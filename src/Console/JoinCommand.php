@@ -113,6 +113,7 @@ final class JoinCommand extends PluginCommand
             'ticket' => $ticket,
             'name' => $name,
             'languages' => $languages,
+            'relay' => $address->relay,
         ]);
         self::enable($mirror->root);
         // The first-run card walks through setting a project up; this one is
@@ -132,7 +133,7 @@ final class JoinCommand extends PluginCommand
      */
     private function enter(Address $address, string $name, OutputInterface $output): array|string
     {
-        $socket = SecureClient::connect($address->host, $address->port, $address->fingerprint, $this->timeout);
+        $socket = SecureClient::connect($address->host, $address->port, $address->fingerprint, $this->timeout, $address->relay);
         if (\is_string($socket)) {
             return $socket;
         }
@@ -262,7 +263,12 @@ final class JoinCommand extends PluginCommand
             if ($left <= 0 || 1 !== \stream_select($read, $write, $except, (int) $left, (int) (($left - (int) $left) * 1e6))) {
                 return null;
             }
+            // Not blocking: readable can be a TLS record with nothing in it
+            // for this side — a session ticket — and a blocking read would
+            // wait out the socket's own timeout, past this one.
+            \stream_set_blocking($socket, enable: false);
             $bytes = \fread($socket, length: 262_144);
+            \stream_set_blocking($socket, enable: true);
             if (false === $bytes || '' === $bytes && \feof($socket)) {
                 return null;
             }

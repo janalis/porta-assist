@@ -22,8 +22,9 @@ use Porta\AssistPlugin\Net\Certificate;
  *                answered with its own method, hung up on `exit`
  *
  * It speaks TLS with a certificate of its own, and prints its port and the
- * certificate's fingerprint on the first line.
- *   chatty       as welcome, with the session talking in between
+ * certificate's fingerprint on the first line. With PORTA_ASSIST_RELAY set
+ * to a relay's port on loopback, it is reached through that relay instead:
+ * the port printed is the relay's, followed by the session guests name.
  */
 
 $mode = $argv[1] ?? 'welcome';
@@ -42,11 +43,38 @@ require __DIR__.'/../../../../vendor/autoload.php';
 require __DIR__.'/../../../../tests/plugin-autoload.php';
 $certificate = Certificate::create();
 register_shutdown_function($certificate->forget(...));
-$server = stream_socket_server('tcp://127.0.0.1:0', context: stream_context_create($certificate->serverContext()));
-$name = (string) stream_socket_get_name($server, remote: false);
-fwrite(STDOUT, substr($name, offset: (int) strrpos($name, needle: ':') + 1).' '.$certificate->fingerprint."\n");
-fflush(STDOUT);
-$client = stream_socket_accept($server, timeout: 20);
+$relay = getenv('PORTA_ASSIST_RELAY');
+// One line from a relay, a byte at a time: what follows is TLS, not to be read here.
+$relayed = static function ($stream, array $hello): array {
+    fwrite($stream, json_encode($hello)."\n");
+    $line = '';
+    while (false !== ($byte = fgetc($stream)) && "\n" !== $byte) {
+        $line .= $byte;
+    }
+
+    return (array) json_decode($line, associative: true);
+};
+$reached = static function (string $relay) use ($relayed, $certificate) {
+    $control = stream_socket_client('tcp://127.0.0.1:'.$relay);
+    $session = (string) ($relayed($control, ['relay' => 'host'])['session'] ?? '');
+    fwrite(STDOUT, $relay.' '.$certificate->fingerprint.' '.$session."\n");
+    fflush(STDOUT);
+    $incoming = json_decode((string) fgets($control), associative: true);
+    $client = stream_socket_client('tcp://127.0.0.1:'.$relay, context: stream_context_create($certificate->serverContext()));
+    stream_set_read_buffer($client, size: 0);
+    $relayed($client, ['relay' => 'accept', 'session' => $session, 'conn' => $incoming['incoming'] ?? -1]);
+
+    return $client;
+};
+$listened = static function () use ($certificate) {
+    $server = stream_socket_server('tcp://127.0.0.1:0', context: stream_context_create($certificate->serverContext()));
+    $name = (string) stream_socket_get_name($server, remote: false);
+    fwrite(STDOUT, substr($name, offset: (int) strrpos($name, needle: ':') + 1).' '.$certificate->fingerprint."\n");
+    fflush(STDOUT);
+
+    return stream_socket_accept($server, timeout: 20);
+};
+$client = false !== $relay ? $reached($relay) : $listened();
 // @mago-expect lint:no-error-control-operator -- a client that gives up mid-handshake warns; this host just stops
 if (false === $client || 'plain' === $mode || true !== @stream_socket_enable_crypto($client, enable: true, crypto_method: STREAM_CRYPTO_METHOD_TLS_SERVER)) {
     exit(0);

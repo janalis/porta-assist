@@ -20,7 +20,8 @@
             "api": 1,
             "commands": {
                 "assist": "Porta\\AssistPlugin\\Console\\JoinCommand",
-                "assist-lsp": "Porta\\AssistPlugin\\Console\\LanguageServerCommand"
+                "assist-lsp": "Porta\\AssistPlugin\\Console\\LanguageServerCommand",
+                "assist-relay": "Porta\\AssistPlugin\\Console\\RelayCommand"
             }
         }
     }

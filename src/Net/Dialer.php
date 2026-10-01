@@ -19,11 +19,12 @@ final readonly class Dialer
 
     /**
      * Connect to $host:$port, encrypted, expecting the certificate with
-     * $fingerprint; $done gets the connection, or why there is none.
+     * $fingerprint — through the relay there, naming the session $relay,
+     * when one is given; $done gets the connection, or why there is none.
      *
      * @param \Closure(Connection|string): void $done
      */
-    public function dial(string $host, int $port, string $fingerprint, \Closure $done): void
+    public function dial(string $host, int $port, string $fingerprint, \Closure $done, ?string $relay = null): void
     {
         $where = \sprintf('%s:%d', $host, $port);
         $timeout = $this->timeout;
@@ -44,7 +45,7 @@ final readonly class Dialer
             return;
         }
         $timer = '';
-        $writable = EventLoop::unreference(EventLoop::onWritable($stream, static function (string $watcher) use ($stream, $done, &$timer, $where, $timeout, $fingerprint): void {
+        $writable = EventLoop::unreference(EventLoop::onWritable($stream, static function (string $watcher) use ($stream, $done, &$timer, $where, $timeout, $fingerprint, $relay): void {
             EventLoop::cancel($watcher);
             EventLoop::cancel($timer);
             // Writable says the attempt is over, not that it worked: only a
@@ -56,7 +57,7 @@ final readonly class Dialer
                 return;
             }
             \stream_set_blocking($stream, enable: false);
-            Tls::handshake(
+            $secure = static fn () => Tls::handshake(
                 $stream,
                 \STREAM_CRYPTO_METHOD_TLS_CLIENT,
                 static function (?string $failed) use ($stream, $done, $where): void {
@@ -70,6 +71,26 @@ final readonly class Dialer
                 },
                 $timeout,
                 $fingerprint,
+            );
+            if (null === $relay) {
+                $secure();
+
+                return;
+            }
+            // Through a relay: joined to the host first.
+            RelayHandshake::exchange(
+                $stream,
+                ['relay' => 'guest', 'session' => $relay],
+                static function (?array $answer) use ($stream, $done, $where, $secure): void {
+                    if (true === ($answer['paired'] ?? null)) {
+                        $secure();
+
+                        return;
+                    }
+                    \fclose($stream);
+                    $done(\sprintf('%s: the relay says %s', $where, RelayHandshake::refusal($answer ?? [])));
+                },
+                $timeout,
             );
         }));
         $timer = EventLoop::unreference(EventLoop::delay($this->timeout, static function () use ($writable, $stream, $done, $where): void {

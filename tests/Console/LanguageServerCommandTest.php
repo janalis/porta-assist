@@ -22,23 +22,33 @@ final class LanguageServerCommandTest extends TestCase
 {
     private ?Process $host = null;
 
+    private ?Process $relay = null;
+
     protected function tearDown(): void
     {
         $this->host?->stop(0);
+        $this->relay?->stop(0);
+    }
+
+    /** The first line $process prints, once it has. */
+    private static function firstLine(Process $process): string
+    {
+        $process->start();
+        $first = '';
+        $process->waitUntil(static function (string $type, string $output) use (&$first): bool {
+            $first .= $output;
+
+            return \str_contains($first, "\n");
+        });
+
+        return \trim($first);
     }
 
     /** A copy of a shared project whose host is the fake one: its directory. */
     private function copy(TempProject $project): string
     {
         $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', 'lsp']);
-        $this->host->start();
-        $first = '';
-        $this->host->waitUntil(static function (string $type, string $output) use (&$first): bool {
-            $first .= $output;
-
-            return \str_contains($first, "\n");
-        });
-        [$port, $fingerprint] = \explode(' ', \trim($first), limit: 2);
+        [$port, $fingerprint] = \explode(' ', self::firstLine($this->host), limit: 2);
         GuestSession::store($project->dir, [
             'host' => '127.0.0.1',
             'port' => (int) $port,
@@ -127,14 +137,7 @@ final class LanguageServerCommandTest extends TestCase
             $project = new TempProject([]);
             $this->host?->stop(0);
             $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode]);
-            $this->host->start();
-            $first = '';
-            $this->host->waitUntil(static function (string $type, string $output) use (&$first): bool {
-                $first .= $output;
-
-                return \str_contains($first, "\n");
-            });
-            [$port, $fingerprint] = \explode(' ', \trim($first), limit: 2);
+            [$port, $fingerprint] = \explode(' ', self::firstLine($this->host), limit: 2);
             GuestSession::store($project->dir, [
                 'host' => '127.0.0.1',
                 'port' => (int) $port,
@@ -148,5 +151,39 @@ final class LanguageServerCommandTest extends TestCase
             $this->assertSame(1, $tester->getStatusCode(), $mode);
             $this->assertStringContainsString('The host runs no php language server for this session '.$says, $tester->getErrorOutput(), $mode);
         }
+    }
+
+    public function testThroughARelayTheBridgeStillReachesTheHost(): void
+    {
+        $this->relay = new Process([\PHP_BINARY, __DIR__.'/../Support/assist-relay.php']);
+        $relayPort = self::firstLine($this->relay);
+        $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', 'lsp'], env: ['PORTA_ASSIST_RELAY' => $relayPort]);
+        [$port, $fingerprint, $session] = \explode(' ', self::firstLine($this->host), limit: 3);
+        $this->assertSame($relayPort, $port, 'reached at the relay');
+        $session = [
+            'host' => '127.0.0.1',
+            'port' => (int) $port,
+            'fingerprint' => $fingerprint,
+            'ticket' => \str_repeat('ab', times: 16),
+            'name' => 'Bo',
+            'languages' => ['php'],
+            'relay' => $session,
+        ];
+        $project = new TempProject([]);
+        GuestSession::store($project->dir, $session);
+
+        [$tester, $sent] = $this->bridge($project->dir, 'php', [
+            ['jsonrpc' => '2.0', 'id' => 7, 'method' => 'initialize', 'params' => []],
+            ['jsonrpc' => '2.0', 'method' => 'exit'],
+        ]);
+        $this->assertSame(0, $tester->getStatusCode(), $tester->getErrorOutput());
+        $this->assertSame(JsonRpcFramer::encode(['jsonrpc' => '2.0', 'id' => 7, 'result' => 'initialize']), $sent);
+
+        // A session the relay does not know: the relay says so.
+        $gone = new TempProject([]);
+        GuestSession::store($gone->dir, ['relay' => \str_repeat('0', times: 16)] + $session);
+        [$tester] = $this->bridge($gone->dir, 'php', []);
+        $this->assertSame(1, $tester->getStatusCode());
+        $this->assertStringContainsString('The relay at 127.0.0.1:'.$port.' says no such session', $tester->getErrorOutput());
     }
 }

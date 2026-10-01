@@ -9,6 +9,7 @@ use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Connection;
 use Porta\AssistPlugin\Net\Listener;
+use Porta\AssistPlugin\Net\RelayListener;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Ot\ServerDocument;
 use Porta\AssistPlugin\Ot\TextOperation;
@@ -56,6 +57,8 @@ final class HostSession
     private const string HOST = 'host';
 
     private readonly Listener $listener;
+
+    private readonly RelayListener $relayListener;
 
     private readonly Paths $paths;
 
@@ -105,33 +108,71 @@ final class HostSession
         $this->terminals = new HostTerminals($api, $this->broadcast(...));
         $this->presence = new Presence($api, $this->paths);
         $this->listener = new Listener($this->accept(...));
+        $this->relayListener = new RelayListener($this->accept(...), static fn (string $why) => $api->notify($why, ToastSeverity::Error, 8.0));
     }
 
     /**
-     * Listen on $bind:$port (0 picks one): the invite to hand out, or why
-     * there is none.
+     * Listen on $bind:$port (0 picks one) — or, given one as host:port, be
+     * reached through $relay: $done gets the invite to hand out, or why there
+     * is none. Asked again while the relay has not answered, it waits for it.
+     *
+     * @param \Closure(Address|string): void $done
      */
-    public function start(string $bind, int $port): Address|string
+    public function start(string $bind, int $port, string $relay, \Closure $done): void
     {
         if (null !== $this->address) {
-            return $this->address;
+            $done($this->address);
+
+            return;
+        }
+        if (null !== $this->certificate) {
+            return;
         }
         $certificate = Certificate::create();
+        $this->certificate = $certificate;
+        $started = function (Address|string $address) use ($certificate, $done): void {
+            if (\is_string($address)) {
+                $certificate->forget();
+                $this->certificate = null;
+                $done($address);
+
+                return;
+            }
+            $this->address = $address;
+            $this->timers = [
+                EventLoop::unreference(EventLoop::repeat(self::READ_EVERY, $this->readAll(...))),
+                EventLoop::unreference(EventLoop::repeat(self::CARET_EVERY, $this->caret(...))),
+            ];
+            $done($address);
+        };
+        '' === \trim($relay) ? $started($this->listen($bind, $port, $certificate)) : $this->throughRelay($relay, $certificate, $started);
+    }
+
+    private function listen(string $bind, int $port, Certificate $certificate): Address|string
+    {
         $listening = $this->listener->start($bind, $port, $certificate);
         if (\is_string($listening)) {
-            $certificate->forget();
-
             return $listening;
         }
-        $this->certificate = $certificate;
         $host = '0.0.0.0' === $bind ? \gethostbyname((string) \gethostname()) : $bind;
-        $this->address = new Address($host, $listening, \bin2hex(\random_bytes(16)), $certificate->fingerprint);
-        $this->timers = [
-            EventLoop::unreference(EventLoop::repeat(self::READ_EVERY, $this->readAll(...))),
-            EventLoop::unreference(EventLoop::repeat(self::CARET_EVERY, $this->caret(...))),
-        ];
 
-        return $this->address;
+        return new Address($host, $listening, \bin2hex(\random_bytes(16)), $certificate->fingerprint);
+    }
+
+    /** @param \Closure(Address|string): void $started */
+    private function throughRelay(string $relay, Certificate $certificate, \Closure $started): void
+    {
+        $match = [];
+        if (1 !== \preg_match('/^\s*(\[[0-9a-f:.]+\]|[^\s:\[\]]+):(\d{1,5})\s*$/i', $relay, $match)) {
+            $started(\sprintf('the relay "%s" is not host:port', \trim($relay)));
+
+            return;
+        }
+        $host = \trim($match[1], characters: '[]');
+        $port = (int) $match[2];
+        $this->relayListener->start($host, $port, $certificate, function (?string $failed) use ($host, $port, $certificate, $started): void {
+            $started($failed ?? new Address($host, $port, \bin2hex(\random_bytes(16)), $certificate->fingerprint, $this->relayListener->session()));
+        });
     }
 
     public function address(): ?Address
@@ -155,6 +196,7 @@ final class HostSession
         }
         $this->terminals->stop();
         $this->listener->stop();
+        $this->relayListener->stop();
         $this->certificate?->forget();
         $this->certificate = null;
         $this->files->stop();

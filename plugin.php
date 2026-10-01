@@ -58,6 +58,13 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             hint: '127.0.0.1: this machine only, reached through an ssh tunnel or a VPN; 0.0.0.0: the whole network — still encrypted, and only those holding the invite are asked in',
         );
         $api->registerSetting('port', 'Port to share on', 'int', 0, hint: '0 picks a free one each time', min: 0, max: 65_535);
+        $api->registerSetting(
+            'relay',
+            'Relay to share through',
+            'text',
+            '',
+            hint: 'host:port of a `porta assist-relay` both sides can reach, when the guests cannot reach this machine; empty: they connect directly',
+        );
         $api->registerSetting('maxFileSize', 'Largest file to share (MB)', 'int', 4, hint: 'a bigger one stays on the host', min: 1, max: 64);
 
         $api->registerCommand('share', 'Assist: Share This Project', $this->share(...));
@@ -144,16 +151,19 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             return;
         }
         $this->host ??= new HostSession($api, $this->displayName(), (int) $api->setting('maxFileSize') * 1_048_576, $this->follow());
-        $started = $this->host->start((string) $api->setting('bind'), (int) $api->setting('port'));
-        if (\is_string($started)) {
-            $this->host = null;
-            $api->notify($started, ToastSeverity::Error, 8.0, slot: 'assist');
+        // Stopping before a relay answered calls the start off: whatever ends
+        // here ends the session being started.
+        $this->host->start((string) $api->setting('bind'), (int) $api->setting('port'), (string) $api->setting('relay'), function (Address|string $started) use ($api): void {
+            if (\is_string($started)) {
+                $this->host = null;
+                $api->notify($started, ToastSeverity::Error, 8.0, slot: 'assist');
 
-            return;
-        }
-        $api->copyToClipboard('porta assist '.$started->invite());
-        $api->notify($api->trans('Sharing. Invite copied: porta assist %invite%', ['%invite%' => $started->invite()]), ToastSeverity::Success, 15.0, slot: 'assist');
-        $api->refreshStatusSegments();
+                return;
+            }
+            $api->copyToClipboard('porta assist '.$started->invite());
+            $api->notify($api->trans('Sharing. Invite copied: porta assist %invite%', ['%invite%' => $started->invite()]), ToastSeverity::Success, 15.0, slot: 'assist');
+            $api->refreshStatusSegments();
+        });
     }
 
     private function stop(): void

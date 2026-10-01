@@ -6,6 +6,7 @@ namespace Porta\AssistPlugin\Tests\Support;
 
 use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Certificate;
+use Porta\AssistPlugin\Net\RelayHandshake;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\Editor\BufferManager;
 use Porta\Event\CommandRunRequested;
@@ -108,11 +109,43 @@ trait TalksAssist
         $context = \stream_context_create(Certificate::clientContext());
         $socket = \stream_socket_client('tcp://127.0.0.1:'.$address->port, timeout: 2.0, context: $context);
         $this->assertNotFalse($socket, 'the host listens');
+        if (null !== $address->relay) {
+            $this->assertSame(['paired' => true], $this->relayed($socket, ['relay' => 'guest', 'session' => $address->relay]), 'joined to the host');
+        }
         $this->secure($socket, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
         $this->assertTrue(Certificate::presentedBy($socket, $address->fingerprint), 'the host the invite names');
         $this->peer = $socket;
         $this->buffered = '';
         $this->inbox = [];
+    }
+
+    /**
+     * Say $hello to a relay on $socket: its one-line answer, read a byte at a
+     * time — what follows it is the session's TLS, not to be read here.
+     *
+     * @param resource             $socket
+     * @param array<string, mixed> $hello
+     *
+     * @return array<array-key, mixed>
+     */
+    private function relayed($socket, array $hello): array
+    {
+        \stream_set_blocking($socket, enable: false);
+        \stream_set_read_buffer($socket, size: 0);
+        \fwrite($socket, \json_encode($hello, \JSON_THROW_ON_ERROR)."\n");
+        $line = '';
+        $this->await(static function () use ($socket, &$line): bool {
+            while ('' !== ($byte = (string) \fread($socket, length: 1))) {
+                $line .= $byte;
+                if ("\n" === $byte) {
+                    return true;
+                }
+            }
+
+            return \feof($socket);
+        }, what: 'the relay to answer');
+
+        return RelayHandshake::decode($line);
     }
 
     /** Be a host: listen, and say where — {@see $certificate} is what a guest must expect. */

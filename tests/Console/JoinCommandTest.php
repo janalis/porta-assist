@@ -30,6 +30,8 @@ final class JoinCommandTest extends TestCase
 
     private ?Process $host = null;
 
+    private ?Process $relay = null;
+
     protected function setUp(): void
     {
         $this->home = new TempProject([]);
@@ -39,23 +41,30 @@ final class JoinCommandTest extends TestCase
     protected function tearDown(): void
     {
         $this->host?->stop(0);
+        $this->relay?->stop(0);
     }
 
-    /** A fake host serving $mode; the invite to it. */
-    private function host(string $mode, ?TempProject $project = null): string
+    /** A fake host serving $mode — through the relay on $relay, if given; the invite to it. */
+    private function host(string $mode, ?TempProject $project = null, ?string $relay = null): string
     {
-        $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode, $project->dir ?? '/nonexistent']);
-        $this->host->start();
-        $port = '';
-        $this->host->waitUntil(static function (string $type, string $output) use (&$port): bool {
-            $port .= $output;
+        $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode, $project->dir ?? '/nonexistent'], env: null === $relay ? null : ['PORTA_ASSIST_RELAY' => $relay]);
+        [$port, $fingerprint, $session] = \explode(' ', self::firstLine($this->host).' ', limit: 3);
 
-            return \str_contains($port, "\n");
+        return '127.0.0.1:'.$port.('' === \trim($session) ? '' : '/'.\trim($session)).'#'.self::KEY.'.'.$fingerprint;
+    }
+
+    /** The first line $process prints, once it has. */
+    private static function firstLine(Process $process): string
+    {
+        $process->start();
+        $first = '';
+        $process->waitUntil(static function (string $type, string $output) use (&$first): bool {
+            $first .= $output;
+
+            return \str_contains($first, "\n");
         });
 
-        [$port, $fingerprint] = \explode(' ', \trim($port), limit: 2);
-
-        return '127.0.0.1:'.$port.'#'.self::KEY.'.'.$fingerprint;
+        return \trim($first);
     }
 
     private function join(string $invite, int $exit = 0, ?string $name = 'Bo'): CommandTester
@@ -109,6 +118,7 @@ final class JoinCommandTest extends TestCase
                 'ticket' => \str_repeat('feedface', times: 4),
                 'name' => 'Bo',
                 'languages' => ['php', 'twig'],
+                'relay' => null,
             ],
             $session,
             'the certificate pinned for the IDE\'s reconnects too',
@@ -118,6 +128,21 @@ final class JoinCommandTest extends TestCase
             \json_decode((string) \file_get_contents($root.'/.porta.json'), associative: true),
             'the copy\'s own settings, with this plugin on',
         );
+    }
+
+    public function testThroughARelayTheSessionRemembersIt(): void
+    {
+        $this->relay = new Process([\PHP_BINARY, __DIR__.'/../Support/assist-relay.php']);
+        $relay = self::firstLine($this->relay);
+        $invite = $this->host('welcome', new TempProject(['a.txt' => 'a']), $relay);
+        $this->assertMatchesRegularExpression('#^127\.0\.0\.1:'.$relay.'/[0-9a-f]{16}\##', $invite);
+
+        $tester = $this->join($invite);
+
+        $this->assertSame(0, $tester->getStatusCode(), $tester->getErrorOutput());
+        $session = GuestSession::load($this->launched[0] ?? '');
+        $this->assertSame((int) $relay, $session['port'] ?? null);
+        $this->assertSame(\substr($invite, offset: \strlen('127.0.0.1:'.$relay.'/'), length: 16), $session['relay'] ?? null, 'the IDE reconnects through it too');
     }
 
     public function testAFirstJoinEnablesThePluginOnTopOfTheDefaults(): void
@@ -148,7 +173,12 @@ final class JoinCommandTest extends TestCase
         ];
         $project = new TempProject(['a.txt' => 'a']);
         foreach ($cases as $mode => $says) {
-            $tester = $this->join($this->host($mode, $project));
+            $invite = $this->host($mode, $project);
+            $started = \hrtime(true);
+            $tester = $this->join($invite);
+            // The command's own timeout, not the socket's minute: a host's
+            // TLS session ticket makes the socket readable with nothing to read.
+            $this->assertLessThan(20.0, (\hrtime(true) - $started) / 1e9, $mode.' answered in its own time');
             $this->assertSame(1, $tester->getStatusCode(), $mode.': '.$tester->getDisplay());
             $this->assertStringContainsString($says, $tester->getErrorOutput(), $mode);
             $this->host?->stop(0);

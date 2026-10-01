@@ -67,7 +67,7 @@ final class LanguageServerCommand extends PluginCommand
 
             return self::FAILURE;
         }
-        $socket = SecureClient::connect($session['host'], $session['port'], $session['fingerprint'], $this->timeout);
+        $socket = SecureClient::connect($session['host'], $session['port'], $session['fingerprint'], $this->timeout, $session['relay']);
         if (\is_string($socket)) {
             $errors->writeln('<error>'.$socket.'</error>');
 
