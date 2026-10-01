@@ -50,8 +50,8 @@ final class HostRunsE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
-                $address = $this->share($ide);
-                $this->askIn($address, 'Ana');
+                $invite = $this->invited($ide);
+                $this->askIn($invite, 'Ana');
                 $this->awaitPainted($tui, $terminal, 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $this->expect('welcome');

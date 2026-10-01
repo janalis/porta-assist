@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Console;
 
 use Porta\AssistPlugin\Net\Connection;
-use Porta\AssistPlugin\Net\SecureClient;
+use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\Plugin\Api\PluginCommand;
@@ -68,12 +68,13 @@ final class LanguageServerCommand extends PluginCommand
 
             return self::FAILURE;
         }
-        $socket = SecureClient::connect($session['host'], $session['port'], $session['fingerprint'], $this->timeout, $session['relay']);
+        $socket = GuestRendezvous::blocking(fn (): mixed => GuestRendezvous::connect($session['invite'], GuestSession::channel($root), $this->timeout));
         if (\is_string($socket)) {
             $errors->writeln('<error>'.OutputFormatter::escape($socket).'</error>');
 
             return self::FAILURE;
         }
+        \stream_set_blocking($socket, enable: true);
         \fwrite($socket, Wire::encode([
             't' => 'hello',
             'v' => Wire::VERSION,
@@ -165,6 +166,7 @@ final class LanguageServerCommand extends PluginCommand
     private function toHost($socket, array $messages): void
     {
         foreach ($messages as $message) {
+            \stream_set_blocking($socket, enable: true);
             \fwrite($socket, Wire::encode(['t' => 'lsp', 'm' => $message]));
         }
     }

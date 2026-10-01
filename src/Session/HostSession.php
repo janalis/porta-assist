@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Session;
 
 use Porta\AssistPlugin\Lsp\LspRelay;
-use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Connection;
-use Porta\AssistPlugin\Net\Listener;
-use Porta\AssistPlugin\Net\RelayListener;
+use Porta\AssistPlugin\Net\Rendezvous\Code;
+use Porta\AssistPlugin\Net\Rendezvous\Door;
+use Porta\AssistPlugin\Net\Rendezvous\HostRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Transit;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Ot\ServerDocument;
 use Porta\AssistPlugin\Ot\TextOperation;
@@ -29,10 +30,10 @@ use Revolt\EventLoop;
  * open. Files, saves and file operations are the host's too: a guest asks,
  * the host does it, and everyone hears.
  *
- * Nobody is in until the host says so: a guest needs the invite's token to
- * be ASKED about, and the host answers each one — edit, read only, or no. A
- * guest let in gets a ticket, which lets it back in without asking again,
- * for as long as this session lasts.
+ * Nobody is in until the host says so: a guest needs the code the host
+ * reads out to be ASKED about ({@see HostRendezvous}), and the host answers
+ * each one — edit, read only, or no. A guest let in gets a ticket, which
+ * lets it back in without asking again, for as long as this session lasts.
  */
 final class HostSession
 {
@@ -53,10 +54,6 @@ final class HostSession
 
     private const string HOST = 'host';
 
-    private readonly Listener $listener;
-
-    private readonly RelayListener $relayListener;
-
     private readonly Paths $paths;
 
     private readonly HostFiles $files;
@@ -71,10 +68,20 @@ final class HostSession
 
     private readonly Presence $presence;
 
-    private ?Address $address = null;
+    /** Meeting guests: the code to hand out, and a door for each guest who held one. */
+    private ?HostRendezvous $rendezvous = null;
+
+    /** The secret a guest's first hello carries: sealed in what a guest who held the code is sent. */
+    private string $token = '';
 
     /** The session's TLS identity, while it lasts. */
     private ?Certificate $certificate = null;
+
+    /** @var array<int, Door> the door each connection not let in yet came through */
+    private array $pendingDoors = [];
+
+    /** @var array<string, Door|null> the door each guest let in came through, by peer id */
+    private array $doors = [];
 
     /** @var array<int, Connection> connections not let in yet */
     private array $pending = [];
@@ -113,84 +120,88 @@ final class HostSession
         $this->runs = new HostRuns($api, $this->terminals);
         $this->debug = new HostDebug($api, $this->paths, $this->broadcast(...));
         $this->presence = new Presence($api, $this->paths);
-        $this->listener = new Listener($this->accept(...));
-        $this->relayListener = new RelayListener($this->accept(...), static fn (string $why) => $api->notify($why, ToastSeverity::Error, 8.0));
     }
 
     /**
-     * Listen on $bind:$port (0 picks one) — or, given one as host:port, be
-     * reached through $relay: $done gets the invite to hand out, or why there
-     * is none. Asked again while the relay has not answered, it waits for it.
+     * Meet guests through the mailbox server at $mailbox, joined to them by
+     * the transit relay at $transit: $done gets the first code to hand out,
+     * or why there is none. Asked again while the first code is being made,
+     * it waits for it.
      *
-     * @param \Closure(Address|string): void $done
+     * @param \Closure(Code|string): void $done
      */
-    public function start(string $bind, int $port, string $relay, \Closure $done): void
+    public function start(string $mailbox, string $transit, \Closure $done): void
     {
-        if (null !== $this->address) {
-            $done($this->address);
+        $code = $this->rendezvous?->code();
+        if (null !== $code) {
+            $done($code);
 
             return;
         }
         if (null !== $this->certificate) {
             return;
         }
-        $certificate = Certificate::create();
-        $this->certificate = $certificate;
-        $started = function (Address|string $address) use ($certificate, $done): void {
-            if (\is_string($address)) {
-                $certificate->forget();
-                $this->certificate = null;
-                $done($address);
-
-                return;
-            }
-            $this->address = $address;
-            $this->timers = [
-                EventLoop::unreference(EventLoop::repeat(self::READ_EVERY, $this->readAll(...))),
-                EventLoop::unreference(EventLoop::repeat(self::CARET_EVERY, $this->caret(...))),
-            ];
-            $done($address);
-        };
-        '' === \trim($relay) ? $started($this->listen($bind, $port, $certificate)) : $this->throughRelay($relay, $certificate, $started);
-    }
-
-    private function listen(string $bind, int $port, Certificate $certificate): Address|string
-    {
-        $listening = $this->listener->start($bind, $port, $certificate);
-        if (\is_string($listening)) {
-            return $listening;
-        }
-        $host = '0.0.0.0' === $bind ? \gethostbyname((string) \gethostname()) : $bind;
-
-        return new Address($host, $listening, \bin2hex(\random_bytes(16)), $certificate->fingerprint);
-    }
-
-    /** @param \Closure(Address|string): void $started */
-    private function throughRelay(string $relay, Certificate $certificate, \Closure $started): void
-    {
-        $match = [];
-        if (1 !== \preg_match('/^\s*(\[[0-9a-f:.]+\]|[^\s:\[\]]+):(\d{1,5})\s*$/i', $relay, $match)) {
-            $started(\sprintf('the relay "%s" is not host:port', \trim($relay)));
+        try {
+            Transit::at($transit, timeout: 0.0);
+        } catch (\InvalidArgumentException $e) {
+            $done($e->getMessage());
 
             return;
         }
-        $host = \trim($match[1], characters: '[]');
-        $port = (int) $match[2];
-        $this->relayListener->start($host, $port, $certificate, function (?string $failed) use ($host, $port, $certificate, $started): void {
-            $started($failed ?? new Address($host, $port, \bin2hex(\random_bytes(16)), $certificate->fingerprint, $this->relayListener->session()));
-        });
+        $certificate = Certificate::create();
+        $this->certificate = $certificate;
+        $this->token = \bin2hex(\random_bytes(16));
+        $this->rendezvous = new HostRendezvous(
+            $mailbox,
+            $transit,
+            $certificate,
+            $this->token,
+            function (Code $code, string $why) use ($done): void {
+                if ('' === $why) {
+                    $this->timers = [
+                        EventLoop::unreference(EventLoop::repeat(self::READ_EVERY, $this->readAll(...))),
+                        EventLoop::unreference(EventLoop::repeat(self::CARET_EVERY, $this->caret(...))),
+                    ];
+                    $done($code);
+
+                    return;
+                }
+                if ('used' !== $why) {
+                    $this->api->notify(
+                        'wrong' === $why
+                            ? $this->api->trans('Someone tried the code and did not get in — the code is now %code%', ['%code%' => $code->text()])
+                            : $this->api->trans('The code was taken at the mailbox server — the code is now %code%', ['%code%' => $code->text()]),
+                        ToastSeverity::Warn,
+                        15.0,
+                        slot: 'assist',
+                    );
+                }
+                $this->api->refreshStatusSegments();
+            },
+            function (string $why) use ($certificate, $done): void {
+                $certificate->forget();
+                $this->certificate = null;
+                $this->rendezvous = null;
+                $done($why);
+            },
+            fn (string $why) => $this->api->notify($this->api->trans('Lost the mailbox server (%why%) — trying again', ['%why%' => $why]), ToastSeverity::Warn, 8.0, slot: 'assist'),
+            $this->accept(...),
+        );
+        $this->rendezvous->start();
     }
 
-    public function address(): ?Address
+    /** The code to hand out now — null while none is. */
+    public function code(): ?Code
     {
-        return $this->address;
+        return $this->rendezvous?->code();
     }
 
     /** Everyone is told the session ended and let go; the host's buffers keep what they have. */
     public function stop(): void
     {
         // First: a guest let go now has not LEFT, and is not announced as one.
-        $this->address = null;
+        $this->rendezvous?->stop();
+        $this->rendezvous = null;
         foreach ($this->guests as $guest) {
             $guest->connection->close('the session ended', ['t' => 'bye', 'reason' => 'ended']);
         }
@@ -202,8 +213,6 @@ final class HostSession
         }
         $this->terminals->stop();
         $this->servers->stop();
-        $this->listener->stop();
-        $this->relayListener->stop();
         $this->certificate?->forget();
         $this->certificate = null;
         $this->files->stop();
@@ -217,6 +226,8 @@ final class HostSession
         $this->timers = [];
         $this->docs = [];
         $this->tickets = [];
+        $this->doors = [];
+        $this->pendingDoors = [];
         $this->api->participants()->set([]);
     }
 
@@ -240,6 +251,9 @@ final class HostSession
         $guest = $this->guests[$peer] ?? null;
         if (null !== $guest) {
             unset($this->tickets[$guest->ticket]);
+            // Nor the way back the code gave it.
+            ($this->doors[$peer] ?? null)?->close();
+            unset($this->doors[$peer]);
             $this->stopRelays($peer);
             $guest->connection->close('removed by the host', ['t' => 'bye', 'reason' => 'removed']);
         }
@@ -378,8 +392,10 @@ final class HostSession
 
     // --- Letting guests in ----------------------------------------------------
 
-    private function accept(Connection $connection): void
+    /** @param resource $stream a guest's connection, through the door its code opened */
+    private function accept($stream, Door $door): void
     {
+        $connection = new Connection($stream);
         if (\count($this->pending) >= $this->maxPending) {
             $connection->close('too many waiting', ['t' => 'denied', 'reason' => 'busy']);
 
@@ -387,6 +403,7 @@ final class HostSession
         }
         $id = $this->next++;
         $this->pending[$id] = $connection;
+        $this->pendingDoors[$id] = $door;
         $timeout = EventLoop::unreference(EventLoop::delay($this->helloTimeout, static fn () => $connection->close('said nothing')));
         $connection->listen(
             function (array $message) use ($id, $connection, $timeout): void {
@@ -403,7 +420,7 @@ final class HostSession
 
     private function unpend(int $id): void
     {
-        unset($this->pending[$id]);
+        unset($this->pending[$id], $this->pendingDoors[$id]);
     }
 
     /** @param array<string, mixed> $message the connection's first */
@@ -414,7 +431,7 @@ final class HostSession
         $token = Wire::string($message, 'token');
         $refusal = match (true) {
             'hello' !== $message['t'] || Wire::VERSION !== Wire::int($message, 'v') => 'version',
-            null === $ticket && !\hash_equals((string) $this->address?->token, $token) => 'token',
+            null === $ticket && ('' === $this->token || !\hash_equals($this->token, $token)) => 'token',
             '' === $name => 'name',
             null === $ticket && \count($this->guests) >= (int) $this->api->setting('maxGuests') => 'full',
             default => null,
@@ -441,7 +458,7 @@ final class HostSession
             $connection->close('not answered', ['t' => 'denied', 'reason' => 'unanswered']);
         }));
         $this->api->pick(
-            $this->api->trans('%name% asks to join, from %from%', ['%name%' => $name, '%from%' => $connection->peer()]),
+            $this->api->trans('%name% asks to join', ['%name%' => $name]),
             [
                 Role::Edit->value => $this->api->trans('Let them edit'),
                 Role::ReadOnly->value => $this->api->trans('Let them read along'),
@@ -474,7 +491,7 @@ final class HostSession
      */
     private function languageServer(int $id, Connection $connection, array $message, ?array $ticket): void
     {
-        unset($this->pending[$id]);
+        unset($this->pending[$id], $this->pendingDoors[$id]);
         $server = $this->api->codeIntelligence()->languageServers()[Wire::string($message, 'language')] ?? null;
         $guestRoot = Wire::string($message, 'root');
         if (null === $ticket || null === $server || '' === $guestRoot) {
@@ -507,7 +524,9 @@ final class HostSession
 
     private function admit(int $id, Connection $connection, string $peer, string $name, Role $role, string $ticket): void
     {
-        unset($this->pending[$id]);
+        // The door it came through is the guest's: removing it closes that too.
+        $this->doors[$peer] = $this->pendingDoors[$id] ?? null;
+        unset($this->pending[$id], $this->pendingDoors[$id]);
         // The same guest back on a new connection: the old one is over —
         // replaced first, so its closing is not taken for the guest leaving.
         $previous = $this->guests[$peer] ?? null;
@@ -581,7 +600,7 @@ final class HostSession
         $this->servers->gone($guest);
         $this->follow->gone($guest->id);
         $this->broadcast(['t' => 'left', 'peer' => $guest->id]);
-        if (null !== $this->address) {
+        if (null !== $this->rendezvous) {
             $this->api->notify($this->api->trans('%name% left', ['%name%' => $guest->name]), slot: 'assist');
         }
         $this->api->participants()->set(Presence::people($this->participants()));

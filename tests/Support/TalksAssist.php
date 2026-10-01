@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Tests\Support;
 
-use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Certificate;
-use Porta\AssistPlugin\Net\RelayHandshake;
+use Porta\AssistPlugin\Net\Rendezvous\Code;
+use Porta\AssistPlugin\Net\Rendezvous\Door;
+use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
+use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
 use Porta\AssistPlugin\Net\Wire;
+use Porta\AssistPlugin\Session\HostSession;
 use Porta\Editor\BufferManager;
 use Porta\Event\CommandRunRequested;
 use Porta\Ide;
@@ -20,8 +24,9 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
  * The other end of a session, for an E2e: a guest talking to the host IDE
- * under test, or a host the guest IDE under test joins — speaking the wire
- * by hand, and pumping the loop the IDE runs on while it waits.
+ * under test, or a host the guest IDE under test joins — meeting it through
+ * a {@see FakeWormhole} of the test's own, speaking the wire by hand, and
+ * pumping the loop the IDE runs on while it waits.
  */
 trait TalksAssist
 {
@@ -31,13 +36,21 @@ trait TalksAssist
     /** @var resource|null */
     private $peer;
 
-    /** @var resource|null */
-    private $listening;
-
     private string $buffered = '';
 
     /** The certificate this side presents when it plays the host. */
     private ?Certificate $certificate = null;
+
+    /** Where this side, as the host, waits for the guest IDE. */
+    private ?Door $door = null;
+
+    /** @var list<resource> the guest IDE's connections through {@see $door}, not taken yet */
+    private array $arrived = [];
+
+    private ?FakeWormhole $wormhole = null;
+
+    /** @var array<string, int> the next channel of each invite this side holds as a guest, by its key */
+    private array $channels = [];
 
     /** @var list<array<string, mixed>> */
     private array $inbox = [];
@@ -48,21 +61,57 @@ trait TalksAssist
         Services::resolve($ide, EventDispatcherInterface::class)->dispatch(new CommandRunRequested($id));
     }
 
-    /** Share the project open in $ide: the invite, read off the toast that hands it out. */
-    private function share(Ide $ide): Address
+    /** The mailbox server and relay of this test, started on first use. */
+    private function wormhole(): FakeWormhole
     {
+        return $this->wormhole ??= new FakeWormhole();
+    }
+
+    /** Share the project open in $ide, through {@see wormhole()}: the code, read off the toast that hands it out. */
+    private function share(Ide $ide): Code
+    {
+        $api = $this->api($ide);
+        $api->changeSetting('mailbox', $this->wormhole()->mailbox);
+        $api->changeSetting('transit', $this->wormhole()->transit);
         $this->command($ide, 'assist:share');
-        $invite = '';
-        $this->await(static function () use ($ide, &$invite): bool {
+        $code = '';
+        $this->await(static function () use ($ide, &$code): bool {
             $match = [];
-            if (1 === \preg_match('/porta assist (\S+)/', Toasts::last($ide), $match)) {
-                $invite = $match[1];
+            if (1 === \preg_match('/porta assist (\S+)\)/', Toasts::last($ide), $match)) {
+                $code = $match[1];
             }
 
-            return '' !== $invite;
-        }, what: 'the invite');
+            return '' !== $code;
+        }, what: 'the code');
 
-        return Address::parse($invite);
+        return Code::parse($code);
+    }
+
+    /** Share the project open in $ide, and redeem the code as a guest would: what the host sends who held it. */
+    private function invited(Ide $ide): Invite
+    {
+        return $this->redeem($this->share($ide));
+    }
+
+    /** The code the host in $ide hands out now, once it is not $not. */
+    private function code(Ide $ide, ?Code $not = null): Code
+    {
+        $code = null;
+        $this->await(function () use ($ide, $not, &$code): bool {
+            $host = Probe::get($this->plugin($ide), 'host');
+            $code = $host instanceof HostSession ? $host->code() : null;
+
+            return null !== $code && $code->text() !== $not?->text();
+        }, what: 'the code handed out');
+        \assert($code instanceof Code, description: 'the await saw it');
+
+        return $code;
+    }
+
+    /** Hand $code to the host waiting with it, as `porta assist` does — the loop the IDE runs on running meanwhile. */
+    private function redeem(Code $code): Invite
+    {
+        return GuestRendezvous::blocking(fn (): Invite => GuestRendezvous::redeem($this->wormhole()->mailbox, $code, 5.0));
     }
 
     /** The plugin as the IDE loaded it — its sessions are read through {@see Probe}. */
@@ -95,126 +144,86 @@ trait TalksAssist
         return (string) Services::resolve($ide, BufferManager::class)->get($path)?->document->getText();
     }
 
-    /** Be a guest named $name: connect to the host on $address and ask in with its token. */
-    private function askIn(Address $address, string $name): void
+    /** Be a guest named $name: connect to the host through $invite and ask in with its token. */
+    private function askIn(Invite $invite, string $name): void
     {
-        $this->dial($address);
-        $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $name, 'token' => $address->token]);
+        $this->dial($invite);
+        $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $name, 'token' => $invite->token]);
         $this->expect('pending');
     }
 
-    /** Be a guest: connect to the host IDE at $address, encrypted, expecting its certificate. */
-    private function dial(Address $address): void
+    /** Be a guest: connect to the host through $invite — on its next channel — encrypted, expecting its certificate. */
+    private function dial(Invite $invite): void
     {
-        $context = \stream_context_create(Certificate::clientContext());
-        $socket = \stream_socket_client('tcp://127.0.0.1:'.$address->port, timeout: 2.0, context: $context);
-        $this->assertNotFalse($socket, 'the host listens');
-        if (null !== $address->relay) {
-            $this->assertSame(['paired' => true], $this->relayed($socket, ['relay' => 'guest', 'session' => $address->relay]), 'joined to the host');
-        }
-        $this->secure($socket, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
-        $this->assertTrue(Certificate::presentedBy($socket, $address->fingerprint), 'the host the invite names');
-        $this->peer = $socket;
+        $this->peer = $this->connect($invite);
         $this->buffered = '';
         $this->inbox = [];
     }
 
     /**
-     * Say $hello to a relay on $socket: its one-line answer, read a byte at a
-     * time — what follows it is the session's TLS, not to be read here.
+     * A connection of a guest's to the host, through $invite, on its next
+     * channel — encrypted, the host checked to be the one it names.
      *
-     * @param resource             $socket
-     * @param array<string, mixed> $hello
-     *
-     * @return array<array-key, mixed>
+     * @return resource
      */
-    private function relayed($socket, array $hello): array
+    private function connect(Invite $invite)
     {
-        \stream_set_blocking($socket, enable: false);
-        \stream_set_read_buffer($socket, size: 0);
-        \fwrite($socket, \json_encode($hello, \JSON_THROW_ON_ERROR)."\n");
-        $line = '';
-        $this->await(static function () use ($socket, &$line): bool {
-            while ('' !== ($byte = (string) \fread($socket, length: 1))) {
-                $line .= $byte;
-                if ("\n" === $byte) {
-                    return true;
-                }
-            }
+        $n = $this->nextChannel($invite);
+        $stream = GuestRendezvous::blocking(static fn (): mixed => GuestRendezvous::connect($invite, $n, 5.0));
+        $this->assertIsResource($stream, 'the host is reached through the relay');
 
-            return \feof($socket);
-        }, what: 'the relay to answer');
-
-        return RelayHandshake::decode($line);
+        return $stream;
     }
 
-    /** Be a host: listen, and say where — {@see $certificate} is what a guest must expect. */
-    private function listen(): int
+    /** The next channel through $invite's door, taken: the host waits on only a few past the last one joined. */
+    private function nextChannel(Invite $invite): int
+    {
+        $door = \bin2hex($invite->key->bytes);
+        $n = $this->channels[$door] ?? 0;
+        $this->channels[$door] = $n + 1;
+
+        return $n;
+    }
+
+    /**
+     * Be a host, waiting at {@see wormhole()}'s relay: what the guest IDE is
+     * to be sent — {@see $certificate} is what it must expect.
+     */
+    private function listen(): Invite
+    {
+        $invite = $this->invite();
+        $this->open($invite);
+
+        return $invite;
+    }
+
+    /** What a host would send a guest IDE, before it waits for it: {@see open()} starts that. */
+    private function invite(): Invite
     {
         $this->certificate = Certificate::create();
-        $server = \stream_socket_server('tcp://127.0.0.1:0', context: \stream_context_create($this->certificate->serverContext()));
-        $this->assertNotFalse($server);
-        \stream_set_blocking($server, enable: false);
-        $this->listening = $server;
-        $name = (string) \stream_socket_get_name($server, remote: false);
 
-        return (int) \substr($name, offset: (int) \strrpos($name, needle: ':') + 1);
+        return new Invite(new SessionKey(\random_bytes(32)), $this->wormhole()->transit, $this->certificate->fingerprint, \bin2hex(\random_bytes(16)));
+    }
+
+    /** Be the host $invite names: wait at the relay for the guest IDE. */
+    private function open(Invite $invite): void
+    {
+        $this->assertNotNull($this->certificate, 'invite() first');
+        $this->arrived = [];
+        $this->door = new Door($invite->key, $invite->transit, $this->certificate, function ($stream): void {
+            $this->arrived[] = $stream;
+        });
+        $this->door->open();
     }
 
     /** Be a host: wait for the guest IDE to connect. */
     private function acceptGuest(): void
     {
-        $server = $this->listening;
-        $this->assertNotNull($server);
-        $accepted = null;
-        $this->await(
-            static function () use ($server, &$accepted): bool {
-                // @mago-expect lint:no-error-control-operator -- nothing to accept yet warns; null is the answer
-                $stream = @\stream_socket_accept($server, timeout: 0);
-                if (false !== $stream) {
-                    $accepted = $stream;
-                }
-
-                return null !== $accepted;
-            },
-            what: 'the guest IDE to connect',
-        );
-        \assert(\is_resource($accepted), description: 'the await saw it accepted');
-        $this->secure($accepted, \STREAM_CRYPTO_METHOD_TLS_SERVER);
-        $this->peer = $accepted;
+        $this->assertNotNull($this->door, 'listen() first');
+        $this->await(fn (): bool => [] !== $this->arrived, what: 'the guest IDE to connect');
+        $this->peer = \array_shift($this->arrived);
         $this->buffered = '';
         $this->inbox = [];
-    }
-
-    /**
-     * Encrypt $stream, pumping the loop while the IDE on the other end does
-     * its half: a blocking handshake here would wait for a loop it blocks.
-     *
-     * @param resource $stream
-     */
-    private function secure($stream, int $method): void
-    {
-        \stream_set_blocking($stream, enable: false);
-        $this->await(
-            static function () use ($stream, $method): bool {
-                // @mago-expect lint:no-error-control-operator -- a refused handshake warns; the false is turned into the failure
-                $done = @\stream_socket_enable_crypto($stream, enable: true, crypto_method: $method);
-                if (false === $done) {
-                    throw new \RuntimeException('the TLS handshake failed');
-                }
-
-                return true === $done;
-            },
-            what: 'the TLS handshake',
-        );
-    }
-
-    /** The fingerprint a guest IDE must expect of this side as a host. */
-    private function fingerprint(): string
-    {
-        $this->assertNotNull($this->certificate, 'listen() first');
-
-        return $this->certificate->fingerprint;
     }
 
     /** @param array<string, mixed> $message */
@@ -280,10 +289,8 @@ trait TalksAssist
             \fclose($this->peer);
         }
         $this->peer = null;
-        if (null !== $this->listening) {
-            \fclose($this->listening);
-        }
-        $this->listening = null;
+        $this->door?->close();
+        $this->door = null;
     }
 
     private function drain(): void

@@ -48,8 +48,8 @@ final class HostFilesE2eTest extends TestCase
 
     private function editor(Tui $tui, VirtualTerminal $terminal, Ide $ide): string
     {
-        $address = $this->share($ide);
-        $this->askIn($address, 'Ana');
+        $invite = $this->invited($ide);
+        $this->askIn($invite, 'Ana');
         $this->awaitPainted($tui, $terminal, 'Ana asks to join');
         $terminal->simulateInput("\r");
 

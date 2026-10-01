@@ -7,28 +7,38 @@ namespace Porta\AssistPlugin\Tests\Net;
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Connection;
-use Porta\AssistPlugin\Net\Dialer;
-use Porta\AssistPlugin\Net\Listener;
+use Porta\AssistPlugin\Net\Rendezvous\Door;
+use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
+use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
+use Porta\AssistPlugin\Net\Rendezvous\Tcp;
+use Porta\AssistPlugin\Net\Rendezvous\Transit;
+use Porta\AssistPlugin\Tests\Support\FakeWormhole;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\PumpsLoop;
+use Revolt\EventLoop;
 
 /**
- * A session's connections, on real loopback sockets: listened for, dialled,
- * encrypted against the certificate the invite names, read line by line,
+ * A session's connections, on real loopback sockets: joined through a
+ * transit relay — the host waiting at a {@see Door}, the guest coming to it
+ * — encrypted against the certificate the invite names, read line by line,
  * closed once.
  */
 final class TransportTest extends TestCase
 {
     use PumpsLoop;
 
-    /** @var list<Connection> */
+    /** @var list<resource> what came through the door */
     private array $accepted = [];
 
     private Certificate $certificate;
 
+    private FakeWormhole $wormhole;
+
     protected function setUp(): void
     {
         $this->certificate = Certificate::create();
+        $this->wormhole = new FakeWormhole();
     }
 
     protected function tearDown(): void
@@ -36,55 +46,56 @@ final class TransportTest extends TestCase
         $this->certificate->forget();
     }
 
-    private function listener(float $handshakeTimeout = 10.0): Listener
+    /**
+     * A host waiting at the relay: the door, and what a guest of it holds.
+     *
+     * @return array{Door, Invite}
+     */
+    private function door(float $timeout = 10.0): array
     {
-        return new Listener(function (Connection $connection): void {
-            $this->accepted[] = $connection;
-        }, $handshakeTimeout);
+        $invite = new Invite(new SessionKey(\random_bytes(32)), $this->wormhole->transit, $this->certificate->fingerprint, \str_repeat('ab', times: 16));
+        $door = new Door(
+            $invite->key,
+            $invite->transit,
+            $this->certificate,
+            function ($stream): void {
+                $this->accepted[] = $stream;
+            },
+            $timeout,
+        );
+        $door->open();
+
+        return [$door, $invite];
     }
 
-    /** @return array{Connection, Connection} the dialled end and the accepted one */
-    private function pair(int $port): array
+    /** @return array{Connection, Connection} the guest's end and the host's */
+    private function pair(): array
     {
-        $dialled = null;
-        new Dialer()->dial('127.0.0.1', $port, $this->certificate->fingerprint, static function (Connection|string $result) use (&$dialled): void {
-            $dialled = $result;
-        });
-        $this->await(function () use (&$dialled): bool {
-            return null !== $dialled && [] !== $this->accepted;
-        }, what: 'both ends');
-        $this->assertInstanceOf(Connection::class, $dialled);
+        [, $invite] = $this->door();
+        $guest = self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 0, 5.0));
+        $this->assertIsResource($guest);
+        $this->await(fn (): bool => [] !== $this->accepted, what: 'the host\'s end');
 
-        return [$dialled, \array_shift($this->accepted)];
+        return [new Connection($guest), new Connection(\array_shift($this->accepted))];
     }
 
     /**
-     * What each dial ended in, once $count have.
+     * Run $work, which waits on the loop, from the test: nothing else keeps the loop running.
      *
-     * @param \Closure(\Closure(Connection|string): void): void $dial
+     * @template T
      *
-     * @return list<Connection|string>
+     * @param \Closure(): T $work
+     *
+     * @return T
      */
-    private function dials(int $count, \Closure $dial): array
+    private static function blocking(\Closure $work): mixed
     {
-        $results = [];
-        $dial(static function (Connection|string $result) use (&$results): void {
-            $results[] = $result;
-        });
-        $this->await(static function () use (&$results, $count): bool {
-            return \count($results) === $count;
-        }, what: 'every dial answered');
-
-        return $results;
+        return GuestRendezvous::blocking($work);
     }
 
     public function testMessagesCrossBothWaysAndALastOneIsDeliveredBeforeTheClose(): void
     {
-        $listener = $this->listener();
-        $port = $listener->start('127.0.0.1', 0, $this->certificate);
-        $this->assertIsInt($port);
-        $this->assertStringContainsString('cannot listen on tcp://127.0.0.1:'.$port, (string) $this->listener()->start('127.0.0.1', $port, $this->certificate), 'a port in use is said, not thrown');
-        [$guest, $host] = $this->pair($port);
+        [$guest, $host] = $this->pair();
         $this->assertMatchesRegularExpression('/^127\.0\.0\.1:\d+$/', $host->peer());
 
         $heard = [];
@@ -113,16 +124,11 @@ final class TransportTest extends TestCase
         $this->assertSame([['t' => 'hello'], ['t' => 'bye']], $heard, 'the last message before the close, nothing after');
         $this->assertSame(['host: bye now', 'guest: the connection was closed'], $closed, 'each said once');
         $this->assertTrue($host->isClosed());
-        $listener->stop();
-        $listener->stop();
     }
 
     public function testWhatIsNotAMessageIsSkippedAndNothingIsReadPastAClose(): void
     {
-        $listener = $this->listener();
-        $port = $listener->start('127.0.0.1', 0, $this->certificate);
-        $this->assertIsInt($port);
-        [$guest, $host] = $this->pair($port);
+        [$guest, $host] = $this->pair();
         $heard = [];
         $host->listen(static function (array $message) use (&$heard, $host): void {
             $heard[] = $message['t'];
@@ -136,7 +142,6 @@ final class TransportTest extends TestCase
         \fwrite($socket, data: "not json\n{\"t\":\"one\"}\n{\"t\":\"stop\"}\n{\"t\":\"unread\"}\n");
         $this->await($host->isClosed(...), what: 'the close');
         $this->assertSame(['one', 'stop'], $heard);
-        $listener->stop();
     }
 
     public function testALineTooLongClosesTheConnection(): void
@@ -160,74 +165,139 @@ final class TransportTest extends TestCase
         $this->assertStringContainsString('past 16 bytes', (string) $why);
     }
 
+    public function testEachConnectionTakesTheNextChannelAndHolesAreSteppedOver(): void
+    {
+        [$door, $invite] = $this->door();
+        // Channels 0 and 1 taken by guest processes that died: 2 still gets through.
+        $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2, 5.0)));
+        // Past the window from there, nothing waits; within it, the host does.
+        $this->assertSame('nobody came to the relay at '.$this->wormhole->transit, self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 20, 0.3)));
+        $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2 + Door::WINDOW, 5.0)));
+        $this->await(fn (): bool => 2 === \count($this->accepted), what: 'both through');
+        // Waits far behind the last channel joined are called off.
+        $this->assertSame([3, 4, 5, 7, 8, 9, 10], \array_keys((array) Probe::get($door, 'waits')));
+
+        $door->close();
+        $door->close();
+        // Closed: nobody waits — or a wait the relay has not seen go yet,
+        // which joins and then says nothing.
+        $this->assertIsString(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 9, 0.3)), 'closed: nobody lets the guest in');
+    }
+
     public function testOnlyTheHostTheInviteNamesIsTalkedTo(): void
     {
-        $listener = $this->listener();
-        $port = $listener->start('127.0.0.1', 0, $this->certificate);
-        $this->assertIsInt($port);
+        [, $invite] = $this->door();
         $impostor = Certificate::create();
-
-        [$result] = $this->dials(1, static fn (\Closure $done) => new Dialer()->dial('127.0.0.1', $port, $impostor->fingerprint, $done));
         $impostor->forget();
-        $this->assertSame('127.0.0.1:'.$port.': the host is not the one the invite names', $result);
-        $listener->stop();
+
+        $result = self::blocking(static fn (): mixed => GuestRendezvous::connect(new Invite($invite->key, $invite->transit, $impostor->fingerprint, $invite->token), 0, 5.0));
+
+        $this->assertSame('the host is not the one the invite names', $result);
     }
 
     public function testAPeerThatDoesNotSpeakTlsIsLetGo(): void
     {
-        // A client that never shakes hands: the host lets it go.
-        $listener = $this->listener(handshakeTimeout: 0.2);
-        $port = $listener->start('127.0.0.1', 0, $this->certificate);
-        $this->assertIsInt($port);
-        $plain = \stream_socket_client('tcp://127.0.0.1:'.$port);
-        $this->assertNotFalse($plain);
-        \stream_set_blocking($plain, enable: false);
-        $this->await(static fn (): bool => '' === \fread($plain, length: 10) && \feof($plain), what: 'the silent client let go');
+        // A guest that never shakes hands: the host lets it go.
+        [, $invite] = $this->door(timeout: 0.2);
+        $plain = self::blocking(static fn (): mixed => Transit::at($invite->transit, 2.0)->pair($invite->key->channel(0), 'ab', 2.0));
+        $this->assertIsResource($plain);
+        $this->await(static fn (): bool => '' === \fread($plain, length: 10) && \feof($plain), what: 'the silent guest let go');
         $this->assertSame([], $this->accepted);
-        $listener->stop();
 
         // A host that answers in the clear, and one that never answers.
-        $clear = \stream_socket_server('tcp://127.0.0.1:0');
-        $this->assertNotFalse($clear);
-        $clearPort = (int) \substr((string) \stream_socket_get_name($clear, remote: false), offset: 10);
-        $fingerprint = $this->certificate->fingerprint;
-        $results = $this->dials(2, function (\Closure $done) use ($clear, $clearPort, $fingerprint): void {
-            new Dialer(timeout: 0.3)->dial('127.0.0.1', $clearPort, $fingerprint, $done);
-            new Dialer(timeout: 0.3)->dial('127.0.0.1', $clearPort, $fingerprint, $done);
-            $this->await(
-                static function () use ($clear): bool {
-                    // @mago-expect lint:no-error-control-operator -- nothing to accept yet warns
-                    $first = @\stream_socket_accept($clear, timeout: 0);
-                    if (false === $first) {
-                        return false;
-                    }
-                    \fwrite($first, data: "HTTP/1.0 400 nope\r\n\r\n");
-                    \fclose($first);
-
-                    return true;
-                },
-                what: 'the first one answered in the clear',
-            );
-        });
-        $this->assertContains('127.0.0.1:'.$clearPort.': the secure connection failed', $results);
-        $this->assertContains('127.0.0.1:'.$clearPort.': the handshake took too long', $results);
+        $key = new SessionKey(\random_bytes(32));
+        $invite = new Invite($key, $this->wormhole->transit, $this->certificate->fingerprint, \str_repeat('ab', times: 16));
+        foreach (["HTTP/1.0 400 nope\r\n\r\n" => 'the secure connection failed', '' => 'the handshake took too long'] as $answer => $says) {
+            $host = null;
+            $transit = Transit::at($this->wormhole->transit, 2.0);
+            EventLoop::queue(static function () use ($transit, $key, &$host): void {
+                $host = $transit->pair($key->channel(0), 'cd', null);
+            });
+            $stream = self::blocking(static fn (): mixed => GuestRendezvous::pair($invite, 0, 2.0));
+            $this->assertIsResource($stream);
+            $this->await(static function () use (&$host): bool {
+                return \is_resource($host);
+            }, what: 'the host joined');
+            \fwrite($host, $answer);
+            $this->assertSame($says, self::blocking(static fn (): mixed => GuestRendezvous::secure($invite, $stream, 0.3)));
+            \fclose($host);
+        }
     }
 
-    public function testADialThatCannotConnectSaysWhy(): void
+    public function testAConnectionThatCannotBeMadeSaysWhy(): void
     {
         // Port 1 on loopback: nothing listens there, and nothing unprivileged can
         // start to — a port closed by this test could be taken by a parallel one.
-        $port = 1;
-        $fingerprint = $this->certificate->fingerprint;
-        $results = $this->dials(3, static function (\Closure $done) use ($port, $fingerprint): void {
-            new Dialer()->dial('127.0.0.1', $port, $fingerprint, $done);
-            new Dialer()->dial('no-such-host.invalid', 1, $fingerprint, $done);
-            new Dialer(timeout: 0.2)->dial('10.255.255.1', 9, $fingerprint, $done);
-        });
+        $this->assertSame('127.0.0.1:1 refused the connection', self::blocking(static fn (): mixed => Tcp::connect('127.0.0.1', 1, 2.0)));
+        $this->assertStringStartsWith('cannot reach no-such-host.invalid:1', (string) self::blocking(static fn (): mixed => Tcp::connect('no-such-host.invalid', 1, 2.0)));
+        $this->assertSame('10.255.255.1:9 did not answer', self::blocking(static fn (): mixed => Tcp::connect('10.255.255.1', 9, 0.2)));
+        $this->assertStringStartsWith('::1:1 ', (string) self::blocking(static fn (): mixed => Tcp::connect('::1', 1, 2.0)), 'IPv6, spelled in brackets to connect');
+    }
 
-        $this->assertNotEmpty(\array_filter($results, static fn (mixed $r): bool => \is_string($r) && \str_starts_with($r, 'cannot reach no-such-host.invalid:1')));
-        $this->assertContains('127.0.0.1:'.$port.' refused the connection', $results);
-        $this->assertContains('10.255.255.1:9 did not answer', $results);
+    public function testARelayThatCannotBeReachedIsWaitedAtAgainUntilTheDoorCloses(): void
+    {
+        $door = new Door(new SessionKey(\random_bytes(32)), '127.0.0.1:1', $this->certificate, static function (): void {}, 0.5);
+        $door->open();
+        $this->pump(0.2);
+        $this->assertSame(Door::WINDOW - 1, Probe::get($door, 'last'), 'refused: not further along');
+        $this->assertSame([], Probe::get($door, 'waits'), 'each pausing before it waits again');
+        $door->close();
+        $this->assertSame([], Probe::get($door, 'waits'));
+    }
+
+    public function testAWaitCalledOffOrHungUpOnSaysSo(): void
+    {
+        // Called off before it even connected.
+        $transit = Transit::at($this->wormhole->transit, 2.0);
+        $result = null;
+        EventLoop::queue(static function () use ($transit, &$result): void {
+            $result = $transit->pair('ab', 'cd', null);
+        });
+        $transit->cancel();
+        $this->await(static function () use (&$result): bool {
+            return null !== $result;
+        }, what: 'the wait over');
+        $this->assertSame('called off', $result);
+
+        // A relay that hangs up before joining, and one that answers a byte at a time.
+        $relay = \stream_socket_server('tcp://127.0.0.1:0');
+        $this->assertNotFalse($relay);
+        $address = (string) \stream_socket_get_name($relay, remote: false);
+        $answers = [
+            'the relay at '.$address.' hung up' => static function ($relay): void {
+                \fclose($relay);
+            },
+            'joined, said in two pieces' => function ($relay): void {
+                \fwrite($relay, data: 'o');
+                $this->pump(0.05);
+                \fwrite($relay, data: "k\n");
+            },
+        ];
+        foreach ($answers as $says => $answer) {
+            $result = null;
+            $transit = Transit::at($address, 2.0);
+            EventLoop::queue(static function () use ($transit, &$result): void {
+                $result = $transit->pair('ab', 'cd', 2.0);
+            });
+            $accepted = null;
+            $this->await(
+                static function () use ($relay, &$accepted): bool {
+                    // @mago-expect lint:no-error-control-operator -- nothing to accept yet warns
+                    $stream = @\stream_socket_accept($relay, timeout: 0);
+                    $accepted = false === $stream ? null : $stream;
+
+                    return null !== $accepted;
+                },
+                what: 'the relay asked',
+            );
+            \assert(\is_resource($accepted), description: 'the await saw it');
+            $this->assertSame("please relay ab for side cd\n", \fgets($accepted));
+            $answer($accepted);
+            $this->await(static function () use (&$result): bool {
+                return null !== $result;
+            }, what: 'the relay\'s answer');
+            \is_resource($result) ? $this->assertStringStartsWith('joined', $says) : $this->assertSame($says, $result);
+        }
     }
 
     public function testTheKeyGoesWithTheSession(): void

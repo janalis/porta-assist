@@ -6,6 +6,7 @@
     "require": {
         "php": ">=8.5",
         "ext-openssl": "*",
+        "ext-sodium": "*",
         "revolt/event-loop": "^1.0",
         "symfony/console": "^8.2",
         "symfony/filesystem": "^8.2"
@@ -20,8 +21,7 @@
             "api": 1,
             "commands": {
                 "assist": "Porta\\AssistPlugin\\Console\\JoinCommand",
-                "assist-lsp": "Porta\\AssistPlugin\\Console\\LanguageServerCommand",
-                "assist-relay": "Porta\\AssistPlugin\\Console\\RelayCommand"
+                "assist-lsp": "Porta\\AssistPlugin\\Console\\LanguageServerCommand"
             }
         }
     }

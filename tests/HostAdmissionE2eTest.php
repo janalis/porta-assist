@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
@@ -47,9 +48,9 @@ final class HostAdmissionE2eTest extends TestCase
     }
 
     /** Ask in as $name and be let in to edit: the peer id. */
-    private function askInAndLetEdit(Tui $tui, VirtualTerminal $terminal, Address $address, string $name): string
+    private function askInAndLetEdit(Tui $tui, VirtualTerminal $terminal, Invite $invite, string $name): string
     {
-        $this->askIn($address, $name);
+        $this->askIn($invite, $name);
         $this->answer($tui, $terminal, $name.' asks to join', downs: 0);
 
         return Wire::string($this->expect('welcome'), 'peer');
@@ -61,15 +62,15 @@ final class HostAdmissionE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($project): void {
-                $address = $this->share($ide);
+                $invite = $this->invited($ide);
 
                 // A name made to write to the terminal: shown as text, never sent to it.
-                $this->askIn($address, "Ev\x1b]52;c;aGFja2Vk\x07il\x1b[31m");
+                $this->askIn($invite, "Ev\x1b]52;c;aGFja2Vk\x07il\x1b[31m");
                 $this->answer($tui, $terminal, 'Ev]52;c;aGFja2Vkil[31m asks to join', downs: 2);
                 $this->assertSame('host', $this->expect('denied')['reason']);
                 $this->assertStringNotContainsString("\x1b]52;c;aGFja2Vk", $terminal->getOutput(), 'her clipboard write never reached the terminal — the invite\'s own copy does');
 
-                $this->askIn($address, 'Ana');
+                $this->askIn($invite, 'Ana');
                 $this->answer($tui, $terminal, 'Ana asks to join', downs: 1);
                 $welcome = $this->expect('welcome');
                 $this->assertSame('read', $welcome['role']);
@@ -98,7 +99,7 @@ final class HostAdmissionE2eTest extends TestCase
 
                 // Back on another connection with her ticket: in at once, still editing.
                 $old = $this->peer;
-                $this->dial($address);
+                $this->dial($invite);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
                 $again = $this->expect('welcome');
                 $this->assertSame([$welcome['peer'], 'edit'], [$again['peer'], $again['role']]);
@@ -110,12 +111,12 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->answer($tui, $terminal, 'editing', downs: 0);
                 $this->answer($tui, $terminal, 'Remove from the session', downs: 9);
                 $this->assertSame('removed', $this->expect('bye')['reason']);
-                $this->dial($address);
-                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
-                $this->assertSame('token', $this->expect('denied')['reason']);
+                $next = $this->nextChannel($invite);
+                $this->assertIsString(GuestRendezvous::blocking(static fn (): mixed => GuestRendezvous::connect($invite, $next, 0.3)), 'her way in went with her');
 
                 // A guest gone while the host was choosing: the choice finds nobody.
-                $carl = $this->askInAndLetEdit($tui, $terminal, $address, 'Carl');
+                $invite = $this->redeem($this->code($ide));
+                $carl = $this->askInAndLetEdit($tui, $terminal, $invite, 'Carl');
                 $this->command($ide, 'assist:participants');
                 $this->answer($tui, $terminal, 'Carl', downs: 0);
                 $this->awaitPainted($tui, $terminal, 'Let them edit');
@@ -125,11 +126,11 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->assertNotSame('', $carl);
 
                 // Turned away, and the other refusals.
-                $this->askIn($address, 'Bo');
+                $this->askIn($invite, 'Bo');
                 $this->answer($tui, $terminal, 'Bo asks to join', downs: 2);
                 $this->assertSame('host', $this->expect('denied')['reason']);
-                foreach ([['t' => 'hello', 'v' => 99, 'name' => 'Old'], ['t' => 'open'], ['t' => 'hello', 'v' => Wire::VERSION, 'name' => '  ', 'token' => $address->token]] as $i => $hello) {
-                    $this->dial($address);
+                foreach ([['t' => 'hello', 'v' => 99, 'name' => 'Old'], ['t' => 'open'], ['t' => 'hello', 'v' => Wire::VERSION, 'name' => '  ', 'token' => $invite->token]] as $i => $hello) {
+                    $this->dial($invite);
                     $this->say($hello);
                     $this->assertSame(['version', 'version', 'name'][$i], $this->expect('denied')['reason']);
                 }
@@ -144,7 +145,7 @@ final class HostAdmissionE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
-                $address = $this->share($ide);
+                $invite = $this->invited($ide);
                 $host = Probe::get($this->plugin($ide), 'host');
                 $this->assertIsObject($host);
                 Probe::set($host, 'answerTimeout', 0.3);
@@ -153,32 +154,32 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->api($ide)->changeSetting('maxGuests', 1);
 
                 // Nobody answered.
-                $this->askIn($address, 'Cy');
+                $this->askIn($invite, 'Cy');
                 $this->assertSame('unanswered', $this->expect('denied')['reason']);
                 // The pick is still open: answering it now lets nobody in.
                 $terminal->simulateInput("\r");
 
                 // Silent for too long, then one waiting connection too many.
-                $this->dial($address);
+                $this->dial($invite);
                 $this->await($this->hungUp(...), what: 'the silent one let go');
-                $this->dial($address);
+                $this->dial($invite);
                 $silent = $this->peer;
-                $this->dial($address);
+                $this->dial($invite);
                 $this->assertSame('busy', $this->expect('denied')['reason']);
                 $this->assertIsResource($silent);
                 \fclose($silent);
                 $this->await(static fn (): bool => [] === Probe::get($host, 'pending'), what: 'the host to see it go');
 
                 // One guest at most, and one who gave up before the answer.
-                $this->askIn($address, 'Di');
+                $this->askIn($invite, 'Di');
                 $this->answer($tui, $terminal, 'Di asks to join', downs: 0);
                 $this->expect('welcome');
                 $di = $this->peer;
-                $this->dial($address);
-                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ed', 'token' => $address->token]);
+                $this->dial($invite);
+                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ed', 'token' => $invite->token]);
                 $this->assertSame('full', $this->expect('denied')['reason']);
                 $this->api($ide)->changeSetting('maxGuests', 8);
-                $this->askIn($address, 'Fay');
+                $this->askIn($invite, 'Fay');
                 $this->hangUp();
                 $this->await(static fn (): bool => [] === Probe::get($host, 'pending'), what: 'the host to see Fay give up');
                 $this->answer($tui, $terminal, 'Fay asks to join', downs: 0);
@@ -187,7 +188,7 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->await(static fn (): bool => self::toasted($ide, 'Di left'), what: 'Di gone, Fay never in');
 
                 // Stopping, with someone still at the door: share again later, from scratch.
-                $this->dial($address);
+                $this->dial($invite);
                 $this->await(static fn (): bool => [] !== Probe::get($host, 'pending'), what: 'at the door');
                 $this->command($ide, 'assist:stop');
                 $this->await(static fn (): bool => self::toasted($ide, 'Stopped sharing'), what: 'stopped');

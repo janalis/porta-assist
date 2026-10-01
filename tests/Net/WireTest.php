@@ -5,45 +5,11 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests\Net;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Wire;
 
-/** The invite a host hands out, and the messages on the wire: whatever a peer sends is read safely. */
+/** The messages on the wire: whatever a peer sends is read safely. */
 final class WireTest extends TestCase
 {
-    private const string KEY = '00112233445566778899aabbccddeeff';
-
-    private const string PRINT = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-
-    public function testAnInviteIsReadBackAsItWasHandedOut(): void
-    {
-        $address = Address::parse('  192.168.1.20:52814#'.\strtoupper(self::KEY.'.'.self::PRINT).' ');
-        $this->assertSame(['192.168.1.20', 52_814, self::KEY, self::PRINT], [$address->host, $address->port, $address->token, $address->fingerprint], 'trimmed, lower-cased');
-        $this->assertSame('192.168.1.20:52814#'.self::KEY.'.'.self::PRINT, $address->invite());
-
-        $v6 = Address::parse('[::1]:9000#'.self::KEY.'.'.self::PRINT);
-        $this->assertSame('::1', $v6->host);
-        $this->assertSame('[::1]:9000#'.self::KEY.'.'.self::PRINT, $v6->invite(), 'the brackets come back');
-    }
-
-    public function testAnythingElseIsRefusedSayingWhat(): void
-    {
-        foreach ([
-            'host:1#short.'.self::PRINT => 'is not host:port#token.fingerprint',
-            'host#'.self::KEY.'.'.self::PRINT => 'is not host:port#token.fingerprint',
-            'host:1#'.self::KEY => 'is not host:port#token.fingerprint',
-            'host:0#'.self::KEY.'.'.self::PRINT => '0 is not a port',
-            'host:70000#'.self::KEY.'.'.self::PRINT => '70000 is not a port',
-        ] as $invite => $says) {
-            try {
-                Address::parse($invite);
-                $this->fail($invite.' is refused');
-            } catch (\InvalidArgumentException $e) {
-                $this->assertStringContainsString($says, $e->getMessage());
-            }
-        }
-    }
-
     public function testALineIsAMessageOnlyWithAType(): void
     {
         $this->assertSame(['t' => 'x', 'n' => 1], Wire::decode(\trim(Wire::encode(['t' => 'x', 'n' => 1]))));

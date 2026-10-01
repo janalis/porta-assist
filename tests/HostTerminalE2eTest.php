@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
@@ -32,9 +32,9 @@ final class HostTerminalE2eTest extends TestCase
     private const string DOWN = "\x1b[B";
 
     /** Ask in as $name and be let in: the welcome. @return array<string, mixed> */
-    private function letIn(Tui $tui, VirtualTerminal $terminal, Address $address, string $name): array
+    private function letIn(Tui $tui, VirtualTerminal $terminal, Invite $invite, string $name): array
     {
-        $this->askIn($address, $name);
+        $this->askIn($invite, $name);
         $this->awaitPainted($tui, $terminal, $name.' asks to join');
         $terminal->simulateInput("\r");
 
@@ -56,11 +56,11 @@ final class HostTerminalE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
-                $address = $this->share($ide);
+                $invite = $this->invited($ide);
                 $this->command($ide, 'assist:share_terminal');
                 $this->await(static fn (): bool => self::toasted($ide, 'No terminal to share'), what: 'nothing to share yet');
 
-                $ana = $this->letIn($tui, $terminal, $address, 'Ana');
+                $ana = $this->letIn($tui, $terminal, $invite, 'Ana');
                 $runs = $this->api($ide)->runs();
                 $runs->start('cat', [\PHP_BINARY, '-r', 'echo "ready\n"; while (false !== ($l = fgets(STDIN))) { echo "got ", $l; }']);
                 $this->await(static fn (): bool => \str_contains((string) $runs->scrollback('run:cat'), 'ready'), what: 'the run to start');
@@ -102,7 +102,7 @@ final class HostTerminalE2eTest extends TestCase
 
                 // A newcomer sees it too.
                 $anaSocket = $this->peer;
-                $this->letIn($tui, $terminal, $address, 'Bo');
+                $this->letIn($tui, $terminal, $invite, 'Bo');
                 $this->assertStringContainsString('got yes', self::bytes($this->expect('terminal')));
                 $this->peer = $anaSocket;
 

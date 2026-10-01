@@ -109,30 +109,43 @@ final class AssistUiE2eTest extends TestCase
                 $this->await(static fn (): bool => self::toasted($ide, 'Nobody else is in the session'), what: 'nobody to follow');
                 $this->command($ide, 'assist:participants');
 
-                // A port taken: said, and nothing shared.
-                $taken = \stream_socket_server('tcp://127.0.0.1:0');
-                $this->assertNotFalse($taken);
-                $port = (int) \substr((string) \stream_socket_get_name($taken, remote: false), offset: 10);
-                $this->api($ide)->changeSetting('port', $port);
+                // A relay or a mailbox server that is not one: said, and nothing shared.
+                $api = $this->api($ide);
+                $api->changeSetting('transit', 'nowhere');
                 $this->command($ide, 'assist:share');
-                $this->await(static fn (): bool => self::toasted($ide, 'cannot listen on tcp://127.0.0.1:'.$port), what: 'the port in use');
+                $this->await(static fn (): bool => self::toasted($ide, 'Cannot share: the relay "nowhere" is not host:port'), what: 'the relay refused');
                 $this->assertNull(Probe::get($this->plugin($ide), 'host'));
-                $this->api($ide)->changeSetting('port', 0);
+                $api->changeSetting('transit', $this->wormhole()->transit);
+                $api->changeSetting('mailbox', 'ws://127.0.0.1:1/v1');
+                $this->command($ide, 'assist:share');
+                $this->await(static fn (): bool => self::toasted($ide, 'Cannot share: 127.0.0.1:1 refused the connection'), what: 'the mailbox server unreachable');
+                $this->assertNull(Probe::get($this->plugin($ide), 'host'));
                 Services::resolve($ide, Identity::class)->rename('Hal');
 
-                // Shared — twice is the same session, its invite copied again.
-                $address = $this->share($ide);
-                $this->assertSame($address->invite(), $this->share($ide)->invite());
+                // Shared — twice is the same session, its code copied again.
+                $code = $this->share($ide);
+                $this->assertSame($code->text(), $this->share($ide)->text());
                 $this->assertSame('⇄ 0', $this->cell($ide)?->text);
-                $this->assertSame(['', 'Copy the invite', 'Participants', 'Stop sharing'], \array_keys($this->menu($ide)));
-                ($this->menu($ide)['Copy the invite']->run)();
+                $this->assertSame(['', 'Copy the code: '.$code->text(), 'Participants', 'Stop sharing'], \array_keys($this->menu($ide)));
+                ($this->menu($ide)['Copy the code: '.$code->text()]->run)();
+                $invite = $this->redeem($code);
 
-                $this->askIn($address, 'Ana');
+                $this->askIn($invite, 'Ana');
                 $this->awaitPainted($tui, $terminal, 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $welcome = $this->expect('welcome');
                 $this->assertSame([['id' => 'host', 'name' => 'Hal', 'role' => 'host']], $welcome['peers'], 'the name the host chose');
                 $this->assertSame('⇄ 1', $this->cell($ide)?->text);
+                // A code lets one guest in: the next is ready to hand out.
+                $this->await(
+                    fn (): bool => (
+                        [] !== \array_filter(
+                            \array_keys($this->menu($ide)),
+                            static fn (string $label): bool => \str_starts_with($label, 'Copy the code: ') && 'Copy the code: '.$code->text() !== $label,
+                        )
+                    ),
+                    what: 'the next code',
+                );
                 $roster = Services::resolve($ide, Participants::class);
                 $this->assertEquals([new Participant('g0', 'Ana', 'assist')], $roster->all(), 'in core\'s roster too');
                 $this->assertSame(
@@ -172,13 +185,13 @@ final class AssistUiE2eTest extends TestCase
 
                 // Joining from inside the IDE hands over the command to run.
                 $this->command($ide, 'assist:join');
-                $this->awaitPainted($tui, $terminal, 'Invite');
-                $terminal->simulateInput('porta assist '.$address->invite()."\r");
-                $this->await(static fn (): bool => self::toasted($ide, 'run it in a terminal: porta assist '.$address->invite()), what: 'the command handed over');
+                $this->awaitPainted($tui, $terminal, 'Code from the host');
+                $terminal->simulateInput('porta assist '.\strtolower($code->text())."\r");
+                $this->await(static fn (): bool => self::toasted($ide, 'run it in a terminal: porta assist '.$code->text()), what: 'the command handed over');
                 $this->command($ide, 'assist:join');
-                $this->awaitPainted($tui, $terminal, 'Invite');
+                $this->awaitPainted($tui, $terminal, 'Code from the host');
                 $terminal->simulateInput("nonsense\r");
-                $this->await(static fn (): bool => self::toasted($ide, '"nonsense" is not host:port#token'), what: 'refused');
+                $this->await(static fn (): bool => self::toasted($ide, '"nonsense" is not a code like 42-K7QM-X2PA'), what: 'refused');
                 $this->hangUp();
             },
         ]);
@@ -186,12 +199,12 @@ final class AssistUiE2eTest extends TestCase
 
     public function testAGuestsCellAndMenu(): void
     {
-        $port = $this->listen();
+        $invite = $this->listen();
         $project = new TempProject([
             'src/A.php' => "<?php\n",
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
-        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'fingerprint' => $this->fingerprint(), 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
+        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {

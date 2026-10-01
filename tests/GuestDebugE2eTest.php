@@ -43,12 +43,12 @@ final class GuestDebugE2eTest extends TestCase
 
     public function testTheGuestWatchesAndStepsTheHostsDebugger(): void
     {
-        $port = $this->listen();
+        $invite = $this->listen();
         $project = new TempProject([
             'src/A.php' => "<?php\n// two\n// three\n",
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
-        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'fingerprint' => $this->fingerprint(), 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
+        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {

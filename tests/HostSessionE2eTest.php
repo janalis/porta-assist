@@ -5,20 +5,16 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Editor\BufferManager;
-use Porta\Event\CommandRunRequested;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\Services;
 use Porta\Tests\Support\TempProject;
-use Porta\Tests\Support\Toasts;
 use Porta\Tests\Support\UsesBundledPlugins;
 use Porta\Ui\Glyphs;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui;
 
@@ -43,22 +39,6 @@ final class HostSessionE2eTest extends TestCase
         ]);
     }
 
-    private function share(Ide $ide): Address
-    {
-        Services::resolve($ide, EventDispatcherInterface::class)->dispatch(new CommandRunRequested('assist:share'));
-        $invite = '';
-        $this->await(static function () use ($ide, &$invite): bool {
-            $match = [];
-            if (1 === \preg_match('/porta assist (\S+)/', Toasts::last($ide), $match)) {
-                $invite = $match[1];
-            }
-
-            return '' !== $invite;
-        }, what: 'the invite');
-
-        return Address::parse($invite);
-    }
-
     private function text(Ide $ide, string $path): string
     {
         return (string) Services::resolve($ide, BufferManager::class)->get($path)?->document->getText();
@@ -71,16 +51,15 @@ final class HostSessionE2eTest extends TestCase
 
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
-                $address = $this->share($ide);
-                $this->assertSame('127.0.0.1', $address->host);
+                $invite = $this->invited($ide);
 
                 // A wrong token is not even asked about.
-                $this->dial($address);
+                $this->dial($invite);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Eve', 'token' => \str_repeat('0', times: 32)]);
                 $this->assertSame('token', $this->expect('denied')['reason']);
 
-                $this->dial($address);
-                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'token' => $address->token]);
+                $this->dial($invite);
+                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'token' => $invite->token]);
                 $this->expect('pending');
                 $this->awaitPainted($tui, $terminal, 'Ana asks to join');
                 $terminal->simulateInput("\r"); // the first answer: let them edit

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Event\AgentActivity;
@@ -44,9 +44,9 @@ final class HostEdgesE2eTest extends TestCase
     }
 
     /** A guest named $name, let in to edit: its welcome. @return array<string, mixed> */
-    private function guest(Tui $tui, VirtualTerminal $terminal, Address $address, string $name): array
+    private function guest(Tui $tui, VirtualTerminal $terminal, Invite $invite, string $name): array
     {
-        $this->askIn($address, $name);
+        $this->askIn($invite, $name);
         $this->awaitPainted($tui, $terminal, $name.' asks to join');
         $terminal->simulateInput("\r");
 
@@ -62,10 +62,10 @@ final class HostEdgesE2eTest extends TestCase
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root): void {
                 // Before anyone listed the project, a change under the editor tells nobody.
                 Services::resolve($ide, EventDispatcherInterface::class)->dispatch(new WorkingTreeChanged());
-                $address = $this->share($ide);
+                $invite = $this->invited($ide);
 
                 // Ana: in a shared file, with an agent of her own; the host's agent at work too.
-                $ana = $this->guest($tui, $terminal, $address, 'Ana');
+                $ana = $this->guest($tui, $terminal, $invite, 'Ana');
                 $anaSocket = $this->peer;
                 $this->say(['t' => 'open', 'path' => 'src/A.php']);
                 $this->expect('opened');
@@ -78,7 +78,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->assertNotContains($ana['peer'], \array_column($this->inboxOf('presence'), 'peer'), 'her own caret is not told back to her');
 
                 // Bo arrives: Ana's caret and both agents come with the welcome; Ana's caret again when he opens the file.
-                $bo = $this->guest($tui, $terminal, $address, 'Bo');
+                $bo = $this->guest($tui, $terminal, $invite, 'Bo');
                 $peers = \array_column($this->inboxOf('presence'), 'peer');
                 $this->assertContains($ana['peer'], $peers);
                 $this->assertContains('host~claude', $peers);
@@ -89,7 +89,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->assertSame([$ana['peer'], 2], [$caret['peer'], $caret['line']], 'where she is, clamped into the text');
 
                 // Ana back on her ticket: her own agent is not told to her as someone else.
-                $this->dial($address);
+                $this->dial($invite);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $ana['ticket']]);
                 $this->expect('welcome');
                 $this->assertNotContains($ana['peer'].'~codex', \array_column($this->inboxOf('presence'), 'peer'));
@@ -110,8 +110,8 @@ final class HostEdgesE2eTest extends TestCase
 
         $this->runIde($project, $root.'/src/A.php', [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root, $outside, $far): void {
-                $address = $this->share($ide);
-                $this->guest($tui, $terminal, $address, 'Ana');
+                $invite = $this->invited($ide);
+                $this->guest($tui, $terminal, $invite, 'Ana');
 
                 // Not text: not shared.
                 $this->say(['t' => 'open', 'path' => 'pic.bin']);

@@ -3,8 +3,8 @@
   <file source-language="en" target-language="ja" datatype="plaintext" original="messages">
     <body>
       <trans-unit id="1">
-        <source>%name% asks to join, from %from%</source>
-        <target>%name% が %from% から参加を求めています</target>
+        <source>%name% asks to join</source>
+        <target>%name% が参加を求めています</target>
       </trans-unit>
       <trans-unit id="2">
         <source>%name% joined and can edit</source>
@@ -23,12 +23,12 @@
         <target>%name% のセッションに接続しました</target>
       </trans-unit>
       <trans-unit id="6">
-        <source>Copied — run it in a terminal: porta assist %invite%</source>
-        <target>コピーしました — ターミナルで実行してください: porta assist %invite%</target>
+        <source>Copied — run it in a terminal: porta assist %code%</source>
+        <target>コピーしました — ターミナルで実行: porta assist %code%</target>
       </trans-unit>
       <trans-unit id="7">
-        <source>Copy the invite</source>
-        <target>招待をコピー</target>
+        <source>Copy the code: %code%</source>
+        <target>コードをコピー: %code%</target>
       </trans-unit>
       <trans-unit id="8">
         <source>Follow</source>
@@ -51,8 +51,8 @@
         <target>%name% のセッション（閲覧のみ）</target>
       </trans-unit>
       <trans-unit id="13">
-        <source>Invite (host:port#token.fingerprint)</source>
-        <target>招待 (ホスト:ポート#トークン.フィンガープリント)</target>
+        <source>Code from the host (42-K7QM-X2PA)</source>
+        <target>ホストのコード (42-K7QM-X2PA)</target>
       </trans-unit>
       <trans-unit id="14">
         <source>Leave the session</source>
@@ -91,8 +91,8 @@
         <target>このプロジェクトを共有中 — 参加 %count%</target>
       </trans-unit>
       <trans-unit id="24">
-        <source>Sharing. Invite copied: porta assist %invite%</source>
-        <target>共有中。招待をコピーしました: porta assist %invite%</target>
+        <source>Sharing. The code to read out: %code% (copied: porta assist %code%)</source>
+        <target>共有中。伝えるコード: %code%(コピー済み: porta assist %code%)</target>
       </trans-unit>
       <trans-unit id="25">
         <source>Stop following</source>
@@ -131,8 +131,8 @@
         <target>セッションは満員です</target>
       </trans-unit>
       <trans-unit id="34">
-        <source>The session is over — ask the host for a new invite</source>
-        <target>セッションは終了しています — ホストに新しい招待を頼んでください</target>
+        <source>The session is over — ask the host for a new code</source>
+        <target>セッションは終了しました — ホストに新しいコードを頼んでください</target>
       </trans-unit>
       <trans-unit id="35">
         <source>This is a copy of someone else's project — it is theirs to share</source>
@@ -349,6 +349,22 @@
       <trans-unit id="88">
         <source>The host has not let you step its debugger</source>
         <target>ホストはデバッガーの操作を許可していません</target>
+      </trans-unit>
+      <trans-unit id="89">
+        <source>Cannot share: %why%</source>
+        <target>共有できません: %why%</target>
+      </trans-unit>
+      <trans-unit id="90">
+        <source>Someone tried the code and did not get in — the code is now %code%</source>
+        <target>誰かがコードを試しましたが入れませんでした — 新しいコードは %code% です</target>
+      </trans-unit>
+      <trans-unit id="91">
+        <source>The code was taken at the mailbox server — the code is now %code%</source>
+        <target>メールボックスサーバーでコードが使われました — 新しいコードは %code% です</target>
+      </trans-unit>
+      <trans-unit id="92">
+        <source>Lost the mailbox server (%why%) — trying again</source>
+        <target>メールボックスサーバーとの接続が切れました (%why%) — 再試行します</target>
       </trans-unit>
     </body>
   </file>

@@ -3,8 +3,8 @@
   <file source-language="en" target-language="de" datatype="plaintext" original="messages">
     <body>
       <trans-unit id="1">
-        <source>%name% asks to join, from %from%</source>
-        <target>%name% möchte beitreten, von %from%</target>
+        <source>%name% asks to join</source>
+        <target>%name% möchte beitreten</target>
       </trans-unit>
       <trans-unit id="2">
         <source>%name% joined and can edit</source>
@@ -23,12 +23,12 @@
         <target>Mit der Sitzung von %name% verbunden</target>
       </trans-unit>
       <trans-unit id="6">
-        <source>Copied — run it in a terminal: porta assist %invite%</source>
-        <target>Kopiert — im Terminal ausführen: porta assist %invite%</target>
+        <source>Copied — run it in a terminal: porta assist %code%</source>
+        <target>Kopiert — in einem Terminal ausführen: porta assist %code%</target>
       </trans-unit>
       <trans-unit id="7">
-        <source>Copy the invite</source>
-        <target>Einladung kopieren</target>
+        <source>Copy the code: %code%</source>
+        <target>Code kopieren: %code%</target>
       </trans-unit>
       <trans-unit id="8">
         <source>Follow</source>
@@ -51,8 +51,8 @@
         <target>In der Sitzung von %name%, nur lesend</target>
       </trans-unit>
       <trans-unit id="13">
-        <source>Invite (host:port#token.fingerprint)</source>
-        <target>Einladung (Host:Port#Token.Fingerabdruck)</target>
+        <source>Code from the host (42-K7QM-X2PA)</source>
+        <target>Code vom Host (42-K7QM-X2PA)</target>
       </trans-unit>
       <trans-unit id="14">
         <source>Leave the session</source>
@@ -91,8 +91,8 @@
         <target>Dieses Projekt wird geteilt — %count% dabei</target>
       </trans-unit>
       <trans-unit id="24">
-        <source>Sharing. Invite copied: porta assist %invite%</source>
-        <target>Wird geteilt. Einladung kopiert: porta assist %invite%</target>
+        <source>Sharing. The code to read out: %code% (copied: porta assist %code%)</source>
+        <target>Freigegeben. Der weiterzugebende Code: %code% (kopiert: porta assist %code%)</target>
       </trans-unit>
       <trans-unit id="25">
         <source>Stop following</source>
@@ -131,8 +131,8 @@
         <target>Die Sitzung ist voll</target>
       </trans-unit>
       <trans-unit id="34">
-        <source>The session is over — ask the host for a new invite</source>
-        <target>Die Sitzung ist vorbei — bitte den Host um eine neue Einladung</target>
+        <source>The session is over — ask the host for a new code</source>
+        <target>Die Sitzung ist vorbei — bitte den Host um einen neuen Code</target>
       </trans-unit>
       <trans-unit id="35">
         <source>This is a copy of someone else's project — it is theirs to share</source>
@@ -349,6 +349,22 @@
       <trans-unit id="88">
         <source>The host has not let you step its debugger</source>
         <target>Der Host lässt Sie seinen Debugger nicht steuern</target>
+      </trans-unit>
+      <trans-unit id="89">
+        <source>Cannot share: %why%</source>
+        <target>Freigabe nicht möglich: %why%</target>
+      </trans-unit>
+      <trans-unit id="90">
+        <source>Someone tried the code and did not get in — the code is now %code%</source>
+        <target>Jemand hat den Code versucht und kam nicht hinein — der Code ist jetzt %code%</target>
+      </trans-unit>
+      <trans-unit id="91">
+        <source>The code was taken at the mailbox server — the code is now %code%</source>
+        <target>Der Code wurde auf dem Mailbox-Server belegt — der Code ist jetzt %code%</target>
+      </trans-unit>
+      <trans-unit id="92">
+        <source>Lost the mailbox server (%why%) — trying again</source>
+        <target>Verbindung zum Mailbox-Server verloren (%why%) — neuer Versuch</target>
       </trans-unit>
     </body>
   </file>

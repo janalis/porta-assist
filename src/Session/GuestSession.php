@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Session;
 
 use Porta\AssistPlugin\Net\Connection;
-use Porta\AssistPlugin\Net\Dialer;
+use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Ot\ClientDocument;
 use Porta\AssistPlugin\Ot\TextDiff;
@@ -40,6 +41,12 @@ final class GuestSession
 
     /** Where the IDE in a guest's copy finds how to reach the host. */
     public const string FILE = '.porta/assist-session.json';
+
+    /**
+     * The next channel a connection to the host takes — shared by the IDE
+     * and every `porta assist-lsp` it starts, so each takes its own.
+     */
+    public const string CHANNEL = '.porta/assist-channel';
 
     /** Seconds before each try at a lost host: doubling, up to the last. */
     private const array RETRY = [1.0, 2.0, 4.0, 8.0, 15.0, 30.0];
@@ -89,20 +96,23 @@ final class GuestSession
 
     private bool $over = false;
 
+    /** The channel the connection being made is on — kept for the next try until the relay joins it. */
+    private ?int $channel = null;
+
     /** Set while the host's word is being carried out here, so it is not sent back as the guest's. */
     private bool $applying = false;
 
     private readonly Presence $presence;
 
     /**
-     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string, languages: list<string>, relay: string|null} $session
+     * @param array{invite: Invite, ticket: string, name: string, languages: list<string>} $session
      */
     public function __construct(
         private readonly PluginApi $api,
         private readonly Mirror $mirror,
         private readonly array $session,
         public readonly Follow $follow,
-        private readonly Dialer $dialer = new Dialer(),
+        private readonly float $timeout = 10.0,
     ) {
         $this->presence = new Presence($api, $mirror->paths);
         $this->runs = new GuestRuns($api, $this->send(...));
@@ -113,43 +123,35 @@ final class GuestSession
      * The session the IDE was opened for, when it was opened on a guest's
      * copy — read from {@see FILE} under $root — or null.
      *
-     * @return array{host: string, port: int, fingerprint: string, ticket: string, name: string, languages: list<string>, relay: string|null}|null
+     * @return array{invite: Invite, ticket: string, name: string, languages: list<string>}|null
      */
     public static function load(string $root): ?array
     {
         $file = $root.'/'.self::FILE;
         // @mago-expect analysis:mixed-assignment -- narrowed below
         $json = \is_file($file) ? \json_decode((string) \file_get_contents($file), associative: true) : null;
-        if (
-            !\is_array($json)
-            || !\is_string($json['host'] ?? null)
-            || !\is_int($json['port'] ?? null)
-            || !\is_string($json['fingerprint'] ?? null)
-            || !\is_string($json['ticket'] ?? null)
-            || !\is_string($json['name'] ?? null)
-        ) {
+        $invite = \is_array($json) ? Invite::fromArray($json) : null;
+        if (null === $invite || !\is_string($json['ticket'] ?? null) || !\is_string($json['name'] ?? null)) {
             return null;
         }
 
         /** @var array<string, mixed> $json */
         return [
-            'host' => $json['host'],
-            'port' => $json['port'],
-            'fingerprint' => $json['fingerprint'],
+            'invite' => $invite,
             'ticket' => $json['ticket'],
             'name' => $json['name'],
             'languages' => Wire::strings($json, 'languages'),
-            'relay' => \is_string($json['relay'] ?? null) ? $json['relay'] : null,
         ];
     }
 
     /**
      * Write the session for the IDE about to open $root — readable by this
-     * user only: the ticket lets its holder in.
+     * user only: the ticket lets its holder in — the next connection to the
+     * host to take channel $channel.
      *
-     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string, languages: list<string>, relay?: string|null} $session
+     * @param array{invite: Invite, ticket: string, name: string, languages: list<string>} $session
      */
-    public static function store(string $root, array $session): void
+    public static function store(string $root, array $session, int $channel = 0): void
     {
         $file = $root.'/'.self::FILE;
         if (!\is_dir(\dirname($file))) {
@@ -157,34 +159,66 @@ final class GuestSession
         }
         \touch($file);
         \chmod($file, permissions: 0o600);
-        \file_put_contents($file, \json_encode($session, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES));
+        $fields = [...$session['invite']->toArray(), 'ticket' => $session['ticket'], 'name' => $session['name'], 'languages' => $session['languages']];
+        \file_put_contents($file, \json_encode($fields, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES));
+        \file_put_contents($root.'/'.self::CHANNEL, (string) $channel);
+    }
+
+    /** The next channel to the host, taken: no other process in this copy takes it too. */
+    public static function channel(string $root): int
+    {
+        $handle = \fopen($root.'/'.self::CHANNEL, mode: 'c+');
+        \assert(false !== $handle, description: 'the copy\'s .porta/ is there: the session file is in it');
+        \flock($handle, \LOCK_EX);
+        $channel = (int) \stream_get_contents($handle);
+        \ftruncate($handle, size: 0);
+        \rewind($handle);
+        \fwrite($handle, (string) ($channel + 1));
+        \fclose($handle);
+
+        return $channel;
     }
 
     public function connect(): void
     {
-        $this->dialer->dial(
-            $this->session['host'],
-            $this->session['port'],
-            $this->session['fingerprint'],
-            function (Connection|string $connection): void {
-                if (\is_string($connection)) {
-                    $this->lost($connection);
-
-                    return;
-                }
-                $this->connection = $connection;
-                $this->servers = new GuestServers($this->api, $connection, fn (): string => (string) $this->hostName);
-                $connection->listen($this->receive(...), $this->lost(...));
-                $connection->send(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $this->session['name'], 'ticket' => $this->session['ticket']]);
-            },
-            $this->session['relay'],
-        );
+        EventLoop::queue($this->dial(...));
         if ([] === $this->timers) {
             $this->timers = [
                 EventLoop::unreference(EventLoop::repeat(HostSession::READ_EVERY, $this->readAll(...))),
                 EventLoop::unreference(EventLoop::repeat(HostSession::CARET_EVERY, $this->caret(...))),
             ];
         }
+    }
+
+    /** Reach the host through the relay, on a channel of this copy's own, and ask back in with the ticket. */
+    private function dial(): void
+    {
+        $invite = $this->session['invite'];
+        // The same channel again until the relay joins it: the host waits on
+        // only a few past the last one joined.
+        $this->channel ??= self::channel($this->mirror->root);
+        $stream = GuestRendezvous::pair($invite, $this->channel, $this->timeout);
+        if (!\is_string($stream)) {
+            $this->channel = null;
+            $stream = GuestRendezvous::secure($invite, $stream, $this->timeout);
+        }
+        if ($this->over) {
+            if (!\is_string($stream)) {
+                \fclose($stream);
+            }
+
+            return;
+        }
+        if (\is_string($stream)) {
+            $this->lost($stream);
+
+            return;
+        }
+        $connection = new Connection($stream);
+        $this->connection = $connection;
+        $this->servers = new GuestServers($this->api, $connection, fn (): string => (string) $this->hostName);
+        $connection->listen($this->receive(...), $this->lost(...));
+        $connection->send(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $this->session['name'], 'ticket' => $this->session['ticket']]);
     }
 
     /** Whether the host is there now. */
@@ -466,7 +500,7 @@ final class GuestSession
                 'host' => $this->api->trans('The host turned you away'),
                 'full' => $this->api->trans('The session is full'),
                 'unanswered' => $this->api->trans('The host did not answer'),
-                default => $this->api->trans('The session is over — ask the host for a new invite'),
+                default => $this->api->trans('The session is over — ask the host for a new code'),
             },
             ToastSeverity::Warn,
             8.0,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
@@ -30,9 +30,9 @@ final class HostDebugE2eTest extends TestCase
     private const string DOWN = "\x1b[B";
 
     /** Ask in as $name and be let in. */
-    private function letIn(Tui $tui, VirtualTerminal $terminal, Address $address, string $name): void
+    private function letIn(Tui $tui, VirtualTerminal $terminal, Invite $invite, string $name): void
     {
-        $this->askIn($address, $name);
+        $this->askIn($invite, $name);
         $this->awaitPainted($tui, $terminal, $name.' asks to join');
         $terminal->simulateInput("\r");
         $this->expect('welcome');
@@ -68,8 +68,8 @@ final class HostDebugE2eTest extends TestCase
 
         $this->runIde($project, $project->path('prog.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
-                $address = $this->share($ide);
-                $this->letIn($tui, $terminal, $address, 'Ana');
+                $invite = $this->invited($ide);
+                $this->letIn($tui, $terminal, $invite, 'Ana');
                 $ana = $this->peer;
                 // Nobody debugging: nothing is said of it.
                 $this->say(['t' => 'open', 'path' => 'nope.php']);
@@ -86,7 +86,7 @@ final class HostDebugE2eTest extends TestCase
                 $this->assertSame([['id' => 1, 'name' => '{main}', 'path' => 'prog.php', 'line' => 4], ['id' => 2, 'name' => 'require', 'path' => 'prog.php', 'line' => 0]], $paused['frames']);
 
                 // A newcomer is told too.
-                $this->letIn($tui, $terminal, $address, 'Bo');
+                $this->letIn($tui, $terminal, $invite, 'Bo');
                 $this->assertSame('paused', $this->expect('debug')['status']);
                 $this->hangUp();
                 $this->peer = $ana;

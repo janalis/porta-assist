@@ -6,6 +6,8 @@ namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
+use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
@@ -45,21 +47,21 @@ final class GuestSessionE2eTest extends TestCase
 
     private const string TICKET = '0123456789abcdef0123456789abcdef';
 
-    private function copy(int $port): TempProject
+    private function copy(Invite $invite): TempProject
     {
         $project = new TempProject([
             'src/A.php' => "<?php\n// stale copy\n",
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
-        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'fingerprint' => $this->fingerprint(), 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
+        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
 
         return $project;
     }
 
     public function testTheCopyJoinsTakesTheHostsTextAndEditsAlong(): void
     {
-        $port = $this->listen();
-        $project = $this->copy($port);
+        $invite = $this->listen();
+        $project = $this->copy($invite);
         $path = (string) \realpath($project->path('src/A.php'));
         $this->assertSame(0o600, \fileperms($project->path(GuestSession::FILE)) & 0o777, 'the ticket is for this user only');
 
@@ -131,8 +133,8 @@ final class GuestSessionE2eTest extends TestCase
 
     public function testALostHostIsTriedAgainAndTheSharedFilesWaitReadOnly(): void
     {
-        $port = $this->listen();
-        $project = $this->copy($port);
+        $invite = $this->listen();
+        $project = $this->copy($invite);
         $path = (string) \realpath($project->path('src/A.php'));
 
         $this->runIde($project, $path, [
@@ -159,8 +161,9 @@ final class GuestSessionE2eTest extends TestCase
                 $terminal->simulateInput('y');
                 $this->assertSame(['y', 8], $this->expect('op')['ops'], 'writable again');
 
-                // Nobody listening any more: the retry says why, and leaving ends it.
+                // Nobody listening any more — the relay gone too: the retry says why, and leaving ends it.
                 $this->hangUp();
+                $this->wormhole = null;
                 $this->await(static fn (): bool => self::toasted($ide, 'refused the connection'), timeout: 15.0, what: 'the retry refused');
                 $this->command($ide, 'assist:leave');
                 $this->await(static fn (): bool => self::toasted($ide, 'Left the session'), what: 'left');
@@ -173,8 +176,8 @@ final class GuestSessionE2eTest extends TestCase
 
     public function testTheHostsWordOnFilesPeersAndRightsIsCarriedOut(): void
     {
-        $port = $this->listen();
-        $project = $this->copy($port);
+        $invite = $this->listen();
+        $project = $this->copy($invite);
         $root = (string) \realpath($project->dir);
         $path = $root.'/src/A.php';
         \file_put_contents($root.'/notes.txt', data: "notes\nmore\n");
@@ -347,28 +350,33 @@ final class GuestSessionE2eTest extends TestCase
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
         GuestSession::store($project->dir, [
-            'host' => '127.0.0.1',
-            'port' => 9,
-            'fingerprint' => \str_repeat('0', times: 64),
+            'invite' => new Invite(new SessionKey(\str_repeat('k', times: 32)), '127.0.0.1:9', \str_repeat('0', times: 64), self::TICKET),
             'ticket' => self::TICKET,
             'name' => 'Bo',
             'languages' => ['php', 'twig'],
         ]);
 
         $this->runIde($project, $project->path('notes.txt'), [
-            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($project): void {
                 $servers = $this->api($ide)->codeIntelligence()->languageServers();
                 foreach (['php', 'twig'] as $language) {
                     $this->assertSame(['assist-lsp', $language], \array_slice($servers[$language]['command'] ?? [], -2), $language.', through `porta assist-lsp`');
                 }
+
+                // A relay out of reach is tried again on the same channel: the
+                // host waits on only a few past the last one joined.
+                $guest = Probe::get($this->plugin($ide), 'guest');
+                $this->assertIsObject($guest);
+                $this->await(static fn (): bool => Probe::get($guest, 'tries') >= 2, what: 'a second try');
+                $this->assertSame(1, GuestSession::channel($project->dir), 'one channel taken, however many tries');
             },
         ]);
     }
 
     public function testAHostsTerminalIsShownHereAndTypedIntoOnlyWhenAllowed(): void
     {
-        $port = $this->listen();
-        $project = $this->copy($port);
+        $invite = $this->listen();
+        $project = $this->copy($invite);
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
@@ -411,6 +419,26 @@ final class GuestSessionE2eTest extends TestCase
         ]);
     }
 
+    public function testLeavingWhileTheHostIsBeingReachedLetsTheConnectionGo(): void
+    {
+        $invite = $this->invite();
+        $project = $this->copy($invite);
+
+        $this->runIde($project, $project->path('src/A.php'), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($invite): void {
+                // Waiting at the relay for a host not there yet, the guest leaves.
+                $this->pump(0.2);
+                $this->command($ide, 'assist:leave');
+                $this->await(static fn (): bool => self::toasted($ide, 'Left the session'), what: 'left');
+                $this->open($invite);
+                $this->acceptGuest();
+                $this->await($this->hungUp(...), what: 'the connection let go');
+                $this->assertSame([], $this->inbox, 'without a word: no hello');
+                $this->hangUp();
+            },
+        ]);
+    }
+
     /** @return iterable<string, array{string, string}> */
     public static function refusals(): iterable
     {
@@ -423,8 +451,8 @@ final class GuestSessionE2eTest extends TestCase
     #[DataProvider('refusals')]
     public function testARefusalIsSaidAndNotRetried(string $reason, string $says): void
     {
-        $port = $this->listen();
-        $project = $this->copy($port);
+        $invite = $this->listen();
+        $project = $this->copy($invite);
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($reason, $says): void {
@@ -442,8 +470,8 @@ final class GuestSessionE2eTest extends TestCase
 
     public function testWhatTheHostSendsToBeShownCannotReachTheTerminal(): void
     {
-        $port = $this->listen();
-        $project = $this->copy($port);
+        $invite = $this->listen();
+        $project = $this->copy($invite);
         $evil = static fn (string $mark): string => "X\x1b]52;c;".$mark."\x07\u{202E}Y";
 
         $this->runIde($project, (string) \realpath($project->path('src/A.php')), [

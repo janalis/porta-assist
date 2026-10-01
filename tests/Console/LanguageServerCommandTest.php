@@ -6,7 +6,10 @@ namespace Porta\AssistPlugin\Tests\Console;
 
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Console\LanguageServerCommand;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
+use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
 use Porta\AssistPlugin\Session\GuestSession;
+use Porta\AssistPlugin\Tests\Support\FakeWormhole;
 use Porta\Support\JsonRpcFramer;
 use Porta\Tests\Support\TempProject;
 use Symfony\Component\Console\Application;
@@ -15,8 +18,9 @@ use Symfony\Component\Process\Process;
 
 /**
  * `porta assist-lsp <language>`, as a guest's IDE starts it: the editor's
- * frames go to the host over the session's encrypted connection, the host's
- * answers come back framed as a language server's — until either side ends.
+ * frames go to the host over a connection of the bridge's own, through the
+ * session's relay — the host's answers come back framed as a language
+ * server's — until either side ends.
  */
 final class LanguageServerCommandTest extends TestCase
 {
@@ -24,10 +28,40 @@ final class LanguageServerCommandTest extends TestCase
 
     private ?Process $relay = null;
 
+    private ?FakeWormhole $wormhole = null;
+
     protected function tearDown(): void
     {
         $this->host?->stop(0);
         $this->relay?->stop(0);
+    }
+
+    /** A fake host serving $mode, waiting at the relay: what a guest of it holds. */
+    private function host(string $mode): Invite
+    {
+        $this->wormhole ??= new FakeWormhole();
+        $this->host?->stop(0);
+        $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode], env: ['PORTA_FAKE_TRANSIT' => $this->wormhole->transit, 'PORTA_FAKE_DOOR' => '1']);
+        $invite = Invite::fromArray((array) \json_decode(self::firstLine($this->host), associative: true));
+        $this->assertInstanceOf(Invite::class, $invite);
+
+        return $invite;
+    }
+
+    /** @var list<TempProject> kept for the test: a project let go is deleted */
+    private array $projects = [];
+
+    /**
+     * A copy of a shared project, a guest of the host $invite names: its directory.
+     *
+     * @param list<string> $languages
+     */
+    private function store(TempProject $project, Invite $invite, array $languages = ['php']): string
+    {
+        $this->projects[] = $project;
+        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => \str_repeat('ab', times: 16), 'name' => 'Bo', 'languages' => $languages]);
+
+        return $project->dir;
     }
 
     /** The first line $process prints, once it has. */
@@ -47,18 +81,7 @@ final class LanguageServerCommandTest extends TestCase
     /** A copy of a shared project whose host is the fake one: its directory. */
     private function copy(TempProject $project): string
     {
-        $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', 'lsp']);
-        [$port, $fingerprint] = \explode(' ', self::firstLine($this->host), limit: 2);
-        GuestSession::store($project->dir, [
-            'host' => '127.0.0.1',
-            'port' => (int) $port,
-            'fingerprint' => $fingerprint,
-            'ticket' => \str_repeat('ab', times: 16),
-            'name' => 'Bo',
-            'languages' => ['php'],
-        ]);
-
-        return $project->dir;
+        return $this->store($project, $this->host('lsp'));
     }
 
     /**
@@ -113,17 +136,9 @@ final class LanguageServerCommandTest extends TestCase
         // Port 1 on loopback: nothing listens there, and nothing unprivileged can
         // start to — a port closed by this test could be taken by a parallel one.
         $port = 1;
-        $gone = new TempProject([]);
-        GuestSession::store($gone->dir, [
-            'host' => '127.0.0.1',
-            'port' => $port,
-            'fingerprint' => \str_repeat('0', times: 64),
-            'ticket' => \str_repeat('ab', times: 16),
-            'name' => 'Bo',
-            'languages' => [],
-        ]);
-        [$tester] = $this->bridge($gone->dir, 'php', []);
-        $this->assertStringContainsString('Cannot reach 127.0.0.1:'.$port, $tester->getErrorOutput());
+        $gone = $this->store(new TempProject([]), new Invite(new SessionKey(\str_repeat('k', times: 32)), '127.0.0.1:'.$port, \str_repeat('0', times: 64), \str_repeat('ab', times: 16)), []);
+        [$tester] = $this->bridge($gone, 'php', []);
+        $this->assertStringContainsString('127.0.0.1:'.$port.' refused the connection', $tester->getErrorOutput());
 
         $stranger = new TempProject([]);
         [$tester] = $this->bridge($stranger->dir, 'php', []);
@@ -134,57 +149,25 @@ final class LanguageServerCommandTest extends TestCase
     public function testAHostThatTurnsItAwayOrNeverAnswersIsNoServer(): void
     {
         foreach (['deny:host' => '(host)', 'silent' => '()'] as $mode => $says) {
-            $project = new TempProject([]);
-            $this->host?->stop(0);
-            $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode]);
-            [$port, $fingerprint] = \explode(' ', self::firstLine($this->host), limit: 2);
-            GuestSession::store($project->dir, [
-                'host' => '127.0.0.1',
-                'port' => (int) $port,
-                'fingerprint' => $fingerprint,
-                'ticket' => \str_repeat('ab', times: 16),
-                'name' => 'Bo',
-                'languages' => ['php'],
-            ]);
-
-            [$tester] = $this->bridge($project->dir, 'php', []);
+            [$tester] = $this->bridge($this->store(new TempProject([]), $this->host($mode)), 'php', []);
             $this->assertSame(1, $tester->getStatusCode(), $mode);
             $this->assertStringContainsString('The host runs no php language server for this session '.$says, $tester->getErrorOutput(), $mode);
         }
     }
 
-    public function testThroughARelayTheBridgeStillReachesTheHost(): void
+    public function testEachBridgeTakesAChannelOfItsOwn(): void
     {
-        $this->relay = new Process([\PHP_BINARY, __DIR__.'/../Support/assist-relay.php']);
-        $relayPort = self::firstLine($this->relay);
-        $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', 'lsp'], env: ['PORTA_ASSIST_RELAY' => $relayPort]);
-        [$port, $fingerprint, $session] = \explode(' ', self::firstLine($this->host), limit: 3);
-        $this->assertSame($relayPort, $port, 'reached at the relay');
-        $session = [
-            'host' => '127.0.0.1',
-            'port' => (int) $port,
-            'fingerprint' => $fingerprint,
-            'ticket' => \str_repeat('ab', times: 16),
-            'name' => 'Bo',
-            'languages' => ['php'],
-            'relay' => $session,
-        ];
-        $project = new TempProject([]);
-        GuestSession::store($project->dir, $session);
-
-        [$tester, $sent] = $this->bridge($project->dir, 'php', [
+        $root = $this->copy(new TempProject([]));
+        $this->assertSame(0, GuestSession::channel($root));
+        // The host waits on a few channels past the last one used: a channel
+        // taken and never used is stepped over.
+        [$tester, $sent] = $this->bridge($root, 'php', [
             ['jsonrpc' => '2.0', 'id' => 7, 'method' => 'initialize', 'params' => []],
             ['jsonrpc' => '2.0', 'method' => 'exit'],
         ]);
         $this->assertSame(0, $tester->getStatusCode(), $tester->getErrorOutput());
         $this->assertSame(JsonRpcFramer::encode(['jsonrpc' => '2.0', 'id' => 7, 'result' => 'initialize']), $sent);
-
-        // A session the relay does not know: the relay says so.
-        $gone = new TempProject([]);
-        GuestSession::store($gone->dir, ['relay' => \str_repeat('0', times: 16)] + $session);
-        [$tester] = $this->bridge($gone->dir, 'php', []);
-        $this->assertSame(1, $tester->getStatusCode());
-        $this->assertStringContainsString('The relay at 127.0.0.1:'.$port.' says no such session', $tester->getErrorOutput());
+        $this->assertSame(2, GuestSession::channel($root));
     }
 
     public function testWhatARelaySaysIsPrintedAsTextNotAsMarkup(): void
@@ -193,21 +176,12 @@ final class LanguageServerCommandTest extends TestCase
         $this->relay = new Process([
             \PHP_BINARY,
             '-r',
-            '$s = stream_socket_server("tcp://127.0.0.1:0"); echo explode(":", stream_socket_get_name($s, false))[1], "\n"; $c = stream_socket_accept($s, 20); fgets($c); fwrite($c, json_encode(["error" => "<href=https://evil.example>click</>"]) . "\n"); sleep(1);',
+            '$s = stream_socket_server("tcp://127.0.0.1:0"); echo explode(":", stream_socket_get_name($s, false))[1], "\n"; $c = stream_socket_accept($s, 20); fgets($c); fwrite($c, "<href=https://evil.example>click</>\n"); sleep(1);',
         ]);
         $port = self::firstLine($this->relay);
-        $project = new TempProject([]);
-        GuestSession::store($project->dir, [
-            'host' => '127.0.0.1',
-            'port' => (int) $port,
-            'fingerprint' => \str_repeat('0', times: 64),
-            'ticket' => \str_repeat('ab', times: 16),
-            'name' => 'Bo',
-            'languages' => [],
-            'relay' => \str_repeat('0', times: 16),
-        ]);
+        $project = $this->store(new TempProject([]), new Invite(new SessionKey(\str_repeat('k', times: 32)), '127.0.0.1:'.$port, \str_repeat('0', times: 64), \str_repeat('ab', times: 16)), []);
 
-        [$tester] = $this->bridge($project->dir, 'php', []);
+        [$tester] = $this->bridge($project, 'php', []);
 
         $this->assertStringContainsString('says <href=https://evil.example>click</>', $tester->getErrorOutput(), 'the tag shown as written');
     }

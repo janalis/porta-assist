@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Session\Role;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
@@ -52,9 +52,9 @@ final class HostLanguageServerE2eTest extends TestCase
     }
 
     /** A second connection, as the guest's `porta assist-lsp` makes: the host's answer. @return array<string, mixed> */
-    private function channel(Address $address, string $ticket, string $language, string $root = self::COPY): array
+    private function channel(Invite $invite, string $ticket, string $language, string $root = self::COPY): array
     {
-        $this->dial($address);
+        $this->dial($invite);
         $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'channel' => 'lsp', 'name' => 'Ana', 'ticket' => $ticket, 'language' => $language, 'root' => $root]);
         $this->await(fn (): bool => [] !== $this->inbox || $this->hungUp(), what: 'the host\'s answer');
 
@@ -78,8 +78,8 @@ final class HostLanguageServerE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root): void {
-                $address = $this->share($ide);
-                $this->askIn($address, 'Ana');
+                $invite = $this->invited($ide);
+                $this->askIn($invite, 'Ana');
                 $this->awaitPainted($tui, $terminal, 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $welcome = $this->expect('welcome');
@@ -94,10 +94,10 @@ final class HostLanguageServerE2eTest extends TestCase
                     $copy,
                     $reason,
                 ]) {
-                    $this->assertSame(['t' => 'denied', 'reason' => $reason], $this->channel($address, $with, $language, $copy), $reason);
+                    $this->assertSame(['t' => 'denied', 'reason' => $reason], $this->channel($invite, $with, $language, $copy), $reason);
                 }
 
-                $this->assertSame(['t' => 'ready'], $this->channel($address, $ticket, 'php'));
+                $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, 'php'));
                 $this->inbox = [];
                 $initialize = $this->ask([
                     'jsonrpc' => '2.0',
@@ -147,7 +147,7 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->await($this->hungUp(...), what: 'the channel closed with the server');
 
                 // Removed from the session: her language servers go with her.
-                $this->dial($address);
+                $this->dial($invite);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'channel' => 'lsp', 'name' => 'Ana', 'ticket' => $ticket, 'language' => 'php', 'root' => self::COPY]);
                 $this->expect('ready');
                 $channel = $this->peer;
@@ -156,12 +156,14 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->peer = $channel;
                 $this->await($this->hungUp(...), what: 'her server stopped');
 
-                // And stopping the session stops every one.
-                $this->askIn($address, 'Bo');
+                // And stopping the session stops every one. Bo comes with a code
+                // of his own: Ana's way in went with her.
+                $invite = $this->redeem($this->code($ide));
+                $this->askIn($invite, 'Bo');
                 $this->awaitPainted($tui, $terminal, 'Bo asks to join');
                 $terminal->simulateInput("\r");
                 $bo = Wire::string($this->expect('welcome'), 'ticket');
-                $this->assertSame(['t' => 'ready'], $this->channel($address, $bo, 'php'));
+                $this->assertSame(['t' => 'ready'], $this->channel($invite, $bo, 'php'));
                 $this->command($ide, 'assist:stop');
                 $this->await($this->hungUp(...), what: 'his server stopped with the session');
                 $this->hangUp();

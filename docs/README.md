@@ -17,59 +17,64 @@ in `.porta.json`.
 ## Sharing a project
 
 1. Run **Assist: Share This Project** from the palette or the Plugins menu.
-2. Porta starts listening and copies the invite to the clipboard, for example
-   `porta assist 127.0.0.1:52814#4f3a….9c1e…`. Send it to the people you want in.
-3. When someone joins, the host is asked: **Let them edit**, **Let them read
-   along**, or **Turn them away**.
+2. Porta shows a code, for example `42-K7QM-X2PA`, and copies
+   `porta assist 42-K7QM-X2PA` to the clipboard. Read the code out or send it
+   to the person you want in. There is no address or port to set up: neither
+   machine has to be reachable from the other.
+3. When someone joins with it, the host is asked: **Let them edit**, **Let
+   them read along**, or **Turn them away**.
+
+**A code lets one person in.** Once it is used, the next one is ready at once:
+click `⇄` in the status bar and pick **Copy the code** to get it. If someone
+tries a code and gets it wrong, that code is spent too, and a toast gives the
+new one. A code only lets someone ask to join: the host still decides.
 
 While sharing, the status bar shows `⇄` and how many are in. Click it to:
 
 - follow someone;
-- copy the invite again;
+- copy the code for the next guest;
 - open **Participants**, where the host can change what a guest may do or
   remove them;
 - stop sharing.
 
 **Assist: Stop Sharing** ends the session for everyone.
 
-**The session is encrypted.** Each share makes a fresh TLS certificate, and
-the invite carries its fingerprint after the dot. A guest only talks to the
-host whose certificate matches, so nobody on the way can read the session or
-stand in for the host. The token before the dot is what gets a guest asked
-in at all, so share the invite only with the people you mean to let in.
+### How guests reach the host
 
-By default the host still only accepts connections **from its own machine**
-(`127.0.0.1`), so opening it to a network is a choice you make. To work across
-machines, use one of these:
+Both sides connect out to two public servers run by the
+[magic-wormhole](https://magic-wormhole.readthedocs.io) project:
 
-- **An SSH tunnel.** The guest runs `ssh -L 52814:127.0.0.1:52814 host`, then
-  joins `127.0.0.1:52814#…`.
-- **A VPN such as Tailscale.** Set **Accept guests from** to `0.0.0.0` and
-  share the host's VPN address.
-- **A relay.** When neither side can reach the other (both behind a router,
-  say), anyone can run `porta assist-relay` on a machine both can reach. It
-  listens on port 7420 (`--port` changes it, `--bind` the address). Set
-  **Relay to share through** to that machine's `address:port`, then share.
-  The invite then names the relay and the session, as
-  `relay.example.com:7420/6b1f…#…`, and guests join it the usual way.
+- **The mailbox server** is where the two sides meet. The number before the
+  first dash is the meeting point. The letters after it never leave either
+  machine. Both sides prove they hold the same letters with a password-
+  authenticated key exchange (SPAKE2), so the server learns nothing it could
+  use, and someone guessing gets one try before the code changes.
+- **The transit relay** passes the session's bytes between the two sides.
+  The session is encrypted from the guest all the way to the host with a TLS
+  certificate made for this share. What the guest receives through the
+  mailbox pins that certificate, so the relay cannot read the session or
+  stand in for the host.
 
-  The relay only joins the two connections and passes bytes between them.
-  The encryption runs from the guest all the way to the host, checked against
-  the fingerprint in the invite, so the relay sees neither the code nor the
-  token, and it cannot stand in for the host. If the relay stops, everyone
-  who came in through it is cut off and the host is told. Share again for a
-  new invite once it is back.
+The servers see both sides' IP addresses and how much is sent, but never
+your files, what you type, or the letters of the code.
+
+To use servers of your own instead, run
+[magic-wormhole-mailbox-server](https://github.com/magic-wormhole/magic-wormhole-mailbox-server)
+and [magic-wormhole-transit-relay](https://github.com/magic-wormhole/magic-wormhole-transit-relay).
+Then set **Mailbox server** (a `ws://` address) and **Transit relay**
+(`host:port`) on the host. Guests join with
+`porta assist <code> --mailbox ws://…`. The relay comes from the host.
 
 ## Joining
 
-Run the invite in a terminal:
+Run the code in a terminal:
 
 ```
-porta assist 127.0.0.1:52814#4f3a….9c1e…
+porta assist 42-K7QM-X2PA
 ```
 
-If the host on the other end presents a different certificate, Porta refuses
-to join and says so.
+Case does not matter, and the dashes may be spaces. If the code is wrong,
+already used, or nobody is sharing with it, Porta says so.
 
 Add `--name` to choose the name the others see. Without it, Porta uses your
 login name.
@@ -88,7 +93,8 @@ What the copy holds:
   are never sent.
 - **Joining again.** It fetches only what changed since last time.
 
-**Assist: Join a Session…** inside Porta copies the command for you to run.
+**Assist: Join a Session…** inside Porta asks for the code and copies the
+command for you to run.
 A session opens in its own Porta window because it is its own project.
 
 In a session, as a guest:
@@ -222,16 +228,21 @@ Porta instances on the same project see too. Empty uses your login name.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Accept guests from | `127.0.0.1` | `127.0.0.1`: this machine only (reach it through a tunnel or VPN). `0.0.0.0`: the whole network |
-| Port to share on | `0` | `0` picks a free port each time |
-| Relay to share through | empty | `host:port` of a `porta assist-relay` for guests who cannot reach this machine. Empty: guests connect directly |
+| Mailbox server | magic-wormhole's public one | The `ws://` address where a host and its guests meet. Guests name the same with `--mailbox` |
+| Transit relay | magic-wormhole's public one | `host:port` of the relay the session goes through. Guests use the one the host names |
 | Most guests at once | `8` | More can join than there are caret colours. Past eight, the colours repeat |
 | Largest file to share (MB) | `4` | Bigger files stay on the host |
 
 ## Limits
 
-- **Each share is a new invite.** Its certificate and token last as long as
-  that share: after **Assist: Stop Sharing**, an old invite no longer works.
+- **Each share is a new session.** Its certificate lasts as long as that
+  share. After **Assist: Stop Sharing**, nobody gets back in, codes and
+  guests who were in included.
+- **A removed guest stays out.** Removing a guest also closes the way in its
+  code opened. To let them back, give them a new code.
+- **The public servers are shared by everyone.** They are run by volunteers
+  for magic-wormhole's own transfers. For a team that shares all day, run
+  your own (see [How guests reach the host](#how-guests-reach-the-host)).
 - **Eight guests by default.** **Most guests at once** raises it. The editor
   has eight caret colours, so past eight the colours repeat. The name beside
   each caret still tells people apart.

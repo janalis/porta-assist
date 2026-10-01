@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Console;
 
-use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Connection;
-use Porta\AssistPlugin\Net\SecureClient;
+use Porta\AssistPlugin\Net\Rendezvous\Code;
+use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
+use Porta\AssistPlugin\Net\Rendezvous\Mailbox;
+use Porta\AssistPlugin\Net\Rendezvous\RendezvousFailed;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Workspace\Mirror;
@@ -23,13 +26,14 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * `porta assist <invite>` — join a session someone shares.
+ * `porta assist <code>` — join a session someone shares.
  *
- * Asks the host in (the host answers in their IDE), brings this machine's copy
- * of the host's project in line with it — only what changed since the last
- * time is fetched — and opens Porta on that copy, which takes the session
- * from there. A plain blocking loop: until the IDE opens, this process has
- * nothing else to do.
+ * Meets the host through the mailbox server with the code it read out
+ * ({@see GuestRendezvous}), asks the host in (the host answers in their
+ * IDE), brings this machine's copy of the host's project in line with it —
+ * only what changed since the last time is fetched — and opens Porta on
+ * that copy, which takes the session from there. Once connected, a plain
+ * blocking loop: until the IDE opens, this process has nothing else to do.
  */
 #[AsCommand(
     name: 'assist',
@@ -62,9 +66,11 @@ final class JoinCommand extends PluginCommand
         $this->framer = new LineFramer(static function (string $why): void {}, Connection::MAX_LINE);
         $this->setHelp(<<<'HELP'
             Joins a project shared with the <info>assist</info> plugin. The host runs
-            <info>Assist: Share This Project</info> and sends you the invite it copies:
+            <info>Assist: Share This Project</info> and reads you the code it shows:
 
-              <info>porta assist 192.168.1.20:52814#4f….9c…</info>
+              <info>porta assist 42-K7QM-X2PA</info>
+
+            A code lets one person in; the host's next one is ready as soon as it is used.
 
             The host is asked to let you in. Then a copy of the project is kept in sync
             under <info>~/.porta/assist/</info> — a second join fetches only what changed —
@@ -75,21 +81,23 @@ final class JoinCommand extends PluginCommand
 
     public function __invoke(
         OutputInterface $output,
-        #[Argument('The invite the host shared: host:port#token')]
-        string $invite,
+        #[Argument('The code the host read out: 42-K7QM-X2PA')]
+        string $code,
         #[Option('The name the others see')]
         ?string $name = null,
+        #[Option('The mailbox server the host meets guests at, when it is not the public one')]
+        string $mailbox = Mailbox::PUBLIC,
     ): int {
         $errors = self::errors($output);
         try {
-            $address = Address::parse($invite);
+            $parsed = Code::parse($code);
         } catch (\InvalidArgumentException $e) {
             $errors->writeln('<error>'.OutputFormatter::escape($e->getMessage()).'</error>');
 
             return self::FAILURE;
         }
         $who = '' !== \trim((string) $name) ? \trim((string) $name) : self::user();
-        $failure = $this->join($address, $who, $output);
+        $failure = $this->join($mailbox, $parsed, $who, $output);
         if (null !== $failure) {
             $errors->writeln('<error>'.OutputFormatter::escape($failure).'</error>');
 
@@ -100,22 +108,21 @@ final class JoinCommand extends PluginCommand
     }
 
     /** Ask in, sync the copy, open the IDE on it: null once done, else why not. */
-    private function join(Address $address, string $name, OutputInterface $output): ?string
+    private function join(string $mailbox, Code $code, string $name, OutputInterface $output): ?string
     {
-        $joined = $this->enter($address, $name, $output);
+        $output->writeln('Meeting the host…');
+        try {
+            $invite = GuestRendezvous::blocking(fn (): Invite => GuestRendezvous::redeem($mailbox, $code, $this->timeout));
+        } catch (RendezvousFailed $e) {
+            return $e->getMessage();
+        }
+        $joined = $this->enter($invite, $name, $output);
         if (\is_string($joined)) {
             return $joined;
         }
         [$mirror, $ticket, $languages] = $joined;
-        GuestSession::store($mirror->root, [
-            'host' => $address->host,
-            'port' => $address->port,
-            'fingerprint' => $address->fingerprint,
-            'ticket' => $ticket,
-            'name' => $name,
-            'languages' => $languages,
-            'relay' => $address->relay,
-        ]);
+        // This command's own connection took the first channel.
+        GuestSession::store($mirror->root, ['invite' => $invite, 'ticket' => $ticket, 'name' => $name, 'languages' => $languages], channel: 1);
         self::enable($mirror->root);
         // The first-run card walks through setting a project up; this one is
         // the host's, set up already.
@@ -132,15 +139,16 @@ final class JoinCommand extends PluginCommand
      *
      * @return array{Mirror, string, list<string>}|string the copy, the ticket and the host's languages, or why not
      */
-    private function enter(Address $address, string $name, OutputInterface $output): array|string
+    private function enter(Invite $invite, string $name, OutputInterface $output): array|string
     {
-        $socket = SecureClient::connect($address->host, $address->port, $address->fingerprint, $this->timeout, $address->relay);
+        $socket = GuestRendezvous::blocking(fn (): mixed => GuestRendezvous::connect($invite, 0, $this->timeout));
         if (\is_string($socket)) {
-            return $socket;
+            return \sprintf('Cannot reach the host: %s', $socket);
         }
+        \stream_set_blocking($socket, enable: true);
         $this->socket = $socket;
         try {
-            $this->send(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $name, 'token' => $address->token]);
+            $this->send(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $name, 'token' => $invite->token]);
             $welcome = $this->welcome($output);
             if (\is_string($welcome)) {
                 return $welcome;
@@ -193,7 +201,7 @@ final class JoinCommand extends PluginCommand
                 'full' => 'The session is full',
                 'unanswered', 'timeout' => 'The host did not answer',
                 'version' => 'The host runs a Porta that speaks another version of assist',
-                default => 'The invite is not valid any more — ask the host for a new one',
+                default => 'The host does not know this guest any more — ask the host for a new code',
             };
         }
     }

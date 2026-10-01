@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
@@ -90,9 +90,9 @@ final class HostServersE2eTest extends TestCase
     }
 
     /** Ask in as $name and be let in. */
-    private function letIn(Tui $tui, VirtualTerminal $terminal, Address $address, string $name): void
+    private function letIn(Tui $tui, VirtualTerminal $terminal, Invite $invite, string $name): void
     {
-        $this->askIn($address, $name);
+        $this->askIn($invite, $name);
         $this->awaitPainted($tui, $terminal, $name.' asks to join');
         $terminal->simulateInput("\r");
         $this->expect('welcome');
@@ -111,8 +111,8 @@ final class HostServersE2eTest extends TestCase
                 $this->command($ide, 'assist:share_server');
                 $this->await(static fn (): bool => self::toasted($ide, 'Share this project first'), what: 'nothing to share it in');
 
-                $address = $this->share($ide);
-                $this->letIn($tui, $terminal, $address, 'Ana');
+                $invite = $this->invited($ide);
+                $this->letIn($tui, $terminal, $invite, 'Ana');
 
                 // Asked for a port: what is not one is said; the port is shared with everyone.
                 $this->command($ide, 'assist:share_server');
@@ -162,7 +162,7 @@ final class HostServersE2eTest extends TestCase
 
                 // A newcomer is told what is shared.
                 $ana = $this->peer;
-                $this->letIn($tui, $terminal, $address, 'Bo');
+                $this->letIn($tui, $terminal, $invite, 'Bo');
                 $this->assertSame($port, $this->expect('server')['port']);
                 $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 1]);
                 $bos = $this->devAccepts($port);

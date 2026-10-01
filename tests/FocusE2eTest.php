@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
@@ -33,9 +33,9 @@ final class FocusE2eTest extends TestCase
     private const string TICKET = '0123456789abcdef0123456789abcdef';
 
     /** @return resource Ask in as $name and be let in: the connection. */
-    private function letIn(Tui $tui, VirtualTerminal $terminal, Address $address, string $name)
+    private function letIn(Tui $tui, VirtualTerminal $terminal, Invite $invite, string $name)
     {
-        $this->askIn($address, $name);
+        $this->askIn($invite, $name);
         $this->awaitPainted($tui, $terminal, $name.' asks to join');
         $terminal->simulateInput("\r");
         $this->expect('welcome');
@@ -58,9 +58,9 @@ final class FocusE2eTest extends TestCase
                 $this->command($ide, 'assist:focus');
                 $this->await(static fn (): bool => self::toasted($ide, 'Nobody else is in the session'), what: 'nobody to ask');
                 Services::resolve($ide, Identity::class)->rename('Hal');
-                $address = $this->share($ide);
-                $ana = $this->letIn($tui, $terminal, $address, 'Ana');
-                $bo = $this->letIn($tui, $terminal, $address, 'Bo');
+                $invite = $this->invited($ide);
+                $ana = $this->letIn($tui, $terminal, $invite, 'Ana');
+                $bo = $this->letIn($tui, $terminal, $invite, 'Bo');
 
                 // The host asks: both follow it, shown where it is — its caret
                 // sent again, though it has not moved since each saw it.
@@ -104,13 +104,13 @@ final class FocusE2eTest extends TestCase
 
     public function testAGuestFollowsWhoeverAsks(): void
     {
-        $port = $this->listen();
+        $invite = $this->listen();
         $project = new TempProject([
             'src/A.php' => "<?php\n",
             'src/B.php' => "<?php\n\necho 'b';\n",
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
-        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'fingerprint' => $this->fingerprint(), 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
+        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
         $b = (string) \realpath($project->path('src/B.php'));
 
         $this->runIde($project, $project->path('src/A.php'), [

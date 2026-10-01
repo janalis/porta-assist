@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Rendezvous\Code;
+use Porta\AssistPlugin\Net\Rendezvous\Mailbox;
+use Porta\AssistPlugin\Net\Rendezvous\Transit;
 use Porta\AssistPlugin\Session\Follow;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Session\HostSession;
@@ -29,8 +31,8 @@ use Porta\Workbench\StatusTone;
  * Working on one project together, live — what VS Code calls Live Share and
  * PhpStorm Code With Me.
  *
- * A host shares the project it has open and hands out the invite; a guest
- * runs `porta assist <invite>`, the host lets them in, and from then on
+ * A host shares the project it has open and reads out the code it gets; a
+ * guest runs `porta assist <code>`, the host lets them in, and from then on
  * everyone edits the same files at once, sees each other's carets and
  * selections, and may follow one another around. The host's copy is the one
  * that counts: a guest's saves and file operations are asked of the host.
@@ -50,20 +52,18 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
     {
         $this->api = $api;
         $api->registerSetting(
-            'bind',
-            'Accept guests from',
-            'choice',
-            '127.0.0.1',
-            ['127.0.0.1', '0.0.0.0'],
-            hint: '127.0.0.1: this machine only, reached through an ssh tunnel or a VPN; 0.0.0.0: the whole network — still encrypted, and only those holding the invite are asked in',
-        );
-        $api->registerSetting('port', 'Port to share on', 'int', 0, hint: '0 picks a free one each time', min: 0, max: 65_535);
-        $api->registerSetting(
-            'relay',
-            'Relay to share through',
+            'mailbox',
+            'Mailbox server',
             'text',
-            '',
-            hint: 'host:port of a `porta assist-relay` both sides can reach, when the guests cannot reach this machine; empty: they connect directly',
+            Mailbox::PUBLIC,
+            hint: 'where a host and a guest with the same code meet — magic-wormhole\'s public one, or one of your own; guests name the same with --mailbox',
+        );
+        $api->registerSetting(
+            'transit',
+            'Transit relay',
+            'text',
+            Transit::PUBLIC,
+            hint: 'host:port of the relay every connection goes through, encrypted end to end — magic-wormhole\'s public one, or one of your own',
         );
         $api->registerSetting('maxGuests', 'Most guests at once', 'int', 8, hint: 'past eight, the colours that tell carets apart repeat — the names beside them do not', min: 1, max: 32);
         $api->registerSetting('maxFileSize', 'Largest file to share (MB)', 'int', 4, hint: 'a bigger one stays on the host', min: 1, max: 64);
@@ -165,17 +165,17 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             return;
         }
         $this->host ??= new HostSession($api, $api->participants()->yourName(), (int) $api->setting('maxFileSize') * 1_048_576, $this->follow());
-        // Stopping before a relay answered calls the start off: whatever ends
-        // here ends the session being started.
-        $this->host->start((string) $api->setting('bind'), (int) $api->setting('port'), (string) $api->setting('relay'), function (Address|string $started) use ($api): void {
+        // Stopping before the mailbox answered calls the start off: whatever
+        // ends here ends the session being started.
+        $this->host->start((string) $api->setting('mailbox'), (string) $api->setting('transit'), function (Code|string $started) use ($api): void {
             if (\is_string($started)) {
                 $this->host = null;
-                $api->notify($started, ToastSeverity::Error, 8.0, slot: 'assist');
+                $api->notify($api->trans('Cannot share: %why%', ['%why%' => $started]), ToastSeverity::Error, 8.0, slot: 'assist');
 
                 return;
             }
-            $api->copyToClipboard('porta assist '.$started->invite());
-            $api->notify($api->trans('Sharing. Invite copied: porta assist %invite%', ['%invite%' => $started->invite()]), ToastSeverity::Success, 15.0, slot: 'assist');
+            $api->copyToClipboard('porta assist '.$started->text());
+            $api->notify($api->trans('Sharing. The code to read out: %code% (copied: porta assist %code%)', ['%code%' => $started->text()]), ToastSeverity::Success, 15.0, slot: 'assist');
             $api->refreshStatusSegments();
         });
     }
@@ -196,16 +196,16 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
     private function join(): void
     {
         $api = $this->api();
-        $api->prompt($api->trans('Invite (host:port#token.fingerprint)'), initial: '', onSubmit: static function (string $invite) use ($api): void {
+        $api->prompt($api->trans('Code from the host (42-K7QM-X2PA)'), initial: '', onSubmit: static function (string $typed) use ($api): void {
             try {
-                $address = Address::parse(\preg_replace('/^\s*porta\s+assist\s+/', replacement: '', subject: $invite) ?? $invite);
+                $code = Code::parse(\preg_replace('/^\s*porta\s+assist\s+/', replacement: '', subject: $typed) ?? $typed);
             } catch (InvalidArgumentException $e) {
                 $api->notify($e->getMessage(), ToastSeverity::Error, slot: 'assist');
 
                 return;
             }
-            $api->copyToClipboard('porta assist '.$address->invite());
-            $api->notify($api->trans('Copied — run it in a terminal: porta assist %invite%', ['%invite%' => $address->invite()]), seconds: 15.0, slot: 'assist');
+            $api->copyToClipboard('porta assist '.$code->text());
+            $api->notify($api->trans('Copied — run it in a terminal: porta assist %code%', ['%code%' => $code->text()]), seconds: 15.0, slot: 'assist');
         });
     }
 
@@ -469,12 +469,12 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             $items[] = new MenuItem($api->trans('Ask everyone to follow me'), '', static fn () => $api->emit(new CommandRunRequested('assist:focus')));
         }
         $items[] = MenuItem::separator();
-        $address = $this->host?->address();
-        if (null !== $address) {
-            $items[] = new MenuItem($api->trans('Copy the invite'), '', static fn () => $api->copyToClipboard('porta assist '.$address->invite()));
+        $code = $this->host?->code();
+        if (null !== $code) {
+            $items[] = new MenuItem($api->trans('Copy the code: %code%', ['%code%' => $code->text()]), '', static fn () => $api->copyToClipboard('porta assist '.$code->text()));
         }
         $items[] = new MenuItem($api->trans('Participants'), '', static fn () => $api->emit(new CommandRunRequested('assist:participants')));
-        $items[] = null !== $address
+        $items[] = null !== $this->host
             ? new MenuItem($api->trans('Stop sharing'), '', static fn () => $api->emit(new CommandRunRequested('assist:stop')))
             : new MenuItem($api->trans('Leave the session'), '', static fn () => $api->emit(new CommandRunRequested('assist:leave')));
 

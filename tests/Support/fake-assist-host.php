@@ -3,11 +3,21 @@
 declare(strict_types=1);
 
 use Porta\AssistPlugin\Net\Certificate;
+use Porta\AssistPlugin\Net\Rendezvous\Code;
+use Porta\AssistPlugin\Net\Rendezvous\Door;
+use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\HostRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
+use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
+use Porta\Support\FiberWait;
+use Revolt\EventLoop;
 
 /*
  * A host for `porta assist` to join, as a separate process — the command
- * blocks, so the host cannot share its loop. Prints its port, serves ONE
- * connection the way $argv[1] says, then exits:
+ * blocks, so the host cannot share its loop. Meets its guest through the
+ * mailbox server and relay named by PORTA_FAKE_MAILBOX and PORTA_FAKE_TRANSIT,
+ * prints the code to join with on its first line, serves ONE connection the
+ * way $argv[1] says, then exits:
  *
  *   welcome      let in, list and send the files of $argv[2]
  *   pending      say "pending" first, then as welcome
@@ -17,14 +27,11 @@ use Porta\AssistPlugin\Net\Certificate;
  *   no-list      let in, then never list the files
  *   cut          let in, list, and hang up on the first fetch
  *   chatty       as welcome, with the session talking in between
- *   plain        no TLS: hang up on whatever comes
  *   lsp          a language-server channel: ready for php, each request
  *                answered with its own method, hung up on `exit`
  *
- * It speaks TLS with a certificate of its own, and prints its port and the
- * certificate's fingerprint on the first line. With PORTA_ASSIST_RELAY set
- * to a relay's port on loopback, it is reached through that relay instead:
- * the port printed is the relay's, followed by the session guests name.
+ * With PORTA_FAKE_DOOR set, it skips the mailbox: it prints the invite a
+ * guest holds already, as JSON, and waits at the relay for that guest.
  */
 
 $mode = $argv[1] ?? 'welcome';
@@ -43,42 +50,51 @@ require __DIR__.'/../../../../vendor/autoload.php';
 require __DIR__.'/../../../../tests/plugin-autoload.php';
 $certificate = Certificate::create();
 register_shutdown_function($certificate->forget(...));
-$relay = getenv('PORTA_ASSIST_RELAY');
-// One line from a relay, a byte at a time: what follows is TLS, not to be read here.
-$relayed = static function ($stream, array $hello): array {
-    fwrite($stream, json_encode($hello)."\n");
-    $line = '';
-    while (false !== ($byte = fgetc($stream)) && "\n" !== $byte) {
-        $line .= $byte;
-    }
-
-    return (array) json_decode($line, associative: true);
+$transit = (string) getenv('PORTA_FAKE_TRANSIT');
+// @mago-expect lint:no-literal-password -- the fake host's token: the tests know it, and it guards nothing
+$token = '00112233445566778899aabbccddeeff';
+$client = null;
+$take = static function ($stream) use (&$client): void {
+    $client ??= $stream;
 };
-$reached = static function (string $relay) use ($relayed, $certificate) {
-    $control = stream_socket_client('tcp://127.0.0.1:'.$relay);
-    $session = (string) ($relayed($control, ['relay' => 'host'])['session'] ?? '');
-    fwrite(STDOUT, $relay.' '.$certificate->fingerprint.' '.$session."\n");
+$say = static function (string $line): void {
+    fwrite(STDOUT, $line."\n");
     fflush(STDOUT);
-    $incoming = json_decode((string) fgets($control), associative: true);
-    $client = stream_socket_client('tcp://127.0.0.1:'.$relay, context: stream_context_create($certificate->serverContext()));
-    stream_set_read_buffer($client, size: 0);
-    $relayed($client, ['relay' => 'accept', 'session' => $session, 'conn' => $incoming['incoming'] ?? -1]);
-
-    return $client;
 };
-$listened = static function () use ($certificate) {
-    $server = stream_socket_server('tcp://127.0.0.1:0', context: stream_context_create($certificate->serverContext()));
-    $name = (string) stream_socket_get_name($server, remote: false);
-    fwrite(STDOUT, substr($name, offset: (int) strrpos($name, needle: ':') + 1).' '.$certificate->fingerprint."\n");
-    fflush(STDOUT);
-
-    return stream_socket_accept($server, timeout: 20);
+$door = static function () use ($transit, $certificate, $token, $take, $say): void {
+    $invite = new Invite(new SessionKey(random_bytes(32)), $transit, $certificate->fingerprint, $token);
+    new Door($invite->key, $transit, $certificate, $take)->open();
+    $say((string) json_encode($invite->toArray()));
 };
-$client = false !== $relay ? $reached($relay) : $listened();
-// @mago-expect lint:no-error-control-operator -- a client that gives up mid-handshake warns; this host just stops
-if (false === $client || 'plain' === $mode || true !== @stream_socket_enable_crypto($client, enable: true, crypto_method: STREAM_CRYPTO_METHOD_TLS_SERVER)) {
+$code = static fn () => new HostRendezvous(
+    (string) getenv('PORTA_FAKE_MAILBOX'),
+    $transit,
+    $certificate,
+    $token,
+    static fn (Code $code, string $why) => '' === $why ? $say($code->text()) : null,
+    static fn (string $why) => $say('failed: '.$why),
+    static function (): void {},
+    $take,
+)->start();
+false !== getenv('PORTA_FAKE_DOOR') ? $door() : $code();
+// Not arrow functions: those would capture $client as it is now — null.
+GuestRendezvous::blocking(static function () use (&$client): bool {
+    return FiberWait::within(
+        20.0,
+        static function (Closure $done) use (&$client): void {
+            EventLoop::repeat(0.01, static function () use (&$client, $done): void {
+                if (null !== $client) {
+                    $done(true);
+                }
+            });
+        },
+        false,
+    );
+});
+if (null === $client) {
     exit(0);
 }
+stream_set_blocking($client, enable: true);
 $send = static function (array $message) use ($client): void {
     fwrite($client, json_encode($message, JSON_UNESCAPED_SLASHES)."\n");
 };
