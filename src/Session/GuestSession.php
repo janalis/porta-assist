@@ -426,7 +426,7 @@ final class GuestSession
             'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
             'server', 'server-end', 'tunnel-data', 'tunnel-close' => $this->servers?->receive($message),
             'runs', 'running', 'run-refused' => $this->runs->receive($message),
-            'debug', 'debug-vars', 'debugging', 'debug-refused' => $this->debug->receive($message),
+            'debug', 'debug-vars', 'debug-children', 'debugging', 'debug-refused' => $this->debug->receive($message),
             'focus' => $this->follow->asked(Wire::string($message, 'peer'), Wire::text($message, 'name')),
             default => null,
         };

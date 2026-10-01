@@ -601,7 +601,7 @@ final class HostSession
             'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, 'id')),
             'terminal-in' => $this->terminals->input($guest, $message),
             'focus' => $this->focusOn($guest),
-            'debug-vars', 'debug-step' => $this->debug->receive($guest, $message),
+            'debug-vars', 'debug-children', 'debug-step' => $this->debug->receive($guest, $message),
             'runs' => $this->runs->offer($guest),
             'run' => $this->runs->run($guest, Wire::string($message, 'label')),
             'tunnel-open' => $this->servers->open($guest, $message),

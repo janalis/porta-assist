@@ -13,6 +13,7 @@ use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\Toasts;
 use Porta\Tests\Support\UsesBundledPlugins;
+use Porta\Ui\Glyphs;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui;
 
@@ -96,6 +97,24 @@ final class GuestDebugE2eTest extends TestCase
                 $this->awaitPainted($tui, $terminal, '$x = 42');
                 $terminal->simulateInput("\r");
                 $this->assertStringContainsString("\x1b]52;c;".\base64_encode('42'), $terminal->getOutput(), 'its value copied');
+
+                // One that holds more: opened, what it holds asked of the host and listed under its name.
+                $this->say([
+                    't' => 'debug-vars',
+                    'frame' => 1,
+                    'scopes' => [['scope' => 'Locals', 'variables' => [['name' => '$x', 'value' => '42'], ['name' => '$user', 'value' => 'User', 'reference' => 5]]]],
+                ]);
+                $this->awaitPainted($tui, $terminal, '$user = User');
+                $this->awaitPainted($tui, $terminal, 'Locals '.Glyphs::ELLIPSIS);
+                $terminal->simulateInput(self::DOWN."\r");
+                $this->assertSame(5, $this->expect('debug-children')['reference']);
+                $this->say(['t' => 'debug-children', 'reference' => 5, 'variables' => [['name' => 'email', 'value' => "'ana@example.org'", 'reference' => 0]]]);
+                $this->awaitPainted($tui, $terminal, "email = 'ana@example.org'");
+                $this->awaitPainted($tui, $terminal, '╭ $user'); // listed under its name
+                $terminal->simulateInput("\r");
+                $this->assertStringContainsString("\x1b]52;c;".\base64_encode("'ana@example.org'"), $terminal->getOutput());
+                $this->say(['t' => 'debug-children', 'reference' => 9, 'variables' => []]);
+                $this->await(static fn (): bool => $said('No variables'), what: 'nothing held');
 
                 // A frame outside the project: nothing to open, its variables still asked for.
                 $this->command($ide, 'assist:debugger');

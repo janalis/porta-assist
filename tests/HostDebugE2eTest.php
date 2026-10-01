@@ -95,7 +95,14 @@ final class HostDebugE2eTest extends TestCase
                 $this->say(['t' => 'debug-vars', 'frame' => 1]);
                 $variables = $this->expect('debug-vars');
                 $this->assertSame(1, $variables['frame']);
-                $this->assertSame([['scope' => 'Locals', 'variables' => [['name' => '$x', 'value' => '42'], ['name' => '$arr', 'value' => 'array(2)']]]], $variables['scopes']);
+                $this->assertSame(
+                    [['scope' => 'Locals', 'variables' => [['name' => '$x', 'value' => '42', 'reference' => 0], ['name' => '$arr', 'value' => 'array(2)', 'reference' => 1001]]]],
+                    $variables['scopes'],
+                );
+                // And what one holds.
+                $this->say(['t' => 'debug-children', 'reference' => 1001]);
+                $children = $this->expect('debug-children');
+                $this->assertSame([1001, [['name' => '0', 'value' => "'a'", 'reference' => 0], ['name' => '1', 'value' => "'b'", 'reference' => 0]]], [$children['reference'], $children['variables']]);
 
                 // Not let: refused. Let: her step goes through.
                 $this->say(['t' => 'debug-step', 'verb' => 'stepOver']);

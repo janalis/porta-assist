@@ -7,11 +7,13 @@ namespace Porta\AssistPlugin\Session;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Workspace\Paths;
 use Porta\Plugin\Api\PluginApi;
+use Porta\Ui\Glyphs;
 
 /**
  * The host's debugger, from a guest: told where it stopped, its stack
  * listed with the step verbs beside it, a frame opened here with its
- * variables shown — and stepped from here when the host has let this guest.
+ * variables shown, and what each holds — and stepped from here when the host
+ * has let this guest.
  */
 final class GuestDebug
 {
@@ -21,6 +23,9 @@ final class GuestDebug
 
     /** @var list<array{id: int, name: string, path: string, line: int}> */
     private array $frames = [];
+
+    /** @var array<int, string> reference => the name of the variable whose children were asked for */
+    private array $opening = [];
 
     /** @param \Closure(array<string, mixed>): void $send to the host */
     public function __construct(
@@ -35,6 +40,7 @@ final class GuestDebug
         match ($message['t']) {
             'debug' => $this->changed($message),
             'debug-vars' => $this->variables($message),
+            'debug-children' => $this->children($message),
             'debugging' => $this->api->notify(
                 true === ($message['allowed'] ?? null) ? $this->api->trans('You can step the host\'s debugger') : $this->api->trans('You can no longer step the host\'s debugger'),
                 slot: 'assist',
@@ -108,26 +114,71 @@ final class GuestDebug
     /** @param array<string, mixed> $message a frame's scopes and their variables */
     private function variables(array $message): void
     {
-        $rows = [];
-        // @mago-expect analysis:mixed-assignment -- narrowed below
+        $entries = [];
+        // @mago-expect analysis:mixed-assignment -- narrowed in entries()
         foreach (Wire::list($message, 'scopes') as $scope) {
             if (!\is_array($scope)) {
                 continue;
             }
-            // @mago-expect analysis:mixed-assignment -- narrowed below
-            foreach (Wire::list($scope, 'variables') as $variable) {
-                if (!\is_array($variable)) {
-                    continue;
-                }
-                $value = Wire::text($variable, 'value', max: 500);
-                $rows[] = ['label' => Wire::text($variable, 'name').' = '.$value, 'hint' => Wire::text($scope, 'scope'), 'value' => $value];
-            }
+            $entries = [...$entries, ...self::entries(Wire::list($scope, 'variables'), Wire::text($scope, 'scope'))];
         }
-        if ([] === $rows) {
+        $this->list($this->api->trans('Variables'), $entries);
+    }
+
+    /** @param array<string, mixed> $message what a variable holds */
+    private function children(array $message): void
+    {
+        $reference = Wire::int($message, 'reference');
+        $name = $this->opening[$reference] ?? '';
+        unset($this->opening[$reference]);
+        $this->list($name, self::entries(Wire::list($message, 'variables'), $name));
+    }
+
+    /**
+     * Variables to pick from: one that holds more opens what it holds,
+     * asked of the host; any other has its value copied.
+     *
+     * @param list<array{name: string, value: string, reference: int, hint: string}> $entries
+     */
+    private function list(string $title, array $entries): void
+    {
+        if ([] === $entries) {
             $this->api->flash($this->api->trans('No variables'));
 
             return;
         }
-        $this->api->pick($this->api->trans('Variables'), $rows, fn (string $value) => $this->api->copyToClipboard($value));
+        $rows = [];
+        foreach ($entries as $index => $entry) {
+            $rows[] = ['label' => $entry['name'].' = '.$entry['value'], 'hint' => $entry['reference'] > 0 ? $entry['hint'].' '.Glyphs::ELLIPSIS : $entry['hint'], 'value' => (string) $index];
+        }
+        $this->api->pick($title, $rows, function (string $index) use ($entries): void {
+            $entry = $entries[(int) $index];
+            if ($entry['reference'] <= 0) {
+                $this->api->copyToClipboard($entry['value']);
+
+                return;
+            }
+            $this->opening[$entry['reference']] = $entry['name'];
+            ($this->send)(['t' => 'debug-children', 'reference' => $entry['reference']]);
+        });
+    }
+
+    /**
+     * @param list<mixed> $variables as the host sent them
+     *
+     * @return list<array{name: string, value: string, reference: int, hint: string}>
+     */
+    private static function entries(array $variables, string $hint): array
+    {
+        $entries = [];
+        // @mago-expect analysis:mixed-assignment -- narrowed below
+        foreach ($variables as $variable) {
+            if (!\is_array($variable)) {
+                continue;
+            }
+            $entries[] = ['name' => Wire::text($variable, 'name'), 'value' => Wire::text($variable, 'value', max: 500), 'reference' => Wire::int($variable, 'reference'), 'hint' => $hint];
+        }
+
+        return $entries;
     }
 }

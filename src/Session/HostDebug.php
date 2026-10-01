@@ -11,8 +11,8 @@ use Porta\Plugin\Api\PluginApi;
 /**
  * The host's debugger, as the guests see it: told to everyone as it starts,
  * pauses, resumes and ends — where it stopped and its stack, paths relative
- * to the project — each frame's variables to whoever asks, and stepped by a
- * guest the host has let.
+ * to the project — each frame's variables and what each holds to whoever
+ * asks, and stepped by a guest the host has let.
  */
 final readonly class HostDebug
 {
@@ -44,6 +44,12 @@ final readonly class HostDebug
         if ('debug-vars' === $message['t']) {
             $frame = Wire::int($message, 'frame');
             $debugger->variables($frame, static fn (array $scopes) => $guest->send(['t' => 'debug-vars', 'frame' => $frame, 'scopes' => $scopes]));
+
+            return;
+        }
+        if ('debug-children' === $message['t']) {
+            $reference = Wire::int($message, 'reference');
+            $debugger->children($reference, static fn (array $variables) => $guest->send(['t' => 'debug-children', 'reference' => $reference, 'variables' => $variables]));
 
             return;
         }
