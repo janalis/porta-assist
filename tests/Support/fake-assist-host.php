@@ -14,6 +14,8 @@ declare(strict_types=1);
  *   garbled      a welcome without a ticket
  *   no-list      let in, then never list the files
  *   cut          let in, list, and hang up on the first fetch
+ *   chatty       as welcome, with the session talking in between
+ *   chatty       as welcome, with the session talking in between
  */
 
 $mode = $argv[1] ?? 'welcome';
@@ -61,6 +63,10 @@ $welcome = static function () use ($mode, $send): void {
                 'project' => ['id' => '0123456789abcdef', 'name' => 'demo'],
             ],
     );
+    if ('chatty' === $mode) {
+        // What a real host says right away: where its caret is.
+        $send(['t' => 'presence', 'peer' => 'host', 'name' => 'Hal', 'path' => 'a.txt', 'line' => 0, 'column' => 0]);
+    }
 };
 $fetch = static function (array $paths) use ($send, $files): void {
     foreach ($paths as $path) {

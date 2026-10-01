@@ -81,10 +81,13 @@ final class WorkspaceTest extends TestCase
     public function testTheMirrorFollowsTheHostsListAndWritesOnlyInsideItself(): void
     {
         $home = new TempProject([]);
-        $mirror = Mirror::under($home->dir, 'abc');
-        $this->assertSame((string) \realpath($home->path('.porta/assist/abc')), $mirror->root);
+        $mirror = Mirror::under($home->dir, 'abc', 'shop');
+        $this->assertSame((string) \realpath($home->path('.porta/assist/abc/shop')), $mirror->root, 'named as the project, for the tree\'s title');
         $this->assertSame(0o700, \fileperms($mirror->root) & 0o777);
-        $this->assertSame($mirror->root, Mirror::under($home->dir, 'abc')->root, 'the same copy the next time');
+        $this->assertSame($mirror->root, Mirror::under($home->dir, 'abc', 'shop')->root, 'the same copy the next time');
+        foreach (['', '.', '..', 'a/b', 'a\\b', "a\0b"] as $name) {
+            $this->assertStringEndsWith('/abc/project', Mirror::under($home->dir, 'abc', $name)->root, \json_encode($name, \JSON_THROW_ON_ERROR));
+        }
 
         $this->assertTrue($mirror->write('src/A.php', 'same'));
         $this->assertTrue($mirror->write('old.php', 'gone soon'));

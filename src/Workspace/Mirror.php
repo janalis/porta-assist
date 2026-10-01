@@ -26,10 +26,13 @@ final readonly class Mirror
     /**
      * The mirror for the host project $id under $home: one per host project,
      * kept between sessions so a guest that comes back fetches only changes.
+     * Its folder carries the project's own $name, which is what the IDE
+     * titles its tree with; a name that is not one folder's is not used.
      */
-    public static function under(string $home, string $id): self
+    public static function under(string $home, string $id, string $name): self
     {
-        $root = $home.'/.porta/assist/'.$id;
+        $folder = '' === $name || '.' === $name || '..' === $name || 1 === \preg_match('#[/\\\\\0]#', $name) ? 'project' : $name;
+        $root = $home.'/.porta/assist/'.$id.'/'.$folder;
         if (!\is_dir($root)) {
             \mkdir($root, permissions: 0o700, recursive: true);
         }

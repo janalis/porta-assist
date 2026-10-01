@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Console\JoinCommand;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\Config\IdeConfig;
+use Porta\Onboarding\OnboardingState;
 use Porta\Tests\Support\TempProject;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -77,7 +78,7 @@ final class JoinCommandTest extends TestCase
     public function testTheCopyIsBroughtInLineAndTheIdeOpenedOnIt(): void
     {
         $project = new TempProject(['src/A.php' => "<?php\n", 'same.txt' => 'same', 'changed.txt' => 'new']);
-        $copy = $this->home->path('.porta/assist/0123456789abcdef');
+        $copy = $this->home->path('.porta/assist/0123456789abcdef/demo');
         \mkdir($copy.'/src', recursive: true);
         \file_put_contents($copy.'/same.txt', data: 'same');
         \file_put_contents($copy.'/changed.txt', data: 'old');
@@ -92,6 +93,7 @@ final class JoinCommandTest extends TestCase
         $this->assertStringContainsString('3 files shared: 2 to fetch, 1 removed.', $tester->getDisplay());
         $root = (string) \realpath($copy);
         $this->assertSame([$root], $this->launched);
+        $this->assertTrue(new OnboardingState($root)->hasSeenWelcome(), 'no first-run card on someone else\'s project');
         $this->assertSame("<?php\n", \file_get_contents($root.'/src/A.php'));
         $this->assertSame('new', \file_get_contents($root.'/changed.txt'));
         $this->assertFileDoesNotExist($root.'/gone.txt');
@@ -106,7 +108,7 @@ final class JoinCommandTest extends TestCase
     public function testAFirstJoinEnablesThePluginOnTopOfTheDefaults(): void
     {
         $project = new TempProject(['a.txt' => 'a']);
-        $tester = $this->join('127.0.0.1:'.$this->host('welcome', $project).'#'.self::KEY, exit: 3, name: null);
+        $tester = $this->join('127.0.0.1:'.$this->host('chatty', $project).'#'.self::KEY, exit: 3, name: null);
 
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('Porta exited with 3', $tester->getErrorOutput());

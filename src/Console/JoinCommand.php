@@ -12,6 +12,7 @@ use Porta\AssistPlugin\Workspace\Mirror;
 use Porta\Config\IdeConfig;
 use Porta\Config\PortaHome;
 use Porta\Install\PortaBinary;
+use Porta\Onboarding\OnboardingState;
 use Porta\Plugin\Api\PluginCommand;
 use Porta\Support\LineFramer;
 use Symfony\Component\Console\Attribute\Argument;
@@ -106,6 +107,9 @@ final class JoinCommand extends PluginCommand
         [$mirror, $ticket] = $joined;
         GuestSession::store($mirror->root, ['host' => $address->host, 'port' => $address->port, 'ticket' => $ticket, 'name' => $name]);
         self::enable($mirror->root);
+        // The first-run card walks through setting a project up; this one is
+        // the host's, set up already.
+        new OnboardingState($mirror->root)->markWelcomeSeen();
         $output->writeln(\sprintf('Opening <info>%s</info>…', $mirror->root));
         $code = ($this->launch ?? self::launch(...))($mirror->root);
 
@@ -135,7 +139,7 @@ final class JoinCommand extends PluginCommand
             if (\is_string($welcome)) {
                 return $welcome;
             }
-            $mirror = Mirror::under($this->home ?? (string) PortaHome::base(), $welcome['project']);
+            $mirror = Mirror::under($this->home ?? (string) PortaHome::base(), $welcome['project'], $welcome['name']);
             $synced = $this->sync($mirror, $output);
             $this->send(['t' => 'bye']);
 
@@ -149,7 +153,7 @@ final class JoinCommand extends PluginCommand
     /**
      * Wait to be let in.
      *
-     * @return array{project: string, ticket: string}|string the session, or why there is none
+     * @return array{project: string, name: string, ticket: string}|string the session, or why there is none
      */
     private function welcome(OutputInterface $output): array|string
     {
@@ -170,7 +174,7 @@ final class JoinCommand extends PluginCommand
                 }
                 $output->writeln(\sprintf('In, %s.', Wire::string($message ?? [], 'role') === 'edit' ? 'editing' : 'reading along'));
 
-                return ['project' => $id, 'ticket' => $ticket];
+                return ['project' => $id, 'name' => \is_string($project['name'] ?? null) ? $project['name'] : '', 'ticket' => $ticket];
             }
 
             return match (null === $message ? 'timeout' : Wire::string($message, 'reason')) {
@@ -187,8 +191,8 @@ final class JoinCommand extends PluginCommand
     private function sync(Mirror $mirror, OutputInterface $output): ?string
     {
         $this->send(['t' => 'manifest']);
-        $message = $this->next($this->timeout * 6);
-        if (null === $message || 'manifest' !== $message['t']) {
+        $message = $this->next($this->timeout * 6, 'manifest');
+        if (null === $message) {
             return 'The host did not list its files';
         }
         $host = Wire::files($message, 'files');
@@ -223,8 +227,26 @@ final class JoinCommand extends PluginCommand
         }
     }
 
+    /**
+     * The next message — of type $type, when one is named: the session
+     * talks on meanwhile (where the others' carets are, who arrived), and
+     * none of that is this command's business. Null when none comes in
+     * $seconds.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function next(float $seconds, ?string $type = null): ?array
+    {
+        $deadline = \hrtime(true) + (int) ($seconds * 1e9);
+        do {
+            $message = $this->read(($deadline - \hrtime(true)) / 1e9);
+        } while (null !== $message && null !== $type && $type !== $message['t']);
+
+        return $message;
+    }
+
     /** @return array<string, mixed>|null the next message, or null when none comes in $seconds */
-    private function next(float $seconds): ?array
+    private function read(float $seconds): ?array
     {
         $socket = $this->socket;
         $deadline = \hrtime(true) + (int) ($seconds * 1e9);
