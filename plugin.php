@@ -11,6 +11,7 @@ use Porta\AssistPlugin\Workspace\Mirror;
 use Porta\Event\AgentActivity;
 use Porta\Event\AgentLeft;
 use Porta\Event\CommandRunRequested;
+use Porta\Event\DebugStatusChanged;
 use Porta\Event\FileDeleted;
 use Porta\Event\FileRenamed;
 use Porta\Event\PluginObservable;
@@ -79,6 +80,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->registerCommand('servers', 'Assist: Shared Servers', $this->servers(...));
         $api->registerCommand('run', 'Assist: Run on the Host…', $this->runOnHost(...));
         $api->registerCommand('focus', 'Assist: Ask Everyone to Follow Me', $this->focus(...));
+        $api->registerCommand('debugger', 'Assist: Host\'s Debugger', $this->hostDebugger(...));
         $api->addMenuItem('share', fn (): bool => null === $this->guest);
         $api->addMenuItem('join', fn (): bool => null === $this->host && null === $this->guest);
         $api->addMenuItem('follow', fn (): bool => [] !== $this->peers());
@@ -90,6 +92,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->addMenuItem('servers', fn (): bool => [] !== ($this->guest?->servers() ?? []));
         $api->addMenuItem('run', fn (): bool => true === $this->guest?->isConnected());
         $api->addMenuItem('focus', fn (): bool => [] !== $this->peers());
+        $api->addMenuItem('debugger', fn (): bool => true === $this->guest?->isConnected());
         $api->registerStatusSegment($this->status(...));
 
         // In a guest's copy, the host's language servers are this one's: each
@@ -120,6 +123,9 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             $this->guest?->deleted($event->path);
         });
         // An agent at work on either side is a participant like any other.
+        $api->on(DebugStatusChanged::class, function (): void {
+            $this->host?->debugChanged();
+        });
         $api->on(AgentActivity::class, function (PluginObservable $event): void {
             \assert($event instanceof AgentActivity, description: 'on() delivers the class it was registered for');
             $this->host?->agentActivity($event);
@@ -262,14 +268,16 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
                 'no-typing' => $api->trans('Stop them typing in shared terminals'),
                 'running' => $api->trans('Let them run the run configurations'),
                 'no-running' => $api->trans('Stop them running the run configurations'),
+                'debugging' => $api->trans('Let them step the debugger'),
+                'no-debugging' => $api->trans('Stop them stepping the debugger'),
                 'remove' => $api->trans('Remove from the session'),
             ];
             $api->pick($participant['name'], $actions, function (string $action) use ($host, $peer, $participant): void {
                 $role = Role::tryFrom($action);
                 match (true) {
                     null !== $role => $host?->setRole($peer, $role),
-                    \in_array($action, ['typing', 'running'], strict: true) => $host?->permit($peer, $action, true),
-                    \in_array($action, ['no-typing', 'no-running'], strict: true) => $host?->permit($peer, \substr($action, offset: 3), false),
+                    \in_array($action, ['typing', 'running', 'debugging'], strict: true) => $host?->permit($peer, $action, true),
+                    \in_array($action, ['no-typing', 'no-running', 'no-debugging'], strict: true) => $host?->permit($peer, \substr($action, offset: 3), false),
                     'remove' === $action => $host?->remove($peer),
                     default => $this->follow()->start($peer, $participant['name']),
                 };
@@ -360,6 +368,18 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $this->host?->focus();
         $this->guest?->focus();
         $api->notify($api->trans('Asked everyone to follow you'), slot: 'assist');
+    }
+
+    /** The host's debugger: where it stopped, its stack and the step verbs. */
+    private function hostDebugger(): void
+    {
+        $api = $this->api();
+        if (true !== $this->guest?->isConnected()) {
+            $api->flash($api->trans('Not in a session'));
+
+            return;
+        }
+        $this->guest->debug->show();
     }
 
     /** Start one of the host's run configurations, when the host lets this guest. */

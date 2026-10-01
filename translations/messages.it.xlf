@@ -310,6 +310,50 @@
         <source>Ask everyone to follow me</source>
         <target>Chiedi a tutti di seguirmi</target>
       </trans-unit>
+      <trans-unit id="78">
+        <source>Let them step the debugger</source>
+        <target>Permettigli di guidare il debugger</target>
+      </trans-unit>
+      <trans-unit id="79">
+        <source>Stop them stepping the debugger</source>
+        <target>Non permettergli più di guidare il debugger</target>
+      </trans-unit>
+      <trans-unit id="80">
+        <source>The host's debugger paused at %where%</source>
+        <target>Il debugger dell’host è in pausa in %where%</target>
+      </trans-unit>
+      <trans-unit id="81">
+        <source>The host is not debugging</source>
+        <target>L’host non sta facendo debug</target>
+      </trans-unit>
+      <trans-unit id="82">
+        <source>The host's debugger is running</source>
+        <target>Il debugger dell’host è in esecuzione</target>
+      </trans-unit>
+      <trans-unit id="83">
+        <source>The host stopped debugging</source>
+        <target>L’host ha smesso di fare debug</target>
+      </trans-unit>
+      <trans-unit id="84">
+        <source>Host's debugger — %where%</source>
+        <target>Debugger dell’host — %where%</target>
+      </trans-unit>
+      <trans-unit id="85">
+        <source>No variables</source>
+        <target>Nessuna variabile</target>
+      </trans-unit>
+      <trans-unit id="86">
+        <source>You can step the host's debugger</source>
+        <target>Puoi guidare il debugger dell’host</target>
+      </trans-unit>
+      <trans-unit id="87">
+        <source>You can no longer step the host's debugger</source>
+        <target>Non puoi più guidare il debugger dell’host</target>
+      </trans-unit>
+      <trans-unit id="88">
+        <source>The host has not let you step its debugger</source>
+        <target>L’host non ti permette di guidare il suo debugger</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

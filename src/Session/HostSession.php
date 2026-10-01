@@ -67,6 +67,8 @@ final class HostSession
 
     private readonly HostRuns $runs;
 
+    private readonly HostDebug $debug;
+
     private readonly Presence $presence;
 
     private ?Address $address = null;
@@ -109,6 +111,7 @@ final class HostSession
         $this->terminals = new HostTerminals($api, $this->broadcast(...));
         $this->servers = new HostServers($this->broadcast(...));
         $this->runs = new HostRuns($api, $this->terminals);
+        $this->debug = new HostDebug($api, $this->paths, $this->broadcast(...));
         $this->presence = new Presence($api, $this->paths);
         $this->listener = new Listener($this->accept(...));
         $this->relayListener = new RelayListener($this->accept(...), static fn (string $why) => $api->notify($why, ToastSeverity::Error, 8.0));
@@ -255,6 +258,12 @@ final class HostSession
         return $this->servers;
     }
 
+    /** The host's debugger changed: the guests are told. */
+    public function debugChanged(): void
+    {
+        $this->debug->changed();
+    }
+
     /** Everyone follows the host now — and is shown where it is, at once. */
     public function focus(): void
     {
@@ -266,8 +275,9 @@ final class HostSession
     }
 
     /**
-     * Let a guest type into the shared terminals ($right `typing`), or start
-     * the host's run configurations (`running`) — or not any more.
+     * Let a guest type into the shared terminals ($right `typing`), start the
+     * host's run configurations (`running`) or step its debugger
+     * (`debugging`) — or not any more.
      */
     public function permit(string $peer, string $right, bool $allowed): void
     {
@@ -540,6 +550,7 @@ final class HostSession
         }
         $this->terminals->welcome($guest);
         $this->servers->welcome($guest);
+        $this->debug->welcome($guest);
         $this->broadcast(['t' => 'peer', 'id' => $peer, 'name' => $name, 'role' => $role->value], except: $peer);
         $this->api->notify(
             Role::Edit === $role
@@ -590,6 +601,7 @@ final class HostSession
             'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, 'id')),
             'terminal-in' => $this->terminals->input($guest, $message),
             'focus' => $this->focusOn($guest),
+            'debug-vars', 'debug-step' => $this->debug->receive($guest, $message),
             'runs' => $this->runs->offer($guest),
             'run' => $this->runs->run($guest, Wire::string($message, 'label')),
             'tunnel-open' => $this->servers->open($guest, $message),

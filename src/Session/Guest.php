@@ -18,6 +18,9 @@ final class Guest
     /** Whether it may start the host's run configurations. */
     public bool $running = false;
 
+    /** Whether it may step the host's debugger. */
+    public bool $debugging = false;
+
     /** @var array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}|null where it said its caret is */
     public ?array $caret = null;
 
@@ -29,12 +32,13 @@ final class Guest
         public readonly Connection $connection,
     ) {}
 
-    /** Let it type into the shared terminals ($right `typing`) or run the host's configurations (`running`), or not — and tell it. */
+    /** Let it type into the shared terminals ($right `typing`), run the host's configurations (`running`) or step its debugger (`debugging`), or not — and tell it. */
     public function permit(string $right, bool $allowed): void
     {
         match ($right) {
             'typing' => $this->typing = $allowed,
-            default => $this->running = $allowed,
+            'running' => $this->running = $allowed,
+            default => $this->debugging = $allowed,
         };
         $this->send(['t' => $right, 'allowed' => $allowed]);
     }

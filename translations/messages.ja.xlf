@@ -310,6 +310,50 @@
         <source>Ask everyone to follow me</source>
         <target>全員にフォローを求める</target>
       </trans-unit>
+      <trans-unit id="78">
+        <source>Let them step the debugger</source>
+        <target>デバッガーの操作を許可</target>
+      </trans-unit>
+      <trans-unit id="79">
+        <source>Stop them stepping the debugger</source>
+        <target>デバッガーの操作を禁止</target>
+      </trans-unit>
+      <trans-unit id="80">
+        <source>The host's debugger paused at %where%</source>
+        <target>ホストのデバッガーが %where% で一時停止しました</target>
+      </trans-unit>
+      <trans-unit id="81">
+        <source>The host is not debugging</source>
+        <target>ホストはデバッグしていません</target>
+      </trans-unit>
+      <trans-unit id="82">
+        <source>The host's debugger is running</source>
+        <target>ホストのデバッガーは実行中です</target>
+      </trans-unit>
+      <trans-unit id="83">
+        <source>The host stopped debugging</source>
+        <target>ホストがデバッグを終了しました</target>
+      </trans-unit>
+      <trans-unit id="84">
+        <source>Host's debugger — %where%</source>
+        <target>ホストのデバッガー — %where%</target>
+      </trans-unit>
+      <trans-unit id="85">
+        <source>No variables</source>
+        <target>変数はありません</target>
+      </trans-unit>
+      <trans-unit id="86">
+        <source>You can step the host's debugger</source>
+        <target>ホストのデバッガーを操作できます</target>
+      </trans-unit>
+      <trans-unit id="87">
+        <source>You can no longer step the host's debugger</source>
+        <target>ホストのデバッガーはもう操作できません</target>
+      </trans-unit>
+      <trans-unit id="88">
+        <source>The host has not let you step its debugger</source>
+        <target>ホストはデバッガーの操作を許可していません</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

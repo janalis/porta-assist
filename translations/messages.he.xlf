@@ -310,6 +310,50 @@
         <source>Ask everyone to follow me</source>
         <target>לבקש מכולם לעקוב אחריי</target>
       </trans-unit>
+      <trans-unit id="78">
+        <source>Let them step the debugger</source>
+        <target>לאפשר לקדם את מנפה הבאגים</target>
+      </trans-unit>
+      <trans-unit id="79">
+        <source>Stop them stepping the debugger</source>
+        <target>להפסיק לאפשר לקדם את מנפה הבאגים</target>
+      </trans-unit>
+      <trans-unit id="80">
+        <source>The host's debugger paused at %where%</source>
+        <target>מנפה הבאגים של המארח נעצר ב־%where%</target>
+      </trans-unit>
+      <trans-unit id="81">
+        <source>The host is not debugging</source>
+        <target>המארח לא מנפה באגים</target>
+      </trans-unit>
+      <trans-unit id="82">
+        <source>The host's debugger is running</source>
+        <target>מנפה הבאגים של המארח רץ</target>
+      </trans-unit>
+      <trans-unit id="83">
+        <source>The host stopped debugging</source>
+        <target>המארח הפסיק לנפות באגים</target>
+      </trans-unit>
+      <trans-unit id="84">
+        <source>Host's debugger — %where%</source>
+        <target>מנפה הבאגים של המארח — %where%</target>
+      </trans-unit>
+      <trans-unit id="85">
+        <source>No variables</source>
+        <target>אין משתנים</target>
+      </trans-unit>
+      <trans-unit id="86">
+        <source>You can step the host's debugger</source>
+        <target>אפשר לקדם את מנפה הבאגים של המארח</target>
+      </trans-unit>
+      <trans-unit id="87">
+        <source>You can no longer step the host's debugger</source>
+        <target>כבר אי אפשר לקדם את מנפה הבאגים של המארח</target>
+      </trans-unit>
+      <trans-unit id="88">
+        <source>The host has not let you step its debugger</source>
+        <target>המארח לא מאפשר לך לקדם את מנפה הבאגים שלו</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

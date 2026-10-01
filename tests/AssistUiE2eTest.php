@@ -98,6 +98,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:servers' => false,
                         'assist:run' => false,
                         'assist:focus' => false,
+                        'assist:debugger' => false,
                     ],
                     $this->enabled($ide),
                 );
@@ -142,6 +143,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:servers' => false,
                         'assist:run' => false,
                         'assist:focus' => true,
+                        'assist:debugger' => false,
                     ],
                     $this->enabled($ide),
                 );
@@ -210,6 +212,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:servers' => true,
                         'assist:run' => true,
                         'assist:focus' => true,
+                        'assist:debugger' => true,
                     ],
                     $this->enabled($ide),
                 );

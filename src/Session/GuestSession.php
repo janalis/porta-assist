@@ -70,6 +70,9 @@ final class GuestSession
     /** The host's run configurations, started from here. */
     public readonly GuestRuns $runs;
 
+    /** The host's debugger, watched and stepped from here. */
+    public readonly GuestDebug $debug;
+
     /** The host's servers, reached through the connection there is now. */
     private ?GuestServers $servers = null;
 
@@ -103,6 +106,7 @@ final class GuestSession
     ) {
         $this->presence = new Presence($api, $mirror->paths);
         $this->runs = new GuestRuns($api, $this->send(...));
+        $this->debug = new GuestDebug($api, $mirror->paths, $this->send(...));
     }
 
     /**
@@ -422,6 +426,7 @@ final class GuestSession
             'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
             'server', 'server-end', 'tunnel-data', 'tunnel-close' => $this->servers?->receive($message),
             'runs', 'running', 'run-refused' => $this->runs->receive($message),
+            'debug', 'debug-vars', 'debugging', 'debug-refused' => $this->debug->receive($message),
             'focus' => $this->follow->asked(Wire::string($message, 'peer'), Wire::text($message, 'name')),
             default => null,
         };
@@ -487,6 +492,7 @@ final class GuestSession
     private function lost(string $reason): void
     {
         $this->connection = null;
+        $this->debug->reset();
         $this->servers?->stop();
         $this->servers = null;
         $this->role = null;

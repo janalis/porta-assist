@@ -310,6 +310,50 @@
         <source>Ask everyone to follow me</source>
         <target>Demander à tout le monde de me suivre</target>
       </trans-unit>
+      <trans-unit id="78">
+        <source>Let them step the debugger</source>
+        <target>L’autoriser à piloter le débogueur</target>
+      </trans-unit>
+      <trans-unit id="79">
+        <source>Stop them stepping the debugger</source>
+        <target>Ne plus l’autoriser à piloter le débogueur</target>
+      </trans-unit>
+      <trans-unit id="80">
+        <source>The host's debugger paused at %where%</source>
+        <target>Le débogueur de l’hôte est en pause à %where%</target>
+      </trans-unit>
+      <trans-unit id="81">
+        <source>The host is not debugging</source>
+        <target>L’hôte ne débogue pas</target>
+      </trans-unit>
+      <trans-unit id="82">
+        <source>The host's debugger is running</source>
+        <target>Le débogueur de l’hôte est en cours d’exécution</target>
+      </trans-unit>
+      <trans-unit id="83">
+        <source>The host stopped debugging</source>
+        <target>L’hôte a arrêté de déboguer</target>
+      </trans-unit>
+      <trans-unit id="84">
+        <source>Host's debugger — %where%</source>
+        <target>Débogueur de l’hôte — %where%</target>
+      </trans-unit>
+      <trans-unit id="85">
+        <source>No variables</source>
+        <target>Aucune variable</target>
+      </trans-unit>
+      <trans-unit id="86">
+        <source>You can step the host's debugger</source>
+        <target>Vous pouvez piloter le débogueur de l’hôte</target>
+      </trans-unit>
+      <trans-unit id="87">
+        <source>You can no longer step the host's debugger</source>
+        <target>Vous ne pouvez plus piloter le débogueur de l’hôte</target>
+      </trans-unit>
+      <trans-unit id="88">
+        <source>The host has not let you step its debugger</source>
+        <target>L’hôte ne vous autorise pas à piloter son débogueur</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

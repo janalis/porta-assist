@@ -37,7 +37,7 @@ final class Wire
         return $message;
     }
 
-    /** @param array<string, mixed> $message */
+    /** @param array<array-key, mixed> $message */
     public static function string(array $message, string $key): string
     {
         return \is_string($message[$key] ?? null) ? $message[$key] : '';
@@ -49,7 +49,7 @@ final class Wire
      * as an escape sequence or turn the text around it, and no longer than
      * $max characters.
      *
-     * @param array<string, mixed> $message
+     * @param array<array-key, mixed> $message
      */
     public static function text(array $message, string $key, int $max = 200): string
     {
@@ -62,7 +62,7 @@ final class Wire
         return \mb_substr(\trim((string) \preg_replace('/[\p{Cc}\p{Cf}]+/u', replacement: '', subject: $text)), start: 0, length: $max);
     }
 
-    /** @param array<string, mixed> $message */
+    /** @param array<array-key, mixed> $message */
     public static function int(array $message, string $key, int $default = 0): int
     {
         return \is_int($message[$key] ?? null) ? $message[$key] : $default;
@@ -136,7 +136,7 @@ final class Wire
     }
 
     /**
-     * @param array<string, mixed> $message
+     * @param array<array-key, mixed> $message
      *
      * @return list<mixed>
      */

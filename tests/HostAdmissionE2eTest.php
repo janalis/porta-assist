@@ -108,7 +108,7 @@ final class HostAdmissionE2eTest extends TestCase
                 // Sent away: told so, and the ticket lets nobody back in.
                 $this->command($ide, 'assist:participants');
                 $this->answer($tui, $terminal, 'editing', downs: 0);
-                $this->answer($tui, $terminal, 'Remove from the session', downs: 7);
+                $this->answer($tui, $terminal, 'Remove from the session', downs: 9);
                 $this->assertSame('removed', $this->expect('bye')['reason']);
                 $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
