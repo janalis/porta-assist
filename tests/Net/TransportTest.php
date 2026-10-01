@@ -165,6 +165,86 @@ final class TransportTest extends TestCase
         $this->assertStringContainsString('past 16 bytes', (string) $why);
     }
 
+    public function testALastMessageToAPeerThatStopsReadingNeverHoldsUpTheLoop(): void
+    {
+        [$connection, $client] = $this->loopback();
+        $closed = [];
+        $connection->listen(static function (array $message): void {}, static function (string $why) use (&$closed): void {
+            $closed[] = $why;
+        });
+
+        $before = \hrtime(as_number: true);
+        $connection->close('removed', ['t' => 'bye', 'pad' => \str_repeat('x', times: 4_000_000)]);
+
+        $this->assertLessThan(0.5, (\hrtime(as_number: true) - $before) / 1e9, 'no blocking write');
+        $this->assertSame(['removed'], $closed, 'the owner hears it at once');
+        $this->assertIsResource(Probe::get($connection, 'stream'), 'the last message still has its chance');
+        $this->pump(Connection::LINGER + 0.3);
+        $this->assertFalse(\is_resource(Probe::get($connection, 'stream')), 'then the socket goes regardless');
+        \fclose($client);
+    }
+
+    public function testALastMessageToAPeerThatReadsArrivesWholeBeforeTheSocketCloses(): void
+    {
+        [$connection, $client] = $this->loopback();
+        $connection->listen(static function (array $message): void {}, static function (): void {});
+        $pad = \str_repeat('x', times: 2_000_000);
+
+        $connection->close('removed', ['t' => 'bye', 'pad' => $pad]);
+
+        \stream_set_blocking($client, enable: false);
+        $received = '';
+        $this->await(static function () use (&$received, $client): bool {
+            $received .= (string) \fread($client, length: 1_048_576);
+
+            return \feof($client);
+        }, what: 'the whole message, then the close');
+        $this->assertSame(['t' => 'bye', 'pad' => $pad], \json_decode(\rtrim($received), associative: true));
+        \fclose($client);
+    }
+
+    public function testAHandlerThatThrowsLosesNoLineReadWithIt(): void
+    {
+        [$connection, $client] = $this->loopback();
+        $heard = [];
+        $errors = [];
+        $connection->listen(static function (array $message) use (&$heard): void {
+            $heard[] = $message['t'];
+            if ('one' === $message['t']) {
+                throw new \RuntimeException('handler broke');
+            }
+        }, static function (): void {});
+        EventLoop::setErrorHandler(static function (\Throwable $error) use (&$errors): void {
+            $errors[] = $error->getMessage();
+        });
+        try {
+            \fwrite($client, data: "{\"t\":\"one\"}\n{\"t\":\"two\"}\n");
+            $this->await(static function () use (&$heard, &$errors): bool {
+                return 2 === \count($heard) && [] !== $errors;
+            }, what: 'both lines and the error');
+        } finally {
+            EventLoop::setErrorHandler(null);
+            $connection->close('done');
+            \fclose($client);
+        }
+        $this->assertSame(['one', 'two'], $heard);
+        $this->assertSame(['handler broke'], $errors);
+    }
+
+    /** @return array{Connection, resource} a connection on plain loopback, and the other end, raw */
+    private function loopback(): array
+    {
+        $server = \stream_socket_server('tcp://127.0.0.1:0');
+        $this->assertNotFalse($server);
+        $client = \stream_socket_client((string) \stream_socket_get_name($server, remote: false));
+        $this->assertNotFalse($client);
+        $accepted = \stream_socket_accept($server);
+        $this->assertNotFalse($accepted);
+        \fclose($server);
+
+        return [new Connection($accepted), $client];
+    }
+
     public function testEachConnectionTakesTheNextChannelAndHolesAreSteppedOver(): void
     {
         [$door, $invite] = $this->door();

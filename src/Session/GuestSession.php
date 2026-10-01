@@ -15,6 +15,7 @@ use Porta\AssistPlugin\Workspace\Mirror;
 use Porta\Event\AgentActivity;
 use Porta\Overlay\State\ToastSeverity;
 use Porta\Plugin\Api\PluginApi;
+use Porta\Support\Backoff;
 use Revolt\EventLoop;
 
 /**
@@ -47,9 +48,6 @@ final class GuestSession
      * and every `porta assist-lsp` it starts, so each takes its own.
      */
     public const string CHANNEL = '.porta/assist-channel';
-
-    /** Seconds before each try at a lost host: doubling, up to the last. */
-    private const array RETRY = [1.0, 2.0, 4.0, 8.0, 15.0, 30.0];
 
     /** @var array<string, array{text: SharedText, client: ClientDocument}> by relative path */
     private array $docs = [];
@@ -537,7 +535,7 @@ final class GuestSession
         foreach ($this->docs as $doc) {
             $buffers->makeReadOnly($doc['text']->path);
         }
-        $delay = self::RETRY[\min($this->tries, \count(self::RETRY) - 1)];
+        $delay = Backoff::after($this->tries);
         ++$this->tries;
         $this->api->notify($this->api->trans('Lost the host (%why%) — trying again', ['%why%' => $reason]), ToastSeverity::Warn, slot: 'assist');
         // Everyone stays in the roster as last seen until the host is back —

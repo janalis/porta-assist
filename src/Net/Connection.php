@@ -22,6 +22,9 @@ final class Connection
     /** A line past this is not a message this protocol sends: a file is sent alone and capped well below. */
     public const int MAX_LINE = 33_554_432;
 
+    /** Seconds a last message gets to go out before the socket closes anyway. */
+    public const float LINGER = 2.0;
+
     private readonly NonBlockingWriter $writer;
 
     private readonly string $watcher;
@@ -59,8 +62,17 @@ final class Connection
                     return;
                 }
                 $message = Wire::decode($line);
-                if (null !== $message) {
+                if (null === $message) {
+                    continue;
+                }
+                // The lines after a throwing one were read already: dropped
+                // with it, an edit or an ack would be lost without a trace.
+                // What threw is thrown again on the next tick, where the
+                // loop's error handler still hears it.
+                try {
                     ($this->onMessage)($message);
+                } catch (\Throwable $error) {
+                    EventLoop::queue(static fn () => throw $error);
                 }
             }
         }));
@@ -131,9 +143,11 @@ final class Connection
     }
 
     /**
-     * Hang up, after a last message when there is one: it is pushed out
-     * before the socket closes, because "you were removed" is worth more
-     * than a dead connection.
+     * Hang up, after a last message when there is one: "you were removed" is
+     * worth more than a dead connection, so the socket stays open until it
+     * has gone out — for {@see LINGER} seconds at most, and never by blocking
+     * the loop: a peer that stopped reading would freeze the whole IDE.
+     * Closed for the owner at once either way.
      *
      * @param array<string, mixed>|null $last
      */
@@ -142,14 +156,37 @@ final class Connection
         if ($this->closed) {
             return;
         }
-        if (null !== $last) {
-            $this->writer->write(Wire::encode($last));
-            $this->writer->flushBlocking();
-        }
         $this->closed = true;
         EventLoop::cancel($this->watcher);
+        if (null !== $last) {
+            $this->writer->write(Wire::encode($last));
+        }
+        $this->linger();
+        ($this->onClose)($reason);
+    }
+
+    /** Let go of the socket once what is queued has gone — or its time is up. */
+    private function linger(): void
+    {
+        if (0 === $this->writer->pendingBytes()) {
+            $this->hangUp();
+
+            return;
+        }
+        $timer = EventLoop::unreference(EventLoop::delay(self::LINGER, $this->hangUp(...)));
+        $this->writer->onDrain(function () use ($timer): void {
+            EventLoop::cancel($timer);
+            $this->hangUp();
+        });
+    }
+
+    /** Let go of the socket, once. */
+    private function hangUp(): void
+    {
+        if (!\is_resource($this->stream)) {
+            return;
+        }
         $this->writer->close();
         \fclose($this->stream);
-        ($this->onClose)($reason);
     }
 }

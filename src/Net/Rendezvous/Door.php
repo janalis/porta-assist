@@ -6,6 +6,7 @@ namespace Porta\AssistPlugin\Net\Rendezvous;
 
 use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Tls;
+use Porta\Support\Backoff;
 use Porta\Support\FiberWait;
 use Revolt\EventLoop;
 
@@ -25,9 +26,6 @@ final class Door
 {
     /** Channels waited on past the last one joined. */
     public const int WINDOW = 4;
-
-    /** Seconds before waiting again at a relay that could not be reached, doubling, up to the last. */
-    private const array RETRY = [1.0, 2.0, 4.0, 8.0, 15.0, 30.0];
 
     /** @var array<int, Transit> the waits, by channel */
     private array $waits = [];
@@ -107,7 +105,7 @@ final class Door
             }
             // A wait the relay dropped after a long while is not a relay in trouble.
             $tries = (\hrtime(true) - $since) > 60e9 ? 0 : $tries;
-            $delay = self::RETRY[\min($tries++, \count(self::RETRY) - 1)];
+            $delay = Backoff::after($tries++);
             FiberWait::for(static fn (\Closure $done): string => EventLoop::unreference(EventLoop::delay($delay, static fn () => $done(null))));
         }
     }
