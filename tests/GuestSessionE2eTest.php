@@ -46,7 +46,7 @@ final class GuestSessionE2eTest extends TestCase
             'src/A.php' => "<?php\n// stale copy\n",
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
-        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'ticket' => self::TICKET, 'name' => 'Bo']);
+        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'fingerprint' => $this->fingerprint(), 'ticket' => self::TICKET, 'name' => 'Bo']);
 
         return $project;
     }

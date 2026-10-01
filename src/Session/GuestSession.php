@@ -74,7 +74,7 @@ final class GuestSession
     private readonly Presence $presence;
 
     /**
-     * @param array{host: string, port: int, ticket: string, name: string} $session
+     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string} $session
      */
     public function __construct(
         private readonly PluginApi $api,
@@ -90,25 +90,32 @@ final class GuestSession
      * The session the IDE was opened for, when it was opened on a guest's
      * copy — read from {@see FILE} under $root — or null.
      *
-     * @return array{host: string, port: int, ticket: string, name: string}|null
+     * @return array{host: string, port: int, fingerprint: string, ticket: string, name: string}|null
      */
     public static function load(string $root): ?array
     {
         $file = $root.'/'.self::FILE;
         // @mago-expect analysis:mixed-assignment -- narrowed below
         $json = \is_file($file) ? \json_decode((string) \file_get_contents($file), associative: true) : null;
-        if (!\is_array($json) || !\is_string($json['host'] ?? null) || !\is_int($json['port'] ?? null) || !\is_string($json['ticket'] ?? null) || !\is_string($json['name'] ?? null)) {
+        if (
+            !\is_array($json)
+            || !\is_string($json['host'] ?? null)
+            || !\is_int($json['port'] ?? null)
+            || !\is_string($json['fingerprint'] ?? null)
+            || !\is_string($json['ticket'] ?? null)
+            || !\is_string($json['name'] ?? null)
+        ) {
             return null;
         }
 
-        return ['host' => $json['host'], 'port' => $json['port'], 'ticket' => $json['ticket'], 'name' => $json['name']];
+        return ['host' => $json['host'], 'port' => $json['port'], 'fingerprint' => $json['fingerprint'], 'ticket' => $json['ticket'], 'name' => $json['name']];
     }
 
     /**
      * Write the session for the IDE about to open $root — readable by this
      * user only: the ticket lets its holder in.
      *
-     * @param array{host: string, port: int, ticket: string, name: string} $session
+     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string} $session
      */
     public static function store(string $root, array $session): void
     {
@@ -123,7 +130,7 @@ final class GuestSession
 
     public function connect(): void
     {
-        $this->dialer->dial($this->session['host'], $this->session['port'], function (Connection|string $connection): void {
+        $this->dialer->dial($this->session['host'], $this->session['port'], $this->session['fingerprint'], function (Connection|string $connection): void {
             if (\is_string($connection)) {
                 $this->lost($connection);
 

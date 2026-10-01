@@ -13,24 +13,27 @@ final class WireTest extends TestCase
 {
     private const string KEY = '00112233445566778899aabbccddeeff';
 
+    private const string PRINT = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
     public function testAnInviteIsReadBackAsItWasHandedOut(): void
     {
-        $address = Address::parse('  192.168.1.20:52814#'.\strtoupper(self::KEY).' ');
-        $this->assertSame(['192.168.1.20', 52_814, self::KEY], [$address->host, $address->port, $address->token], 'trimmed, the token lower-cased');
-        $this->assertSame('192.168.1.20:52814#'.self::KEY, $address->invite());
+        $address = Address::parse('  192.168.1.20:52814#'.\strtoupper(self::KEY.'.'.self::PRINT).' ');
+        $this->assertSame(['192.168.1.20', 52_814, self::KEY, self::PRINT], [$address->host, $address->port, $address->token, $address->fingerprint], 'trimmed, lower-cased');
+        $this->assertSame('192.168.1.20:52814#'.self::KEY.'.'.self::PRINT, $address->invite());
 
-        $v6 = Address::parse('[::1]:9000#'.self::KEY);
+        $v6 = Address::parse('[::1]:9000#'.self::KEY.'.'.self::PRINT);
         $this->assertSame('::1', $v6->host);
-        $this->assertSame('[::1]:9000#'.self::KEY, $v6->invite(), 'the brackets come back');
+        $this->assertSame('[::1]:9000#'.self::KEY.'.'.self::PRINT, $v6->invite(), 'the brackets come back');
     }
 
     public function testAnythingElseIsRefusedSayingWhat(): void
     {
         foreach ([
-            'host:1#short' => 'is not host:port#token',
-            'host#'.self::KEY => 'is not host:port#token',
-            'host:0#'.self::KEY => '0 is not a port',
-            'host:70000#'.self::KEY => '70000 is not a port',
+            'host:1#short.'.self::PRINT => 'is not host:port#token.fingerprint',
+            'host#'.self::KEY.'.'.self::PRINT => 'is not host:port#token.fingerprint',
+            'host:1#'.self::KEY => 'is not host:port#token.fingerprint',
+            'host:0#'.self::KEY.'.'.self::PRINT => '0 is not a port',
+            'host:70000#'.self::KEY.'.'.self::PRINT => '70000 is not a port',
         ] as $invite => $says) {
             try {
                 Address::parse($invite);

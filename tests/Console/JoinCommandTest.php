@@ -41,8 +41,8 @@ final class JoinCommandTest extends TestCase
         $this->host?->stop(0);
     }
 
-    /** A fake host serving $mode; its port. */
-    private function host(string $mode, ?TempProject $project = null): int
+    /** A fake host serving $mode; the invite to it. */
+    private function host(string $mode, ?TempProject $project = null): string
     {
         $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode, $project->dir ?? '/nonexistent']);
         $this->host->start();
@@ -53,7 +53,9 @@ final class JoinCommandTest extends TestCase
             return \str_contains($port, "\n");
         });
 
-        return (int) \trim($port);
+        [$port, $fingerprint] = \explode(' ', \trim($port), limit: 2);
+
+        return '127.0.0.1:'.$port.'#'.self::KEY.'.'.$fingerprint;
     }
 
     private function join(string $invite, int $exit = 0, ?string $name = 'Bo'): CommandTester
@@ -85,7 +87,8 @@ final class JoinCommandTest extends TestCase
         \file_put_contents($copy.'/gone.txt', data: 'the host no longer has it');
         \file_put_contents($copy.'/.porta.json', data: '{"enabledPlugins": ["git"], "theme": "light"}');
 
-        $tester = $this->join('127.0.0.1:'.$this->host('pending', $project).'#'.self::KEY);
+        $invite = $this->host('pending', $project);
+        $tester = $this->join($invite);
 
         $this->assertSame(0, $tester->getStatusCode(), $tester->getErrorOutput());
         $this->assertStringContainsString('Waiting for the host to let you in', $tester->getDisplay());
@@ -97,7 +100,12 @@ final class JoinCommandTest extends TestCase
         $this->assertSame("<?php\n", \file_get_contents($root.'/src/A.php'));
         $this->assertSame('new', \file_get_contents($root.'/changed.txt'));
         $this->assertFileDoesNotExist($root.'/gone.txt');
-        $this->assertSame(['host' => '127.0.0.1', 'port' => GuestSession::load($root)['port'] ?? 0, 'ticket' => \str_repeat('feedface', times: 4), 'name' => 'Bo'], GuestSession::load($root));
+        $session = GuestSession::load($root);
+        $this->assertSame(
+            ['host' => '127.0.0.1', 'port' => $session['port'] ?? 0, 'fingerprint' => \substr($invite, offset: -64), 'ticket' => \str_repeat('feedface', times: 4), 'name' => 'Bo'],
+            $session,
+            'the certificate pinned for the IDE\'s reconnects too',
+        );
         $this->assertSame(
             ['enabledPlugins' => ['git', 'assist'], 'theme' => 'light'],
             \json_decode((string) \file_get_contents($root.'/.porta.json'), associative: true),
@@ -108,7 +116,7 @@ final class JoinCommandTest extends TestCase
     public function testAFirstJoinEnablesThePluginOnTopOfTheDefaults(): void
     {
         $project = new TempProject(['a.txt' => 'a']);
-        $tester = $this->join('127.0.0.1:'.$this->host('chatty', $project).'#'.self::KEY, exit: 3, name: null);
+        $tester = $this->join($this->host('chatty', $project), exit: 3, name: null);
 
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('Porta exited with 3', $tester->getErrorOutput());
@@ -133,7 +141,7 @@ final class JoinCommandTest extends TestCase
         ];
         $project = new TempProject(['a.txt' => 'a']);
         foreach ($cases as $mode => $says) {
-            $tester = $this->join('127.0.0.1:'.$this->host($mode, $project).'#'.self::KEY);
+            $tester = $this->join($this->host($mode, $project));
             $this->assertSame(1, $tester->getStatusCode(), $mode.': '.$tester->getDisplay());
             $this->assertStringContainsString($says, $tester->getErrorOutput(), $mode);
             $this->host?->stop(0);
@@ -143,11 +151,22 @@ final class JoinCommandTest extends TestCase
 
     public function testABadInviteOrAnAbsentHostIsSaid(): void
     {
-        $this->assertStringContainsString('is not host:port#token', $this->join('nonsense')->getErrorOutput());
+        $this->assertStringContainsString('is not host:port#token.fingerprint', $this->join('nonsense')->getErrorOutput());
         $closed = \stream_socket_server('tcp://127.0.0.1:0');
         $this->assertNotFalse($closed);
         $port = (int) \substr((string) \stream_socket_get_name($closed, remote: false), offset: 10);
         \fclose($closed);
-        $this->assertStringContainsString('Cannot reach 127.0.0.1:'.$port, $this->join('127.0.0.1:'.$port.'#'.self::KEY)->getErrorOutput());
+        $this->assertStringContainsString('Cannot reach 127.0.0.1:'.$port, $this->join('127.0.0.1:'.$port.'#'.self::KEY.'.'.\str_repeat('0', times: 64))->getErrorOutput());
+    }
+
+    public function testAHostWithAnotherCertificateOrNoneIsNotJoined(): void
+    {
+        $project = new TempProject(['a.txt' => 'a']);
+        $invite = $this->host('welcome', $project);
+        $impostor = \substr($invite, offset: 0, length: -64).\str_repeat('0', times: 64);
+        $this->assertStringContainsString('The host is not the one the invite names', $this->join($impostor)->getErrorOutput());
+        $this->host?->stop(0);
+        $this->assertStringContainsString('The secure connection to the host failed', $this->join($this->host('plain', $project))->getErrorOutput());
+        $this->assertSame([], $this->launched);
     }
 }

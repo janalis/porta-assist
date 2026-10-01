@@ -51,8 +51,8 @@
         <target>In der Sitzung von %name%, nur lesend</target>
       </trans-unit>
       <trans-unit id="13">
-        <source>Invite (host:port#token)</source>
-        <target>Einladung (Host:Port#Token)</target>
+        <source>Invite (host:port#token.fingerprint)</source>
+        <target>Einladung (Host:Port#Token.Fingerabdruck)</target>
       </trans-unit>
       <trans-unit id="14">
         <source>Leave the session</source>

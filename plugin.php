@@ -54,7 +54,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             'choice',
             '127.0.0.1',
             ['127.0.0.1', '0.0.0.0'],
-            hint: '127.0.0.1: this machine only, reached through an ssh tunnel or a VPN; 0.0.0.0: the whole network — the invite\'s token is the only key',
+            hint: '127.0.0.1: this machine only, reached through an ssh tunnel or a VPN; 0.0.0.0: the whole network — still encrypted, and only those holding the invite are asked in',
         );
         $api->registerSetting('port', 'Port to share on', 'int', 0, hint: '0 picks a free one each time', min: 0, max: 65_535);
         $api->registerSetting('maxFileSize', 'Largest file to share (MB)', 'int', 4, hint: 'a bigger one stays on the host', min: 1, max: 64);
@@ -162,7 +162,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
     private function join(): void
     {
         $api = $this->api();
-        $api->prompt($api->trans('Invite (host:port#token)'), initial: '', onSubmit: static function (string $invite) use ($api): void {
+        $api->prompt($api->trans('Invite (host:port#token.fingerprint)'), initial: '', onSubmit: static function (string $invite) use ($api): void {
             try {
                 $address = Address::parse(\preg_replace('/^\s*porta\s+assist\s+/', replacement: '', subject: $invite) ?? $invite);
             } catch (InvalidArgumentException $e) {

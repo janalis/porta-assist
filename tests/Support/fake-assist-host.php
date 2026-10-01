@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Porta\AssistPlugin\Net\Certificate;
+
 /*
  * A host for `porta assist` to join, as a separate process — the command
  * blocks, so the host cannot share its loop. Prints its port, serves ONE
@@ -15,6 +17,10 @@ declare(strict_types=1);
  *   no-list      let in, then never list the files
  *   cut          let in, list, and hang up on the first fetch
  *   chatty       as welcome, with the session talking in between
+ *   plain        no TLS: hang up on whatever comes
+ *
+ * It speaks TLS with a certificate of its own, and prints its port and the
+ * certificate's fingerprint on the first line.
  *   chatty       as welcome, with the session talking in between
  */
 
@@ -29,13 +35,18 @@ if (is_dir($dir)) {
     }
     ksort($files);
 }
-$server = stream_socket_server('tcp://127.0.0.1:0');
+require __DIR__.'/../../../../vendor/autoload.php';
+require __DIR__.'/../../../../tests/plugin-autoload.php';
+$certificate = Certificate::create();
+register_shutdown_function($certificate->forget(...));
+$server = stream_socket_server('tcp://127.0.0.1:0', context: stream_context_create($certificate->serverContext()));
 $name = (string) stream_socket_get_name($server, remote: false);
-fwrite(STDOUT, substr($name, offset: (int) strrpos($name, needle: ':') + 1)."\n");
+fwrite(STDOUT, substr($name, offset: (int) strrpos($name, needle: ':') + 1).' '.$certificate->fingerprint."\n");
 fflush(STDOUT);
 $client = stream_socket_accept($server, timeout: 20);
-if (false === $client) {
-    exit(1);
+// @mago-expect lint:no-error-control-operator -- a client that gives up mid-handshake warns; this host just stops
+if (false === $client || 'plain' === $mode || true !== @stream_socket_enable_crypto($client, enable: true, crypto_method: STREAM_CRYPTO_METHOD_TLS_SERVER)) {
+    exit(0);
 }
 $send = static function (array $message) use ($client): void {
     fwrite($client, json_encode($message, JSON_UNESCAPED_SLASHES)."\n");

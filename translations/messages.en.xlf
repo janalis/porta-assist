@@ -51,8 +51,8 @@
         <target>In %name%'s session, reading along</target>
       </trans-unit>
       <trans-unit id="13">
-        <source>Invite (host:port#token)</source>
-        <target>Invite (host:port#token)</target>
+        <source>Invite (host:port#token.fingerprint)</source>
+        <target>Invite (host:port#token.fingerprint)</target>
       </trans-unit>
       <trans-unit id="14">
         <source>Leave the session</source>

@@ -91,7 +91,7 @@ final class HostAdmissionE2eTest extends TestCase
 
                 // Back on another connection with her ticket: in at once, still editing.
                 $old = $this->peer;
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
                 $again = $this->expect('welcome');
                 $this->assertSame([$welcome['peer'], 'edit'], [$again['peer'], $again['role']]);
@@ -103,7 +103,7 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->answer($tui, $terminal, 'editing', downs: 0);
                 $this->answer($tui, $terminal, 'Remove from the session', downs: 3);
                 $this->assertSame('removed', $this->expect('bye')['reason']);
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
                 $this->assertSame('token', $this->expect('denied')['reason']);
 
@@ -122,7 +122,7 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->answer($tui, $terminal, 'Bo asks to join', downs: 2);
                 $this->assertSame('host', $this->expect('denied')['reason']);
                 foreach ([['t' => 'hello', 'v' => 99, 'name' => 'Old'], ['t' => 'open'], ['t' => 'hello', 'v' => Wire::VERSION, 'name' => '  ', 'token' => $address->token]] as $i => $hello) {
-                    $this->dial($address->port);
+                    $this->dial($address);
                     $this->say($hello);
                     $this->assertSame(['version', 'version', 'name'][$i], $this->expect('denied')['reason']);
                 }
@@ -152,11 +152,11 @@ final class HostAdmissionE2eTest extends TestCase
                 $terminal->simulateInput("\r");
 
                 // Silent for too long, then one waiting connection too many.
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->await($this->hungUp(...), what: 'the silent one let go');
-                $this->dial($address->port);
+                $this->dial($address);
                 $silent = $this->peer;
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->assertSame('busy', $this->expect('denied')['reason']);
                 $this->assertIsResource($silent);
                 \fclose($silent);
@@ -167,19 +167,20 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->answer($tui, $terminal, 'Di asks to join', downs: 0);
                 $this->expect('welcome');
                 $di = $this->peer;
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ed', 'token' => $address->token]);
                 $this->assertSame('full', $this->expect('denied')['reason']);
                 Probe::set($host, 'maxGuests', 4);
                 $this->askIn($address, 'Fay');
                 $this->hangUp();
+                $this->await(static fn (): bool => [] === Probe::get($host, 'pending'), what: 'the host to see Fay give up');
                 $this->answer($tui, $terminal, 'Fay asks to join', downs: 0);
                 $this->assertIsResource($di);
                 \fclose($di);
                 $this->await(static fn (): bool => self::toasted($ide, 'Di left'), what: 'Di gone, Fay never in');
 
                 // Stopping, with someone still at the door: share again later, from scratch.
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->await(static fn (): bool => [] !== Probe::get($host, 'pending'), what: 'at the door');
                 $this->command($ide, 'assist:stop');
                 $this->await(static fn (): bool => self::toasted($ide, 'Stopped sharing'), what: 'stopped');

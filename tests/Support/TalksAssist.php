@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests\Support;
 
 use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\Editor\BufferManager;
 use Porta\Event\CommandRunRequested;
@@ -33,6 +34,9 @@ trait TalksAssist
     private $listening;
 
     private string $buffered = '';
+
+    /** The certificate this side presents when it plays the host. */
+    private ?Certificate $certificate = null;
 
     /** @var list<array<string, mixed>> */
     private array $inbox = [];
@@ -93,26 +97,29 @@ trait TalksAssist
     /** Be a guest named $name: connect to the host on $address and ask in with its token. */
     private function askIn(Address $address, string $name): void
     {
-        $this->dial($address->port);
+        $this->dial($address);
         $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $name, 'token' => $address->token]);
         $this->expect('pending');
     }
 
-    /** Be a guest: connect to the host IDE on $port. */
-    private function dial(int $port): void
+    /** Be a guest: connect to the host IDE at $address, encrypted, expecting its certificate. */
+    private function dial(Address $address): void
     {
-        $socket = \stream_socket_client('tcp://127.0.0.1:'.$port, timeout: 2.0);
+        $context = \stream_context_create(Certificate::clientContext());
+        $socket = \stream_socket_client('tcp://127.0.0.1:'.$address->port, timeout: 2.0, context: $context);
         $this->assertNotFalse($socket, 'the host listens');
-        \stream_set_blocking($socket, enable: false);
+        $this->secure($socket, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        $this->assertTrue(Certificate::presentedBy($socket, $address->fingerprint), 'the host the invite names');
         $this->peer = $socket;
         $this->buffered = '';
         $this->inbox = [];
     }
 
-    /** Be a host: listen, and say where. */
+    /** Be a host: listen, and say where — {@see $certificate} is what a guest must expect. */
     private function listen(): int
     {
-        $server = \stream_socket_server('tcp://127.0.0.1:0');
+        $this->certificate = Certificate::create();
+        $server = \stream_socket_server('tcp://127.0.0.1:0', context: \stream_context_create($this->certificate->serverContext()));
         $this->assertNotFalse($server);
         \stream_set_blocking($server, enable: false);
         $this->listening = $server;
@@ -140,10 +147,41 @@ trait TalksAssist
             what: 'the guest IDE to connect',
         );
         \assert(\is_resource($accepted), description: 'the await saw it accepted');
-        \stream_set_blocking($accepted, enable: false);
+        $this->secure($accepted, \STREAM_CRYPTO_METHOD_TLS_SERVER);
         $this->peer = $accepted;
         $this->buffered = '';
         $this->inbox = [];
+    }
+
+    /**
+     * Encrypt $stream, pumping the loop while the IDE on the other end does
+     * its half: a blocking handshake here would wait for a loop it blocks.
+     *
+     * @param resource $stream
+     */
+    private function secure($stream, int $method): void
+    {
+        \stream_set_blocking($stream, enable: false);
+        $this->await(
+            static function () use ($stream, $method): bool {
+                // @mago-expect lint:no-error-control-operator -- a refused handshake warns; the false is turned into the failure
+                $done = @\stream_socket_enable_crypto($stream, enable: true, crypto_method: $method);
+                if (false === $done) {
+                    throw new \RuntimeException('the TLS handshake failed');
+                }
+
+                return true === $done;
+            },
+            what: 'the TLS handshake',
+        );
+    }
+
+    /** The fingerprint a guest IDE must expect of this side as a host. */
+    private function fingerprint(): string
+    {
+        $this->assertNotNull($this->certificate, 'listen() first');
+
+        return $this->certificate->fingerprint;
     }
 
     /** @param array<string, mixed> $message */

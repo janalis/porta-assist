@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Session;
 
 use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Connection;
 use Porta\AssistPlugin\Net\Listener;
 use Porta\AssistPlugin\Net\Wire;
@@ -62,6 +63,9 @@ final class HostSession
 
     private ?Address $address = null;
 
+    /** The session's TLS identity, while it lasts. */
+    private ?Certificate $certificate = null;
+
     /** @var array<int, Connection> connections not let in yet */
     private array $pending = [];
 
@@ -104,12 +108,16 @@ final class HostSession
         if (null !== $this->address) {
             return $this->address;
         }
-        $listening = $this->listener->start($bind, $port);
+        $certificate = Certificate::create();
+        $listening = $this->listener->start($bind, $port, $certificate);
         if (\is_string($listening)) {
+            $certificate->forget();
+
             return $listening;
         }
+        $this->certificate = $certificate;
         $host = '0.0.0.0' === $bind ? \gethostbyname((string) \gethostname()) : $bind;
-        $this->address = new Address($host, $listening, \bin2hex(\random_bytes(16)));
+        $this->address = new Address($host, $listening, \bin2hex(\random_bytes(16)), $certificate->fingerprint);
         $this->timers = [
             EventLoop::unreference(EventLoop::repeat(self::READ_EVERY, $this->readAll(...))),
             EventLoop::unreference(EventLoop::repeat(self::CARET_EVERY, $this->caret(...))),
@@ -135,6 +143,8 @@ final class HostSession
             $connection->close('the session ended');
         }
         $this->listener->stop();
+        $this->certificate?->forget();
+        $this->certificate = null;
         $this->files->stop();
         foreach ($this->timers as $timer) {
             EventLoop::cancel($timer);

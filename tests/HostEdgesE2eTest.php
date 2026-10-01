@@ -89,7 +89,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->assertSame([$ana['peer'], 2], [$caret['peer'], $caret['line']], 'where she is, clamped into the text');
 
                 // Ana back on her ticket: her own agent is not told to her as someone else.
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $ana['ticket']]);
                 $this->expect('welcome');
                 $this->assertNotContains($ana['peer'].'~codex', \array_column($this->inboxOf('presence'), 'peer'));

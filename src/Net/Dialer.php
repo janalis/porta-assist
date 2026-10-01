@@ -18,13 +18,15 @@ final readonly class Dialer
     ) {}
 
     /**
-     * Connect to $host:$port; $done gets the connection, or why there is none.
+     * Connect to $host:$port, encrypted, expecting the certificate with
+     * $fingerprint; $done gets the connection, or why there is none.
      *
      * @param \Closure(Connection|string): void $done
      */
-    public function dial(string $host, int $port, \Closure $done): void
+    public function dial(string $host, int $port, string $fingerprint, \Closure $done): void
     {
         $where = \sprintf('%s:%d', $host, $port);
+        $timeout = $this->timeout;
         $errno = 0;
         $error = '';
         // @mago-expect lint:no-error-control-operator -- an unresolvable host warns as well as returning false; the message is carried in $error
@@ -34,6 +36,7 @@ final readonly class Dialer
             $error,
             timeout: $this->timeout,
             flags: \STREAM_CLIENT_CONNECT | \STREAM_CLIENT_ASYNC_CONNECT,
+            context: \stream_context_create(Certificate::clientContext()),
         );
         if (false === $stream) {
             $done(\sprintf('cannot reach %s: %s', $where, $error));
@@ -41,7 +44,7 @@ final readonly class Dialer
             return;
         }
         $timer = '';
-        $writable = EventLoop::unreference(EventLoop::onWritable($stream, static function (string $watcher) use ($stream, $done, &$timer, $where): void {
+        $writable = EventLoop::unreference(EventLoop::onWritable($stream, static function (string $watcher) use ($stream, $done, &$timer, $where, $timeout, $fingerprint): void {
             EventLoop::cancel($watcher);
             EventLoop::cancel($timer);
             // Writable says the attempt is over, not that it worked: only a
@@ -52,7 +55,22 @@ final readonly class Dialer
 
                 return;
             }
-            $done(new Connection($stream));
+            \stream_set_blocking($stream, enable: false);
+            Tls::handshake(
+                $stream,
+                \STREAM_CRYPTO_METHOD_TLS_CLIENT,
+                static function (?string $failed) use ($stream, $done, $where): void {
+                    if (null !== $failed) {
+                        \fclose($stream);
+                        $done(\sprintf('%s: %s', $where, $failed));
+
+                        return;
+                    }
+                    $done(new Connection($stream));
+                },
+                $timeout,
+                $fingerprint,
+            );
         }));
         $timer = EventLoop::unreference(EventLoop::delay($this->timeout, static function () use ($writable, $stream, $done, $where): void {
             EventLoop::cancel($writable);

@@ -75,11 +75,11 @@ final class HostSessionE2eTest extends TestCase
                 $this->assertSame('127.0.0.1', $address->host);
 
                 // A wrong token is not even asked about.
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Eve', 'token' => \str_repeat('0', times: 32)]);
                 $this->assertSame('token', $this->expect('denied')['reason']);
 
-                $this->dial($address->port);
+                $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'token' => $address->token]);
                 $this->expect('pending');
                 $this->awaitPainted($tui, $terminal, 'Ana asks to join');

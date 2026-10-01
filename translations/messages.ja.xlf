@@ -51,8 +51,8 @@
         <target>%name% のセッション（閲覧のみ）</target>
       </trans-unit>
       <trans-unit id="13">
-        <source>Invite (host:port#token)</source>
-        <target>招待 (ホスト:ポート#トークン)</target>
+        <source>Invite (host:port#token.fingerprint)</source>
+        <target>招待 (ホスト:ポート#トークン.フィンガープリント)</target>
       </trans-unit>
       <trans-unit id="14">
         <source>Leave the session</source>

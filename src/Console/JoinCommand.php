@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Console;
 
 use Porta\AssistPlugin\Net\Address;
+use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Connection;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Session\GuestSession;
@@ -62,7 +63,7 @@ final class JoinCommand extends PluginCommand
             Joins a project shared with the <info>assist</info> plugin. The host runs
             <info>Assist: Share This Project</info> and sends you the invite it copies:
 
-              <info>porta assist 192.168.1.20:52814#4f…</info>
+              <info>porta assist 192.168.1.20:52814#4f….9c…</info>
 
             The host is asked to let you in. Then a copy of the project is kept in sync
             under <info>~/.porta/assist/</info> — a second join fetches only what changed —
@@ -105,7 +106,7 @@ final class JoinCommand extends PluginCommand
             return $joined;
         }
         [$mirror, $ticket] = $joined;
-        GuestSession::store($mirror->root, ['host' => $address->host, 'port' => $address->port, 'ticket' => $ticket, 'name' => $name]);
+        GuestSession::store($mirror->root, ['host' => $address->host, 'port' => $address->port, 'fingerprint' => $address->fingerprint, 'ticket' => $ticket, 'name' => $name]);
         self::enable($mirror->root);
         // The first-run card walks through setting a project up; this one is
         // the host's, set up already.
@@ -127,10 +128,22 @@ final class JoinCommand extends PluginCommand
         $errno = 0;
         $error = '';
         $endpoint = \sprintf('tcp://%s:%d', \str_contains($address->host, ':') ? '['.$address->host.']' : $address->host, $address->port);
+        $context = \stream_context_create(Certificate::clientContext());
         // @mago-expect lint:no-error-control-operator -- an unreachable host warns as well as returning false; the message is carried in $error
-        $socket = @\stream_socket_client($endpoint, $errno, $error, $this->timeout);
+        $socket = @\stream_socket_client($endpoint, $errno, $error, $this->timeout, context: $context);
         if (false === $socket) {
             return \sprintf('Cannot reach %s:%d: %s', $address->host, $address->port, $error);
+        }
+        // @mago-expect lint:no-error-control-operator -- a refused handshake warns as well as returning false; false is the answer
+        $refused = match (true) {
+            true !== @\stream_socket_enable_crypto($socket, enable: true, crypto_method: \STREAM_CRYPTO_METHOD_TLS_CLIENT) => 'The secure connection to the host failed',
+            !Certificate::presentedBy($socket, $address->fingerprint) => 'The host is not the one the invite names — ask the host for the invite again',
+            default => null,
+        };
+        if (null !== $refused) {
+            \fclose($socket);
+
+            return $refused;
         }
         $this->socket = $socket;
         try {

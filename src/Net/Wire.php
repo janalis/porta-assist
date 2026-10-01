@@ -12,7 +12,7 @@ namespace Porta\AssistPlugin\Net;
 final class Wire
 {
     /** The protocol a peer must speak to be let in. */
-    public const int VERSION = 1;
+    public const int VERSION = 2;
 
     /** @param array<string, mixed> $message */
     public static function encode(array $message): string
