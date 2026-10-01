@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" target-language="he" datatype="plaintext" original="messages">
+    <body>
+      <trans-unit id="1">
+        <source>%name% asks to join, from %from%</source>
+        <target>%name% מבקש להצטרף, מ־%from%</target>
+      </trans-unit>
+      <trans-unit id="2">
+        <source>%name% joined and can edit</source>
+        <target>%name% הצטרף ויכול לערוך</target>
+      </trans-unit>
+      <trans-unit id="3">
+        <source>%name% joined, reading along</source>
+        <target>%name% הצטרף וקורא לצדכם</target>
+      </trans-unit>
+      <trans-unit id="4">
+        <source>%name% left</source>
+        <target>%name% עזב</target>
+      </trans-unit>
+      <trans-unit id="5">
+        <source>Connected to %name%'s session</source>
+        <target>מחובר להפעלה של %name%</target>
+      </trans-unit>
+      <trans-unit id="6">
+        <source>Copied — run it in a terminal: porta assist %invite%</source>
+        <target>הועתק — הריצו בטרמינל: porta assist %invite%</target>
+      </trans-unit>
+      <trans-unit id="7">
+        <source>Copy the invite</source>
+        <target>העתקת ההזמנה</target>
+      </trans-unit>
+      <trans-unit id="8">
+        <source>Follow</source>
+        <target>מעקב</target>
+      </trans-unit>
+      <trans-unit id="9">
+        <source>Follow %name%</source>
+        <target>לעקוב אחרי %name%</target>
+      </trans-unit>
+      <trans-unit id="10">
+        <source>Following %name%</source>
+        <target>עוקבים אחרי %name%</target>
+      </trans-unit>
+      <trans-unit id="11">
+        <source>In %name%'s session, editing</source>
+        <target>בהפעלה של %name%, עם עריכה</target>
+      </trans-unit>
+      <trans-unit id="12">
+        <source>In %name%'s session, reading along</source>
+        <target>בהפעלה של %name%, קריאה בלבד</target>
+      </trans-unit>
+      <trans-unit id="13">
+        <source>Invite (host:port#token)</source>
+        <target>הזמנה (host:port#token)</target>
+      </trans-unit>
+      <trans-unit id="14">
+        <source>Leave the session</source>
+        <target>יציאה מההפעלה</target>
+      </trans-unit>
+      <trans-unit id="15">
+        <source>Left the session — this copy is yours to keep</source>
+        <target>יצאתם מההפעלה — העותק הזה נשאר שלכם</target>
+      </trans-unit>
+      <trans-unit id="16">
+        <source>Let them edit</source>
+        <target>לאפשר עריכה</target>
+      </trans-unit>
+      <trans-unit id="17">
+        <source>Let them read along</source>
+        <target>לאפשר קריאה בלבד</target>
+      </trans-unit>
+      <trans-unit id="18">
+        <source>Lost the host (%why%) — trying again</source>
+        <target>החיבור למארח אבד (%why%) — מנסים שוב</target>
+      </trans-unit>
+      <trans-unit id="19">
+        <source>Nobody else is in the session</source>
+        <target>אין אף אחד אחר בהפעלה</target>
+      </trans-unit>
+      <trans-unit id="20">
+        <source>Participants</source>
+        <target>משתתפים</target>
+      </trans-unit>
+      <trans-unit id="21">
+        <source>Reconnecting to the host…</source>
+        <target>מתחברים מחדש למארח…</target>
+      </trans-unit>
+      <trans-unit id="22">
+        <source>Remove from the session</source>
+        <target>הסרה מההפעלה</target>
+      </trans-unit>
+      <trans-unit id="23">
+        <source>Sharing this project — %count% in</source>
+        <target>הפרויקט משותף — %count% בפנים</target>
+      </trans-unit>
+      <trans-unit id="24">
+        <source>Sharing. Invite copied: porta assist %invite%</source>
+        <target>משתפים. ההזמנה הועתקה: porta assist %invite%</target>
+      </trans-unit>
+      <trans-unit id="25">
+        <source>Stop following</source>
+        <target>הפסקת מעקב</target>
+      </trans-unit>
+      <trans-unit id="26">
+        <source>Stop sharing</source>
+        <target>הפסקת השיתוף</target>
+      </trans-unit>
+      <trans-unit id="27">
+        <source>Stopped following %name%</source>
+        <target>הפסקתם לעקוב אחרי %name%</target>
+      </trans-unit>
+      <trans-unit id="28">
+        <source>Stopped sharing</source>
+        <target>השיתוף הופסק</target>
+      </trans-unit>
+      <trans-unit id="29">
+        <source>The host did not answer</source>
+        <target>המארח לא ענה</target>
+      </trans-unit>
+      <trans-unit id="30">
+        <source>The host ended the session</source>
+        <target>המארח סיים את ההפעלה</target>
+      </trans-unit>
+      <trans-unit id="31">
+        <source>The host removed you from the session</source>
+        <target>המארח הסיר אתכם מההפעלה</target>
+      </trans-unit>
+      <trans-unit id="32">
+        <source>The host turned you away</source>
+        <target>המארח דחה אתכם</target>
+      </trans-unit>
+      <trans-unit id="33">
+        <source>The session is full</source>
+        <target>ההפעלה מלאה</target>
+      </trans-unit>
+      <trans-unit id="34">
+        <source>The session is over — ask the host for a new invite</source>
+        <target>ההפעלה הסתיימה — בקשו מהמארח הזמנה חדשה</target>
+      </trans-unit>
+      <trans-unit id="35">
+        <source>This is a copy of someone else's project — it is theirs to share</source>
+        <target>זהו עותק של פרויקט של מישהו אחר — השיתוף בידיו</target>
+      </trans-unit>
+      <trans-unit id="36">
+        <source>Turn them away</source>
+        <target>לדחות</target>
+      </trans-unit>
+      <trans-unit id="37">
+        <source>Waiting for the host to let you in…</source>
+        <target>ממתינים שהמארח יכניס אתכם…</target>
+      </trans-unit>
+      <trans-unit id="38">
+        <source>You can edit now</source>
+        <target>כעת אפשר לערוך</target>
+      </trans-unit>
+      <trans-unit id="39">
+        <source>You can read along, not edit</source>
+        <target>אפשר לקרוא, לא לערוך</target>
+      </trans-unit>
+      <trans-unit id="40">
+        <source>agent</source>
+        <target>סוכן</target>
+      </trans-unit>
+      <trans-unit id="41">
+        <source>editing</source>
+        <target>עורך</target>
+      </trans-unit>
+      <trans-unit id="42">
+        <source>host</source>
+        <target>מארח</target>
+      </trans-unit>
+      <trans-unit id="43">
+        <source>reading along</source>
+        <target>קורא</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

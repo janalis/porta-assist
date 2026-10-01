@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" target-language="ja" datatype="plaintext" original="messages">
+    <body>
+      <trans-unit id="1">
+        <source>%name% asks to join, from %from%</source>
+        <target>%name% が %from% から参加を求めています</target>
+      </trans-unit>
+      <trans-unit id="2">
+        <source>%name% joined and can edit</source>
+        <target>%name% が参加しました（編集可）</target>
+      </trans-unit>
+      <trans-unit id="3">
+        <source>%name% joined, reading along</source>
+        <target>%name% が参加しました（閲覧のみ）</target>
+      </trans-unit>
+      <trans-unit id="4">
+        <source>%name% left</source>
+        <target>%name% が退出しました</target>
+      </trans-unit>
+      <trans-unit id="5">
+        <source>Connected to %name%'s session</source>
+        <target>%name% のセッションに接続しました</target>
+      </trans-unit>
+      <trans-unit id="6">
+        <source>Copied — run it in a terminal: porta assist %invite%</source>
+        <target>コピーしました — ターミナルで実行してください: porta assist %invite%</target>
+      </trans-unit>
+      <trans-unit id="7">
+        <source>Copy the invite</source>
+        <target>招待をコピー</target>
+      </trans-unit>
+      <trans-unit id="8">
+        <source>Follow</source>
+        <target>フォロー</target>
+      </trans-unit>
+      <trans-unit id="9">
+        <source>Follow %name%</source>
+        <target>%name% をフォロー</target>
+      </trans-unit>
+      <trans-unit id="10">
+        <source>Following %name%</source>
+        <target>%name% をフォロー中</target>
+      </trans-unit>
+      <trans-unit id="11">
+        <source>In %name%'s session, editing</source>
+        <target>%name% のセッション（編集可）</target>
+      </trans-unit>
+      <trans-unit id="12">
+        <source>In %name%'s session, reading along</source>
+        <target>%name% のセッション（閲覧のみ）</target>
+      </trans-unit>
+      <trans-unit id="13">
+        <source>Invite (host:port#token)</source>
+        <target>招待 (ホスト:ポート#トークン)</target>
+      </trans-unit>
+      <trans-unit id="14">
+        <source>Leave the session</source>
+        <target>セッションを退出</target>
+      </trans-unit>
+      <trans-unit id="15">
+        <source>Left the session — this copy is yours to keep</source>
+        <target>セッションを退出しました — このコピーはそのまま残ります</target>
+      </trans-unit>
+      <trans-unit id="16">
+        <source>Let them edit</source>
+        <target>編集を許可</target>
+      </trans-unit>
+      <trans-unit id="17">
+        <source>Let them read along</source>
+        <target>閲覧のみ許可</target>
+      </trans-unit>
+      <trans-unit id="18">
+        <source>Lost the host (%why%) — trying again</source>
+        <target>ホストとの接続が切れました (%why%) — 再試行中</target>
+      </trans-unit>
+      <trans-unit id="19">
+        <source>Nobody else is in the session</source>
+        <target>セッションに他の参加者はいません</target>
+      </trans-unit>
+      <trans-unit id="20">
+        <source>Participants</source>
+        <target>参加者</target>
+      </trans-unit>
+      <trans-unit id="21">
+        <source>Reconnecting to the host…</source>
+        <target>ホストに再接続しています…</target>
+      </trans-unit>
+      <trans-unit id="22">
+        <source>Remove from the session</source>
+        <target>セッションから外す</target>
+      </trans-unit>
+      <trans-unit id="23">
+        <source>Sharing this project — %count% in</source>
+        <target>このプロジェクトを共有中 — 参加 %count%</target>
+      </trans-unit>
+      <trans-unit id="24">
+        <source>Sharing. Invite copied: porta assist %invite%</source>
+        <target>共有中。招待をコピーしました: porta assist %invite%</target>
+      </trans-unit>
+      <trans-unit id="25">
+        <source>Stop following</source>
+        <target>フォローをやめる</target>
+      </trans-unit>
+      <trans-unit id="26">
+        <source>Stop sharing</source>
+        <target>共有を停止</target>
+      </trans-unit>
+      <trans-unit id="27">
+        <source>Stopped following %name%</source>
+        <target>%name% のフォローをやめました</target>
+      </trans-unit>
+      <trans-unit id="28">
+        <source>Stopped sharing</source>
+        <target>共有を停止しました</target>
+      </trans-unit>
+      <trans-unit id="29">
+        <source>The host did not answer</source>
+        <target>ホストが応答しませんでした</target>
+      </trans-unit>
+      <trans-unit id="30">
+        <source>The host ended the session</source>
+        <target>ホストがセッションを終了しました</target>
+      </trans-unit>
+      <trans-unit id="31">
+        <source>The host removed you from the session</source>
+        <target>ホストによりセッションから外されました</target>
+      </trans-unit>
+      <trans-unit id="32">
+        <source>The host turned you away</source>
+        <target>ホストに参加を断られました</target>
+      </trans-unit>
+      <trans-unit id="33">
+        <source>The session is full</source>
+        <target>セッションは満員です</target>
+      </trans-unit>
+      <trans-unit id="34">
+        <source>The session is over — ask the host for a new invite</source>
+        <target>セッションは終了しています — ホストに新しい招待を頼んでください</target>
+      </trans-unit>
+      <trans-unit id="35">
+        <source>This is a copy of someone else's project — it is theirs to share</source>
+        <target>これは他の人のプロジェクトのコピーです — 共有できるのは元の持ち主だけです</target>
+      </trans-unit>
+      <trans-unit id="36">
+        <source>Turn them away</source>
+        <target>断る</target>
+      </trans-unit>
+      <trans-unit id="37">
+        <source>Waiting for the host to let you in…</source>
+        <target>ホストの承認を待っています…</target>
+      </trans-unit>
+      <trans-unit id="38">
+        <source>You can edit now</source>
+        <target>編集できるようになりました</target>
+      </trans-unit>
+      <trans-unit id="39">
+        <source>You can read along, not edit</source>
+        <target>閲覧のみ可能です（編集不可）</target>
+      </trans-unit>
+      <trans-unit id="40">
+        <source>agent</source>
+        <target>エージェント</target>
+      </trans-unit>
+      <trans-unit id="41">
+        <source>editing</source>
+        <target>編集中</target>
+      </trans-unit>
+      <trans-unit id="42">
+        <source>host</source>
+        <target>ホスト</target>
+      </trans-unit>
+      <trans-unit id="43">
+        <source>reading along</source>
+        <target>閲覧中</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

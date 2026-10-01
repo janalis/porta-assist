@@ -1,0 +1,25 @@
+{
+    "name": "porta/assist",
+    "description": "Work on one project together, live: a host shares it over the network, guests join, everyone edits the same files and sees each other's carets",
+    "type": "porta-plugin",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.5",
+        "revolt/event-loop": "^1.0",
+        "symfony/console": "^8.2",
+        "symfony/filesystem": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Porta\\AssistPlugin\\": "src/"
+        }
+    },
+    "extra": {
+        "porta": {
+            "api": 1,
+            "commands": {
+                "assist": "Porta\\AssistPlugin\\Console\\JoinCommand"
+            }
+        }
+    }
+}

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" target-language="en" datatype="plaintext" original="messages">
+    <body>
+      <trans-unit id="1">
+        <source>%name% asks to join, from %from%</source>
+        <target>%name% asks to join, from %from%</target>
+      </trans-unit>
+      <trans-unit id="2">
+        <source>%name% joined and can edit</source>
+        <target>%name% joined and can edit</target>
+      </trans-unit>
+      <trans-unit id="3">
+        <source>%name% joined, reading along</source>
+        <target>%name% joined, reading along</target>
+      </trans-unit>
+      <trans-unit id="4">
+        <source>%name% left</source>
+        <target>%name% left</target>
+      </trans-unit>
+      <trans-unit id="5">
+        <source>Connected to %name%'s session</source>
+        <target>Connected to %name%'s session</target>
+      </trans-unit>
+      <trans-unit id="6">
+        <source>Copied — run it in a terminal: porta assist %invite%</source>
+        <target>Copied — run it in a terminal: porta assist %invite%</target>
+      </trans-unit>
+      <trans-unit id="7">
+        <source>Copy the invite</source>
+        <target>Copy the invite</target>
+      </trans-unit>
+      <trans-unit id="8">
+        <source>Follow</source>
+        <target>Follow</target>
+      </trans-unit>
+      <trans-unit id="9">
+        <source>Follow %name%</source>
+        <target>Follow %name%</target>
+      </trans-unit>
+      <trans-unit id="10">
+        <source>Following %name%</source>
+        <target>Following %name%</target>
+      </trans-unit>
+      <trans-unit id="11">
+        <source>In %name%'s session, editing</source>
+        <target>In %name%'s session, editing</target>
+      </trans-unit>
+      <trans-unit id="12">
+        <source>In %name%'s session, reading along</source>
+        <target>In %name%'s session, reading along</target>
+      </trans-unit>
+      <trans-unit id="13">
+        <source>Invite (host:port#token)</source>
+        <target>Invite (host:port#token)</target>
+      </trans-unit>
+      <trans-unit id="14">
+        <source>Leave the session</source>
+        <target>Leave the session</target>
+      </trans-unit>
+      <trans-unit id="15">
+        <source>Left the session — this copy is yours to keep</source>
+        <target>Left the session — this copy is yours to keep</target>
+      </trans-unit>
+      <trans-unit id="16">
+        <source>Let them edit</source>
+        <target>Let them edit</target>
+      </trans-unit>
+      <trans-unit id="17">
+        <source>Let them read along</source>
+        <target>Let them read along</target>
+      </trans-unit>
+      <trans-unit id="18">
+        <source>Lost the host (%why%) — trying again</source>
+        <target>Lost the host (%why%) — trying again</target>
+      </trans-unit>
+      <trans-unit id="19">
+        <source>Nobody else is in the session</source>
+        <target>Nobody else is in the session</target>
+      </trans-unit>
+      <trans-unit id="20">
+        <source>Participants</source>
+        <target>Participants</target>
+      </trans-unit>
+      <trans-unit id="21">
+        <source>Reconnecting to the host…</source>
+        <target>Reconnecting to the host…</target>
+      </trans-unit>
+      <trans-unit id="22">
+        <source>Remove from the session</source>
+        <target>Remove from the session</target>
+      </trans-unit>
+      <trans-unit id="23">
+        <source>Sharing this project — %count% in</source>
+        <target>Sharing this project — %count% in</target>
+      </trans-unit>
+      <trans-unit id="24">
+        <source>Sharing. Invite copied: porta assist %invite%</source>
+        <target>Sharing. Invite copied: porta assist %invite%</target>
+      </trans-unit>
+      <trans-unit id="25">
+        <source>Stop following</source>
+        <target>Stop following</target>
+      </trans-unit>
+      <trans-unit id="26">
+        <source>Stop sharing</source>
+        <target>Stop sharing</target>
+      </trans-unit>
+      <trans-unit id="27">
+        <source>Stopped following %name%</source>
+        <target>Stopped following %name%</target>
+      </trans-unit>
+      <trans-unit id="28">
+        <source>Stopped sharing</source>
+        <target>Stopped sharing</target>
+      </trans-unit>
+      <trans-unit id="29">
+        <source>The host did not answer</source>
+        <target>The host did not answer</target>
+      </trans-unit>
+      <trans-unit id="30">
+        <source>The host ended the session</source>
+        <target>The host ended the session</target>
+      </trans-unit>
+      <trans-unit id="31">
+        <source>The host removed you from the session</source>
+        <target>The host removed you from the session</target>
+      </trans-unit>
+      <trans-unit id="32">
+        <source>The host turned you away</source>
+        <target>The host turned you away</target>
+      </trans-unit>
+      <trans-unit id="33">
+        <source>The session is full</source>
+        <target>The session is full</target>
+      </trans-unit>
+      <trans-unit id="34">
+        <source>The session is over — ask the host for a new invite</source>
+        <target>The session is over — ask the host for a new invite</target>
+      </trans-unit>
+      <trans-unit id="35">
+        <source>This is a copy of someone else's project — it is theirs to share</source>
+        <target>This is a copy of someone else's project — it is theirs to share</target>
+      </trans-unit>
+      <trans-unit id="36">
+        <source>Turn them away</source>
+        <target>Turn them away</target>
+      </trans-unit>
+      <trans-unit id="37">
+        <source>Waiting for the host to let you in…</source>
+        <target>Waiting for the host to let you in…</target>
+      </trans-unit>
+      <trans-unit id="38">
+        <source>You can edit now</source>
+        <target>You can edit now</target>
+      </trans-unit>
+      <trans-unit id="39">
+        <source>You can read along, not edit</source>
+        <target>You can read along, not edit</target>
+      </trans-unit>
+      <trans-unit id="40">
+        <source>agent</source>
+        <target>agent</target>
+      </trans-unit>
+      <trans-unit id="41">
+        <source>editing</source>
+        <target>editing</target>
+      </trans-unit>
+      <trans-unit id="42">
+        <source>host</source>
+        <target>host</target>
+      </trans-unit>
+      <trans-unit id="43">
+        <source>reading along</source>
+        <target>reading along</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
