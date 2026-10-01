@@ -217,6 +217,7 @@ final class HostSession
         $this->timers = [];
         $this->docs = [];
         $this->tickets = [];
+        $this->api->participants()->set([]);
     }
 
     /** A guest may now edit, or only read along. */
@@ -559,6 +560,7 @@ final class HostSession
             ToastSeverity::Success,
             slot: 'assist',
         );
+        $this->api->participants()->set(Presence::people($this->participants()));
         $this->api->refreshStatusSegments();
     }
 
@@ -582,6 +584,7 @@ final class HostSession
         if (null !== $this->address) {
             $this->api->notify($this->api->trans('%name% left', ['%name%' => $guest->name]), slot: 'assist');
         }
+        $this->api->participants()->set(Presence::people($this->participants()));
         $this->api->refreshStatusSegments();
     }
 

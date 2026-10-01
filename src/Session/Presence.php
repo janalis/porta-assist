@@ -114,6 +114,27 @@ final class Presence
         return $this->mine;
     }
 
+    /**
+     * The people among a session's $participants, for core's roster: an
+     * agent is not one — it keeps its caret, and core lists who is at work.
+     *
+     * @param list<array{id: string, name: string, kind: string}> $participants
+     *
+     * @return array<string, string> id => name
+     */
+    public static function people(array $participants): array
+    {
+        $people = [];
+        foreach ($participants as $participant) {
+            if ('agent' === $participant['kind']) {
+                continue;
+            }
+            $people[$participant['id']] = $participant['name'];
+        }
+
+        return $people;
+    }
+
     private static function agent(string $peer): string
     {
         return self::PREFIX.$peer;

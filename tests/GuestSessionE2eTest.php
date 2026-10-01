@@ -12,6 +12,8 @@ use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Event\AgentActivity;
 use Porta\Event\AgentLeft;
 use Porta\Ide;
+use Porta\Presence\Participant;
+use Porta\Presence\Participants;
 use Porta\Run\RunController;
 use Porta\Terminal\TerminalSession;
 use Porta\Terminal\TerminalSessions;
@@ -138,9 +140,13 @@ final class GuestSessionE2eTest extends TestCase
                 $this->welcomeGuest();
                 $this->shareFile('src/A.php', "one\n");
                 $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
+                $roster = Services::resolve($ide, Participants::class);
+                $this->assertSame(['Hal', 'Cy'], \array_map(static fn (Participant $p): string => $p->name, $roster->all()), 'the session\'s people in core\'s roster');
 
                 $this->dropPeer();
                 $this->await(static fn (): bool => self::toasted($ide, 'Lost the host (the connection was closed)'), what: 'the guest told');
+                $this->assertTrue($roster->isOutOfTouch(Participants::pluginSource('assist')), 'kept as last seen while it tries again');
+                $this->assertCount(2, $roster->all());
                 $terminal->simulateInput('x');
                 $this->await(static fn (): bool => self::toasted($ide, 'This file is read-only'), what: 'nothing typed while away');
                 $this->assertSame("one\n", $this->bufferText($ide, $path));
@@ -149,6 +155,7 @@ final class GuestSessionE2eTest extends TestCase
                 $this->welcomeGuest();
                 $this->shareFile('src/A.php', "one\ntwo\n");
                 $this->await(fn (): bool => "one\ntwo\n" === $this->bufferText($ide, $path), what: 'the host\'s copy');
+                $this->assertFalse($roster->isOutOfTouch(Participants::pluginSource('assist')), 'back in touch');
                 $terminal->simulateInput('y');
                 $this->assertSame(['y', 8], $this->expect('op')['ops'], 'writable again');
 
@@ -158,6 +165,7 @@ final class GuestSessionE2eTest extends TestCase
                 $this->command($ide, 'assist:leave');
                 $this->await(static fn (): bool => self::toasted($ide, 'Left the session'), what: 'left');
                 $this->assertFileDoesNotExist($project->path(GuestSession::FILE), 'the copy forgets the session');
+                $this->assertSame([], $roster->all(), 'and its people');
                 $this->command($ide, 'assist:leave');
             },
         ]);

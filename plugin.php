@@ -49,7 +49,6 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
     public function activate(PluginApi $api): void
     {
         $this->api = $api;
-        $api->registerSetting('displayName', 'Your name in a session', 'text', '', hint: 'what the others see beside your caret; empty uses your login name');
         $api->registerSetting(
             'bind',
             'Accept guests from',
@@ -165,7 +164,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
 
             return;
         }
-        $this->host ??= new HostSession($api, $this->displayName(), (int) $api->setting('maxFileSize') * 1_048_576, $this->follow());
+        $this->host ??= new HostSession($api, $api->participants()->yourName(), (int) $api->setting('maxFileSize') * 1_048_576, $this->follow());
         // Stopping before a relay answered calls the start off: whatever ends
         // here ends the session being started.
         $this->host->start((string) $api->setting('bind'), (int) $api->setting('port'), (string) $api->setting('relay'), function (Address|string $started) use ($api): void {
@@ -418,17 +417,6 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
     private function follow(): Follow
     {
         return $this->follow ??= new Follow($this->api());
-    }
-
-    private function displayName(): string
-    {
-        $name = \trim((string) $this->api()->setting('displayName'));
-        $user = \getenv('USER');
-        if ('' !== $name) {
-            return $name;
-        }
-
-        return \is_string($user) && '' !== $user ? $user : 'host';
     }
 
     /** @return array<string, string> peer => name, everyone else in the session */

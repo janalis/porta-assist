@@ -10,6 +10,9 @@ use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
 use Porta\Plugin\Lifecycle\PluginLifecycle;
 use Porta\Plugin\Runtime\PluginManager;
+use Porta\Presence\Identity;
+use Porta\Presence\Participant;
+use Porta\Presence\Participants;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
@@ -115,7 +118,7 @@ final class AssistUiE2eTest extends TestCase
                 $this->await(static fn (): bool => self::toasted($ide, 'cannot listen on tcp://127.0.0.1:'.$port), what: 'the port in use');
                 $this->assertNull(Probe::get($this->plugin($ide), 'host'));
                 $this->api($ide)->changeSetting('port', 0);
-                $this->api($ide)->changeSetting('displayName', 'Hal');
+                Services::resolve($ide, Identity::class)->rename('Hal');
 
                 // Shared — twice is the same session, its invite copied again.
                 $address = $this->share($ide);
@@ -130,6 +133,8 @@ final class AssistUiE2eTest extends TestCase
                 $welcome = $this->expect('welcome');
                 $this->assertSame([['id' => 'host', 'name' => 'Hal', 'role' => 'host']], $welcome['peers'], 'the name the host chose');
                 $this->assertSame('⇄ 1', $this->cell($ide)?->text);
+                $roster = Services::resolve($ide, Participants::class);
+                $this->assertEquals([new Participant('g0', 'Ana', 'assist')], $roster->all(), 'in core\'s roster too');
                 $this->assertSame(
                     [
                         'assist:share' => true,
@@ -163,6 +168,7 @@ final class AssistUiE2eTest extends TestCase
                 ($this->menu($ide)['Stop sharing']->run)();
                 $this->assertSame('ended', $this->expect('bye')['reason']);
                 $this->assertNull($this->cell($ide));
+                $this->assertSame([], $roster->all(), 'and out of it once the session is over');
 
                 // Joining from inside the IDE hands over the command to run.
                 $this->command($ide, 'assist:join');

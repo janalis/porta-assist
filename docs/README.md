@@ -196,6 +196,12 @@ server, so share only what you would let them use.
 - **Agents count as participants.** An agent at work on either side, such as
   one connected through the [mcp plugin](../../mcp/docs/README.md), shows the same way.
   **Participants** lists it, and you can follow it.
+- **One roster.** The people in the session (not the agents) are also in
+  core's participant roster: the `⚇` count in the status bar, beside other
+  Porta instances on the same files. When a guest loses the host, the others
+  stay there as last seen, marked `⌁`, while it reconnects; after a minute
+  without the host they are taken out, and they come back on reconnecting.
+  See [Participants](../../../docs/editor.md#participants).
 - **Undo is your own.** <kbd>Ctrl+Z</kbd> takes back only your own changes,
   even when others have typed since.
 - **Following someone.** **Assist: Follow Someone**, or a name in the status
@@ -210,9 +216,12 @@ server, so share only what you would let them use.
 
 ## Settings
 
+The name the others see beside your caret is core's **Your name** setting
+(`displayName`, under **Settings → General → Participants**), the one other
+Porta instances on the same project see too. Empty uses your login name.
+
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Your name in a session | your login name | The name the others see beside your caret |
 | Accept guests from | `127.0.0.1` | `127.0.0.1`: this machine only (reach it through a tunnel or VPN). `0.0.0.0`: the whole network |
 | Port to share on | `0` | `0` picks a free port each time |
 | Relay to share through | empty | `host:port` of a `porta assist-relay` for guests who cannot reach this machine. Empty: guests connect directly |

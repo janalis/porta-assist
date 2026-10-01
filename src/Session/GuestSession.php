@@ -456,7 +456,7 @@ final class GuestSession
         foreach ($this->api->openBuffers()->files() as $file) {
             $this->opened($file['path']);
         }
-        $this->api->refreshStatusSegments();
+        $this->roster();
     }
 
     private function denied(string $reason): void
@@ -506,6 +506,9 @@ final class GuestSession
         $delay = self::RETRY[\min($this->tries, \count(self::RETRY) - 1)];
         ++$this->tries;
         $this->api->notify($this->api->trans('Lost the host (%why%) — trying again', ['%why%' => $reason]), ToastSeverity::Warn, slot: 'assist');
+        // Everyone stays in the roster as last seen until the host is back —
+        // or, for as long as it is not, until core takes them out.
+        $this->api->participants()->outOfTouch();
         $this->retry = EventLoop::unreference(EventLoop::delay($delay, function (): void {
             $this->retry = null;
             $this->connect();
@@ -576,6 +579,7 @@ final class GuestSession
         $this->docs = [];
         $this->peers = [];
         $this->role = null;
+        $this->api->participants()->set([]);
         $this->api->refreshStatusSegments();
     }
 
@@ -684,7 +688,7 @@ final class GuestSession
     {
         $this->peers[$peer] = $name;
         $this->kinds[$peer] = $kind;
-        $this->api->refreshStatusSegments();
+        $this->roster();
     }
 
     private function peerLeft(string $peer): void
@@ -695,6 +699,13 @@ final class GuestSession
         }
         $this->presence->left($peer);
         $this->follow->gone($peer);
+        $this->roster();
+    }
+
+    /** Who is in the session now, in core's roster and on the status bar. */
+    private function roster(): void
+    {
+        $this->api->participants()->set(Presence::people($this->participants()));
         $this->api->refreshStatusSegments();
     }
 

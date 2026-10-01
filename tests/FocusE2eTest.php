@@ -9,9 +9,11 @@ use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
+use Porta\Presence\Identity;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
+use Porta\Tests\Support\Services;
 use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\UsesBundledPlugins;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
@@ -55,7 +57,7 @@ final class FocusE2eTest extends TestCase
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($b): void {
                 $this->command($ide, 'assist:focus');
                 $this->await(static fn (): bool => self::toasted($ide, 'Nobody else is in the session'), what: 'nobody to ask');
-                $this->api($ide)->changeSetting('displayName', 'Hal');
+                Services::resolve($ide, Identity::class)->rename('Hal');
                 $address = $this->share($ide);
                 $ana = $this->letIn($tui, $terminal, $address, 'Ana');
                 $bo = $this->letIn($tui, $terminal, $address, 'Bo');

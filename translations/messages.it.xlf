@@ -78,10 +78,6 @@
         <source>Nobody else is in the session</source>
         <target>Nessun altro nella sessione</target>
       </trans-unit>
-      <trans-unit id="20">
-        <source>Participants</source>
-        <target>Partecipanti</target>
-      </trans-unit>
       <trans-unit id="21">
         <source>Reconnecting to the host…</source>
         <target>Riconnessione all’host…</target>
