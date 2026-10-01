@@ -298,6 +298,18 @@
         <source>Not in a session</source>
         <target>Nicht in einer Sitzung</target>
       </trans-unit>
+      <trans-unit id="75">
+        <source>%name% asked everyone to follow them</source>
+        <target>%name% bittet alle, zu folgen</target>
+      </trans-unit>
+      <trans-unit id="76">
+        <source>Asked everyone to follow you</source>
+        <target>Alle wurden gebeten, Ihnen zu folgen</target>
+      </trans-unit>
+      <trans-unit id="77">
+        <source>Ask everyone to follow me</source>
+        <target>Alle bitten, mir zu folgen</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

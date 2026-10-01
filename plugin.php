@@ -78,6 +78,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->registerCommand('share_server', 'Assist: Share a Server', $this->shareServer(...));
         $api->registerCommand('servers', 'Assist: Shared Servers', $this->servers(...));
         $api->registerCommand('run', 'Assist: Run on the Host…', $this->runOnHost(...));
+        $api->registerCommand('focus', 'Assist: Ask Everyone to Follow Me', $this->focus(...));
         $api->addMenuItem('share', fn (): bool => null === $this->guest);
         $api->addMenuItem('join', fn (): bool => null === $this->host && null === $this->guest);
         $api->addMenuItem('follow', fn (): bool => [] !== $this->peers());
@@ -88,6 +89,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->addMenuItem('share_server', fn (): bool => null !== $this->host);
         $api->addMenuItem('servers', fn (): bool => [] !== ($this->guest?->servers() ?? []));
         $api->addMenuItem('run', fn (): bool => true === $this->guest?->isConnected());
+        $api->addMenuItem('focus', fn (): bool => [] !== $this->peers());
         $api->registerStatusSegment($this->status(...));
 
         // In a guest's copy, the host's language servers are this one's: each
@@ -346,6 +348,20 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         });
     }
 
+    /** Everyone else follows this side now. */
+    private function focus(): void
+    {
+        $api = $this->api();
+        if ([] === $this->peers()) {
+            $api->flash($api->trans('Nobody else is in the session'));
+
+            return;
+        }
+        $this->host?->focus();
+        $this->guest?->focus();
+        $api->notify($api->trans('Asked everyone to follow you'), slot: 'assist');
+    }
+
     /** Start one of the host's run configurations, when the host lets this guest. */
     private function runOnHost(): void
     {
@@ -440,6 +456,9 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         }
         if (null !== $this->follow?->target) {
             $items[] = new MenuItem($api->trans('Stop following'), '', fn () => $this->follow()->stop());
+        }
+        if ([] !== $items) {
+            $items[] = new MenuItem($api->trans('Ask everyone to follow me'), '', static fn () => $api->emit(new CommandRunRequested('assist:focus')));
         }
         $items[] = MenuItem::separator();
         $address = $this->host?->address();

@@ -298,6 +298,18 @@
         <source>Not in a session</source>
         <target>Not in a session</target>
       </trans-unit>
+      <trans-unit id="75">
+        <source>%name% asked everyone to follow them</source>
+        <target>%name% asked everyone to follow them</target>
+      </trans-unit>
+      <trans-unit id="76">
+        <source>Asked everyone to follow you</source>
+        <target>Asked everyone to follow you</target>
+      </trans-unit>
+      <trans-unit id="77">
+        <source>Ask everyone to follow me</source>
+        <target>Ask everyone to follow me</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

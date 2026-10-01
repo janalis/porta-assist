@@ -194,6 +194,16 @@ final class GuestSession
         return $this->role;
     }
 
+    /** Everyone follows this guest now — and is shown where it is, at once. */
+    public function focus(): void
+    {
+        $this->send(['t' => 'focus']);
+        $mine = $this->presence->last();
+        if (null !== $mine) {
+            $this->send(['t' => 'presence', ...$mine]);
+        }
+    }
+
     /** @return array<int, int> the host's shared servers: its port => the port they are reached at here */
     public function servers(): array
     {
@@ -412,6 +422,7 @@ final class GuestSession
             'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
             'server', 'server-end', 'tunnel-data', 'tunnel-close' => $this->servers?->receive($message),
             'runs', 'running', 'run-refused' => $this->runs->receive($message),
+            'focus' => $this->follow->asked(Wire::string($message, 'peer'), Wire::string($message, 'name')),
             default => null,
         };
     }

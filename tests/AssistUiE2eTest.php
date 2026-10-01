@@ -97,6 +97,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:share_server' => false,
                         'assist:servers' => false,
                         'assist:run' => false,
+                        'assist:focus' => false,
                     ],
                     $this->enabled($ide),
                 );
@@ -140,6 +141,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:share_server' => true,
                         'assist:servers' => false,
                         'assist:run' => false,
+                        'assist:focus' => true,
                     ],
                     $this->enabled($ide),
                 );
@@ -207,13 +209,22 @@ final class AssistUiE2eTest extends TestCase
                         'assist:share_server' => false,
                         'assist:servers' => true,
                         'assist:run' => true,
+                        'assist:focus' => true,
                     ],
                     $this->enabled($ide),
                 );
 
                 $this->command($ide, 'assist:share');
                 $this->await(static fn (): bool => self::toasted($ide, 'it is theirs to share'), what: 'not ours to share');
-                $this->assertSame(['Follow Hal', '', 'Participants', 'Leave the session'], \array_keys($this->menu($ide)));
+                $this->assertSame(['Follow Hal', 'Ask everyone to follow me', '', 'Participants', 'Leave the session'], \array_keys($this->menu($ide)));
+                $this->expect('presence');
+                $this->pump(0.3);
+                $this->drain();
+                $this->inbox = [];
+                ($this->menu($ide)['Ask everyone to follow me']->run)();
+                $this->assertSame('focus', $this->expect('focus')['t']);
+                $this->assertSame('src/A.php', $this->expect('presence')['path'], 'where this guest is, sent again at once');
+                $this->await(static fn (): bool => self::toasted($ide, 'Asked everyone to follow you'), what: 'the ask said');
                 ($this->menu($ide)['Leave the session']->run)();
                 $this->assertSame('bye', $this->expect('bye')['t']);
                 $this->await(fn (): bool => null === $this->cell($ide), what: 'gone from the status bar');

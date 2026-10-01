@@ -31,12 +31,19 @@ final class Follow
         private readonly PluginApi $api,
     ) {}
 
-    public function start(string $peer, string $name): void
+    /** Follow $peer — because $why, when they asked everyone to; else because this side chose to. */
+    public function start(string $peer, string $name, ?string $why = null): void
     {
         $this->target = [$peer, $name];
         $this->expected = null;
-        $this->api->flash($this->api->trans('Following %name%', ['%name%' => $name]));
+        $this->api->flash($why ?? $this->api->trans('Following %name%', ['%name%' => $name]));
         $this->api->refreshStatusSegments();
+    }
+
+    /** $name asked everyone to follow them: followed, saying so. */
+    public function asked(string $peer, string $name): void
+    {
+        $this->start($peer, $name, $this->api->trans('%name% asked everyone to follow them', ['%name%' => $name]));
     }
 
     public function stop(): void

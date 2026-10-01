@@ -298,6 +298,18 @@
         <source>Not in a session</source>
         <target>セッションに参加していません</target>
       </trans-unit>
+      <trans-unit id="75">
+        <source>%name% asked everyone to follow them</source>
+        <target>%name% が全員にフォローを求めました</target>
+      </trans-unit>
+      <trans-unit id="76">
+        <source>Asked everyone to follow you</source>
+        <target>全員にフォローを求めました</target>
+      </trans-unit>
+      <trans-unit id="77">
+        <source>Ask everyone to follow me</source>
+        <target>全員にフォローを求める</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

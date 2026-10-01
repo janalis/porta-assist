@@ -255,6 +255,16 @@ final class HostSession
         return $this->servers;
     }
 
+    /** Everyone follows the host now — and is shown where it is, at once. */
+    public function focus(): void
+    {
+        $this->broadcast(['t' => 'focus', 'peer' => self::HOST, 'name' => $this->name]);
+        $mine = $this->presence->last();
+        if (null !== $mine) {
+            $this->broadcast(['t' => 'presence', 'peer' => self::HOST, 'name' => $this->name, ...$mine]);
+        }
+    }
+
     /**
      * Let a guest type into the shared terminals ($right `typing`), or start
      * the host's run configurations (`running`) — or not any more.
@@ -579,6 +589,7 @@ final class HostSession
             'agent' => $this->guestAgent($guest, $message),
             'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, 'id')),
             'terminal-in' => $this->terminals->input($guest, $message),
+            'focus' => $this->focusOn($guest),
             'runs' => $this->runs->offer($guest),
             'run' => $this->runs->run($guest, Wire::string($message, 'label')),
             'tunnel-open' => $this->servers->open($guest, $message),
@@ -832,6 +843,13 @@ final class HostSession
             }
             $guest->send($message);
         }
+    }
+
+    /** A guest asked everyone to follow them: the host does, and so does every other guest. */
+    private function focusOn(Guest $guest): void
+    {
+        $this->follow->asked($guest->id, $guest->name);
+        $this->broadcast(['t' => 'focus', 'peer' => $guest->id, 'name' => $guest->name], except: $guest->id);
     }
 
     /** @return array<string, string> peer => name */
