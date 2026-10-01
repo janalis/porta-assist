@@ -42,9 +42,6 @@ final class HostSession
     /** How often the host's own caret is looked at. */
     public const float CARET_EVERY = 0.1;
 
-    /** As many guests as the editor has colours to tell apart. */
-    private int $maxGuests = 4;
-
     /** Connections that have not said who they are yet. */
     private int $maxPending = 8;
 
@@ -387,7 +384,7 @@ final class HostSession
             'hello' !== $message['t'] || Wire::VERSION !== Wire::int($message, 'v') => 'version',
             null === $ticket && !\hash_equals((string) $this->address?->token, $token) => 'token',
             '' === $name => 'name',
-            null === $ticket && \count($this->guests) >= $this->maxGuests => 'full',
+            null === $ticket && \count($this->guests) >= (int) $this->api->setting('maxGuests') => 'full',
             default => null,
         };
         if (null !== $refusal) {

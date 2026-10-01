@@ -143,7 +143,7 @@ final class HostAdmissionE2eTest extends TestCase
                 Probe::set($host, 'answerTimeout', 0.3);
                 Probe::set($host, 'helloTimeout', 0.3);
                 Probe::set($host, 'maxPending', 1);
-                Probe::set($host, 'maxGuests', 1);
+                $this->api($ide)->changeSetting('maxGuests', 1);
 
                 // Nobody answered.
                 $this->askIn($address, 'Cy');
@@ -170,7 +170,7 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->dial($address);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ed', 'token' => $address->token]);
                 $this->assertSame('full', $this->expect('denied')['reason']);
-                Probe::set($host, 'maxGuests', 4);
+                $this->api($ide)->changeSetting('maxGuests', 8);
                 $this->askIn($address, 'Fay');
                 $this->hangUp();
                 $this->await(static fn (): bool => [] === Probe::get($host, 'pending'), what: 'the host to see Fay give up');

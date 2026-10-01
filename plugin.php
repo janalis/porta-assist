@@ -65,6 +65,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             '',
             hint: 'host:port of a `porta assist-relay` both sides can reach, when the guests cannot reach this machine; empty: they connect directly',
         );
+        $api->registerSetting('maxGuests', 'Most guests at once', 'int', 8, hint: 'past eight, the colours that tell carets apart repeat — the names beside them do not', min: 1, max: 32);
         $api->registerSetting('maxFileSize', 'Largest file to share (MB)', 'int', 4, hint: 'a bigger one stays on the host', min: 1, max: 64);
 
         $api->registerCommand('share', 'Assist: Share This Project', $this->share(...));
