@@ -15,6 +15,7 @@ use Porta\Event\FileDeleted;
 use Porta\Event\FileRenamed;
 use Porta\Event\PluginObservable;
 use Porta\Event\WorkingTreeChanged;
+use Porta\Install\PortaBinary;
 use Porta\Overlay\State\ToastSeverity;
 use Porta\Plugin\Api\AbstractPlugin;
 use Porta\Plugin\Api\DisposablePlugin;
@@ -72,6 +73,13 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->addMenuItem('stop', fn (): bool => null !== $this->host);
         $api->addMenuItem('leave', fn (): bool => null !== $this->guest);
         $api->registerStatusSegment($this->status(...));
+
+        // In a guest's copy, the host's language servers are this one's: each
+        // is reached through `porta assist-lsp`, which the host answers.
+        $session = GuestSession::load($api->projectRoot());
+        foreach (null === $session ? [] : $session['languages'] as $language) {
+            $api->registerLanguageServer($language, 'assist', static fn (): array => [\PHP_BINARY, PortaBinary::path(), 'assist-lsp', $language]);
+        }
 
         $api->onReady($this->rejoin(...));
         $api->onFileOpened(function (string $path): void {

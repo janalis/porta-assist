@@ -46,7 +46,7 @@ final class GuestSessionE2eTest extends TestCase
             'src/A.php' => "<?php\n// stale copy\n",
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
-        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'fingerprint' => $this->fingerprint(), 'ticket' => self::TICKET, 'name' => 'Bo']);
+        GuestSession::store($project->dir, ['host' => '127.0.0.1', 'port' => $port, 'fingerprint' => $this->fingerprint(), 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
 
         return $project;
     }
@@ -327,6 +327,31 @@ final class GuestSessionE2eTest extends TestCase
         $this->say(['t' => 'bye', 'reason' => 'removed']);
         $this->await(static fn (): bool => self::toasted($ide, 'The host removed you'), what: 'removed');
         $this->hangUp();
+    }
+
+    public function testTheHostsLanguageServersAreTheCopys(): void
+    {
+        $project = new TempProject([
+            'notes.txt' => 'no PHP open: no server started',
+            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
+        ]);
+        GuestSession::store($project->dir, [
+            'host' => '127.0.0.1',
+            'port' => 9,
+            'fingerprint' => \str_repeat('0', times: 64),
+            'ticket' => self::TICKET,
+            'name' => 'Bo',
+            'languages' => ['php', 'twig'],
+        ]);
+
+        $this->runIde($project, $project->path('notes.txt'), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
+                $servers = $this->api($ide)->codeIntelligence()->languageServers();
+                foreach (['php', 'twig'] as $language) {
+                    $this->assertSame(['assist-lsp', $language], \array_slice($servers[$language]['command'] ?? [], -2), $language.', through `porta assist-lsp`');
+                }
+            },
+        ]);
     }
 
     /** @return iterable<string, array{string, string}> */

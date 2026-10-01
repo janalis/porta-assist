@@ -19,7 +19,8 @@
         "porta": {
             "api": 1,
             "commands": {
-                "assist": "Porta\\AssistPlugin\\Console\\JoinCommand"
+                "assist": "Porta\\AssistPlugin\\Console\\JoinCommand",
+                "assist-lsp": "Porta\\AssistPlugin\\Console\\LanguageServerCommand"
             }
         }
     }

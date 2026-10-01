@@ -18,6 +18,8 @@ use Porta\AssistPlugin\Net\Certificate;
  *   cut          let in, list, and hang up on the first fetch
  *   chatty       as welcome, with the session talking in between
  *   plain        no TLS: hang up on whatever comes
+ *   lsp          a language-server channel: ready for php, each request
+ *                answered with its own method, hung up on `exit`
  *
  * It speaks TLS with a certificate of its own, and prints its port and the
  * certificate's fingerprint on the first line.
@@ -72,6 +74,7 @@ $welcome = static function () use ($mode, $send): void {
                 'role' => 'pending' === $mode ? 'read' : 'edit',
                 'ticket' => 'feedfacefeedfacefeedfacefeedface',
                 'project' => ['id' => '0123456789abcdef', 'name' => 'demo'],
+                'languages' => ['php', 'twig'],
             ],
     );
     if ('chatty' === $mode) {
@@ -88,6 +91,22 @@ $fetch = static function (array $paths) use ($send, $files): void {
 while (false !== ($line = fgets($client))) {
     $message = json_decode($line, associative: true);
     $type = $message['t'] ?? '';
+    if ('lsp' === $mode) {
+        $lsp = $message['m'] ?? [];
+        if ('exit' === ($lsp['method'] ?? null) || 'hello' === $type && 'php' !== ($message['language'] ?? null)) {
+            if ('hello' === $type) {
+                $send(['t' => 'denied', 'reason' => 'language']);
+            }
+            break;
+        }
+        match (true) {
+            'hello' === $type => $send(['t' => 'ready']),
+            \array_key_exists('id', $lsp) => $send(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'id' => $lsp['id'], 'result' => $lsp['method']]]),
+            default => null,
+        };
+
+        continue;
+    }
     // A denial, a cut, a goodbye: this host is done.
     if ('bye' === $type || 'hello' === $type && str_starts_with($mode, 'deny:') || 'fetch' === $type && 'cut' === $mode) {
         if ('hello' === $type) {

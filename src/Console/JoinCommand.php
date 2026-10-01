@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Console;
 
 use Porta\AssistPlugin\Net\Address;
-use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Connection;
+use Porta\AssistPlugin\Net\SecureClient;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Workspace\Mirror;
@@ -105,8 +105,15 @@ final class JoinCommand extends PluginCommand
         if (\is_string($joined)) {
             return $joined;
         }
-        [$mirror, $ticket] = $joined;
-        GuestSession::store($mirror->root, ['host' => $address->host, 'port' => $address->port, 'fingerprint' => $address->fingerprint, 'ticket' => $ticket, 'name' => $name]);
+        [$mirror, $ticket, $languages] = $joined;
+        GuestSession::store($mirror->root, [
+            'host' => $address->host,
+            'port' => $address->port,
+            'fingerprint' => $address->fingerprint,
+            'ticket' => $ticket,
+            'name' => $name,
+            'languages' => $languages,
+        ]);
         self::enable($mirror->root);
         // The first-run card walks through setting a project up; this one is
         // the host's, set up already.
@@ -121,29 +128,13 @@ final class JoinCommand extends PluginCommand
      * Be let in and bring the copy in line, on a connection of this
      * command's own — the IDE makes another with the ticket.
      *
-     * @return array{Mirror, string}|string the copy and the ticket, or why not
+     * @return array{Mirror, string, list<string>}|string the copy, the ticket and the host's languages, or why not
      */
     private function enter(Address $address, string $name, OutputInterface $output): array|string
     {
-        $errno = 0;
-        $error = '';
-        $endpoint = \sprintf('tcp://%s:%d', \str_contains($address->host, ':') ? '['.$address->host.']' : $address->host, $address->port);
-        $context = \stream_context_create(Certificate::clientContext());
-        // @mago-expect lint:no-error-control-operator -- an unreachable host warns as well as returning false; the message is carried in $error
-        $socket = @\stream_socket_client($endpoint, $errno, $error, $this->timeout, context: $context);
-        if (false === $socket) {
-            return \sprintf('Cannot reach %s:%d: %s', $address->host, $address->port, $error);
-        }
-        // @mago-expect lint:no-error-control-operator -- a refused handshake warns as well as returning false; false is the answer
-        $refused = match (true) {
-            true !== @\stream_socket_enable_crypto($socket, enable: true, crypto_method: \STREAM_CRYPTO_METHOD_TLS_CLIENT) => 'The secure connection to the host failed',
-            !Certificate::presentedBy($socket, $address->fingerprint) => 'The host is not the one the invite names — ask the host for the invite again',
-            default => null,
-        };
-        if (null !== $refused) {
-            \fclose($socket);
-
-            return $refused;
+        $socket = SecureClient::connect($address->host, $address->port, $address->fingerprint, $this->timeout);
+        if (\is_string($socket)) {
+            return $socket;
         }
         $this->socket = $socket;
         try {
@@ -156,7 +147,7 @@ final class JoinCommand extends PluginCommand
             $synced = $this->sync($mirror, $output);
             $this->send(['t' => 'bye']);
 
-            return $synced ?? [$mirror, $welcome['ticket']];
+            return $synced ?? [$mirror, $welcome['ticket'], $welcome['languages']];
         } finally {
             \fclose($socket);
             $this->socket = null;
@@ -166,7 +157,7 @@ final class JoinCommand extends PluginCommand
     /**
      * Wait to be let in.
      *
-     * @return array{project: string, name: string, ticket: string}|string the session, or why there is none
+     * @return array{project: string, name: string, ticket: string, languages: list<string>}|string the session, or why there is none
      */
     private function welcome(OutputInterface $output): array|string
     {
@@ -187,7 +178,7 @@ final class JoinCommand extends PluginCommand
                 }
                 $output->writeln(\sprintf('In, %s.', Wire::string($message ?? [], 'role') === 'edit' ? 'editing' : 'reading along'));
 
-                return ['project' => $id, 'name' => \is_string($project['name'] ?? null) ? $project['name'] : '', 'ticket' => $ticket];
+                return ['project' => $id, 'name' => \is_string($project['name'] ?? null) ? $project['name'] : '', 'ticket' => $ticket, 'languages' => Wire::strings($message ?? [], 'languages')];
             }
 
             return match (null === $message ? 'timeout' : Wire::string($message, 'reason')) {

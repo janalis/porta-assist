@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Session;
 
+use Porta\AssistPlugin\Lsp\LspRelay;
 use Porta\AssistPlugin\Net\Address;
 use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Connection;
@@ -15,6 +16,7 @@ use Porta\AssistPlugin\Workspace\Paths;
 use Porta\Event\AgentActivity;
 use Porta\Overlay\State\ToastSeverity;
 use Porta\Plugin\Api\PluginApi;
+use Porta\Support\JsonRpcTransport;
 use Revolt\EventLoop;
 
 /**
@@ -81,6 +83,9 @@ final class HostSession
     /** @var array<string, array{name: string, owner: string, caret: array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}}> agents at work, by peer id: the host's own and each guest's */
     private array $agents = [];
 
+    /** @var array<string, list<LspRelay>> peer => the language servers run for it */
+    private array $relays = [];
+
     /** @var list<string> */
     private array $timers = [];
 
@@ -142,6 +147,9 @@ final class HostSession
         foreach ($this->pending as $connection) {
             $connection->close('the session ended');
         }
+        foreach (\array_keys($this->relays) as $peer) {
+            $this->stopRelays($peer);
+        }
         $this->listener->stop();
         $this->certificate?->forget();
         $this->certificate = null;
@@ -178,8 +186,17 @@ final class HostSession
         $guest = $this->guests[$peer] ?? null;
         if (null !== $guest) {
             unset($this->tickets[$guest->ticket]);
+            $this->stopRelays($peer);
             $guest->connection->close('removed by the host', ['t' => 'bye', 'reason' => 'removed']);
         }
+    }
+
+    private function stopRelays(string $peer): void
+    {
+        foreach ($this->relays[$peer] ?? [] as $relay) {
+            $relay->stop();
+        }
+        unset($this->relays[$peer]);
     }
 
     // --- The host's own side --------------------------------------------------
@@ -313,6 +330,11 @@ final class HostSession
 
             return;
         }
+        if ('lsp' === Wire::string($message, 'channel')) {
+            $this->languageServer($id, $connection, $message, $ticket);
+
+            return;
+        }
         if (null !== $ticket) {
             $this->admit($id, $connection, $ticket['id'], $ticket['name'], $ticket['role'], Wire::string($message, 'ticket'));
 
@@ -348,6 +370,47 @@ final class HostSession
         );
     }
 
+    /**
+     * A guest's editor asking for a language server: the host's own, run for
+     * it on the host's files, for as long as that connection lasts. Only a
+     * guest let in already — on its ticket — gets one.
+     *
+     * @param array<string, mixed>                               $message
+     * @param array{name: string, role: Role, id: string}|null $ticket
+     */
+    private function languageServer(int $id, Connection $connection, array $message, ?array $ticket): void
+    {
+        unset($this->pending[$id]);
+        $server = $this->api->codeIntelligence()->languageServers()[Wire::string($message, 'language')] ?? null;
+        $guestRoot = Wire::string($message, 'root');
+        if (null === $ticket || null === $server || '' === $guestRoot) {
+            $refusal = match (true) {
+                null === $ticket => 'token',
+                null === $server => 'language',
+                default => 'root',
+            };
+            $connection->close('refused: '.$refusal, ['t' => 'denied', 'reason' => $refusal]);
+
+            return;
+        }
+        $peer = $ticket['id'];
+        $relay = new LspRelay(
+            $connection,
+            new JsonRpcTransport($server['command'], $this->paths->root, \sprintf('%s (for %s)', $server['name'], $ticket['name'])),
+            $guestRoot,
+            $this->paths->root,
+            $server['initializationOptions'] ?? null,
+            fn (): bool => !\array_key_exists($peer, $this->guests) || Role::Edit !== $this->guests[$peer]->role,
+        );
+        if (!$relay->start()) {
+            $connection->close('the server did not start', ['t' => 'denied', 'reason' => 'unavailable']);
+
+            return;
+        }
+        $this->relays[$peer][] = $relay;
+        $connection->send(['t' => 'ready']);
+    }
+
     private function admit(int $id, Connection $connection, string $peer, string $name, Role $role, string $ticket): void
     {
         unset($this->pending[$id]);
@@ -364,6 +427,7 @@ final class HostSession
             'peer' => $peer,
             'role' => $role->value,
             'ticket' => $ticket,
+            'languages' => \array_keys($this->api->codeIntelligence()->languageServers()),
             'project' => ['id' => \substr(\hash('xxh128', (string) \gethostname().$this->paths->root), offset: 0, length: 16), 'name' => \basename($this->paths->root)],
             'peers' => [
                 ['id' => self::HOST, 'name' => $this->name, 'role' => 'host'],

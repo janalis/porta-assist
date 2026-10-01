@@ -74,7 +74,7 @@ final class GuestSession
     private readonly Presence $presence;
 
     /**
-     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string} $session
+     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string, languages: list<string>} $session
      */
     public function __construct(
         private readonly PluginApi $api,
@@ -90,7 +90,7 @@ final class GuestSession
      * The session the IDE was opened for, when it was opened on a guest's
      * copy — read from {@see FILE} under $root — or null.
      *
-     * @return array{host: string, port: int, fingerprint: string, ticket: string, name: string}|null
+     * @return array{host: string, port: int, fingerprint: string, ticket: string, name: string, languages: list<string>}|null
      */
     public static function load(string $root): ?array
     {
@@ -108,14 +108,22 @@ final class GuestSession
             return null;
         }
 
-        return ['host' => $json['host'], 'port' => $json['port'], 'fingerprint' => $json['fingerprint'], 'ticket' => $json['ticket'], 'name' => $json['name']];
+        /** @var array<string, mixed> $json */
+        return [
+            'host' => $json['host'],
+            'port' => $json['port'],
+            'fingerprint' => $json['fingerprint'],
+            'ticket' => $json['ticket'],
+            'name' => $json['name'],
+            'languages' => Wire::strings($json, 'languages'),
+        ];
     }
 
     /**
      * Write the session for the IDE about to open $root — readable by this
      * user only: the ticket lets its holder in.
      *
-     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string} $session
+     * @param array{host: string, port: int, fingerprint: string, ticket: string, name: string, languages: list<string>} $session
      */
     public static function store(string $root, array $session): void
     {

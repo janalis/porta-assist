@@ -102,7 +102,14 @@ final class JoinCommandTest extends TestCase
         $this->assertFileDoesNotExist($root.'/gone.txt');
         $session = GuestSession::load($root);
         $this->assertSame(
-            ['host' => '127.0.0.1', 'port' => $session['port'] ?? 0, 'fingerprint' => \substr($invite, offset: -64), 'ticket' => \str_repeat('feedface', times: 4), 'name' => 'Bo'],
+            [
+                'host' => '127.0.0.1',
+                'port' => $session['port'] ?? 0,
+                'fingerprint' => \substr($invite, offset: -64),
+                'ticket' => \str_repeat('feedface', times: 4),
+                'name' => 'Bo',
+                'languages' => ['php', 'twig'],
+            ],
             $session,
             'the certificate pinned for the IDE\'s reconnects too',
         );
