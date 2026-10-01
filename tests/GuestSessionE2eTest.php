@@ -12,6 +12,9 @@ use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Event\AgentActivity;
 use Porta\Event\AgentLeft;
 use Porta\Ide;
+use Porta\Run\RunController;
+use Porta\Terminal\TerminalSession;
+use Porta\Terminal\TerminalSessions;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
@@ -350,6 +353,52 @@ final class GuestSessionE2eTest extends TestCase
                 foreach (['php', 'twig'] as $language) {
                     $this->assertSame(['assist-lsp', $language], \array_slice($servers[$language]['command'] ?? [], -2), $language.', through `porta assist-lsp`');
                 }
+            },
+        ]);
+    }
+
+    public function testAHostsTerminalIsShownHereAndTypedIntoOnlyWhenAllowed(): void
+    {
+        $port = $this->listen();
+        $project = $this->copy($port);
+
+        $this->runIde($project, $project->path('src/A.php'), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
+                $this->welcomeGuest();
+                $this->say(['t' => 'terminal', 'id' => 'shell:1', 'title' => 'zsh 1', 'data' => \base64_encode("\$ ls\r\nsrc\r\n")]);
+                $runs = $this->api($ide)->runs();
+                $this->await(static fn (): bool => \str_contains((string) $runs->scrollback('assist:shell:1'), 'src'), what: 'the terminal shown');
+                $this->assertContains(['id' => 'assist:shell:1', 'title' => '⇄ zsh 1', 'running' => false], $runs->terminals());
+                $this->say(['t' => 'terminal-out', 'id' => 'shell:1', 'data' => \base64_encode("tests\r\n")]);
+                $this->await(static fn (): bool => \str_contains((string) $runs->scrollback('assist:shell:1'), 'tests'), what: 'what it printed after');
+
+                // Typed into the tab: refused, until the host says so.
+                $controller = Services::resolve($ide, RunController::class);
+                $sessions = Probe::get($controller, 'sessions');
+                $this->assertInstanceOf(TerminalSessions::class, $sessions);
+                $tab = $sessions->find('assist:shell:1');
+                $this->assertInstanceOf(TerminalSession::class, $tab);
+                $sessions->makeActive($tab);
+                $controller->forwardInput('l');
+                $this->await(static fn (): bool => self::toasted($ide, 'ask them to let you type'), what: 'the refusal');
+                $this->say(['t' => 'typing', 'allowed' => true]);
+                $this->await(static fn (): bool => self::toasted($ide, 'You can type in the shared terminals'), what: 'allowed');
+                $controller->forwardInput('l');
+                $typed = $this->expect('terminal-in');
+                $this->assertSame(['shell:1', 'l'], [$typed['id'], \base64_decode(Wire::string($typed, 'data'), strict: true)]);
+                $this->say(['t' => 'typing', 'allowed' => false]);
+                $this->await(static fn (): bool => self::toasted($ide, 'read-only for you again'), what: 'read-only again');
+
+                // No longer shared; another one ends with the session.
+                $this->say(['t' => 'terminal-end', 'id' => 'shell:1']);
+                $this->say(['t' => 'terminal-end', 'id' => 'never-shown']);
+                $this->await(static fn (): bool => '⇄ zsh 1 (ended)' === $tab->title, what: 'marked ended');
+                $this->assertStringContainsString('[no longer shared]', (string) $runs->scrollback('assist:shell:1'));
+                $this->say(['t' => 'terminal', 'id' => 'run:test', 'title' => 'test', 'data' => '']);
+                $this->await(static fn (): bool => null !== $runs->scrollback('assist:run:test'), what: 'the second one shown');
+                $this->say(['t' => 'bye', 'reason' => 'ended']);
+                $this->await(static fn (): bool => \str_ends_with((string) ($sessions->find('assist:run:test')->title ?? ''), '(ended)'), what: 'ended with the session');
+                $this->hangUp();
             },
         ]);
     }

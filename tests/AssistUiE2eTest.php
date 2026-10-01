@@ -86,7 +86,15 @@ final class AssistUiE2eTest extends TestCase
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
                 $this->assertNull($this->cell($ide), 'nothing shown before sharing');
                 $this->assertSame(
-                    ['assist:share' => true, 'assist:join' => true, 'assist:follow' => false, 'assist:participants' => false, 'assist:stop' => false, 'assist:leave' => false],
+                    [
+                        'assist:share' => true,
+                        'assist:join' => true,
+                        'assist:follow' => false,
+                        'assist:participants' => false,
+                        'assist:stop' => false,
+                        'assist:leave' => false,
+                        'assist:share_terminal' => false,
+                    ],
                     $this->enabled($ide),
                 );
                 $this->command($ide, 'assist:follow');
@@ -118,7 +126,15 @@ final class AssistUiE2eTest extends TestCase
                 $this->assertSame([['id' => 'host', 'name' => 'Hal', 'role' => 'host']], $welcome['peers'], 'the name the host chose');
                 $this->assertSame('⇄ 1', $this->cell($ide)?->text);
                 $this->assertSame(
-                    ['assist:share' => true, 'assist:join' => false, 'assist:follow' => true, 'assist:participants' => true, 'assist:stop' => true, 'assist:leave' => false],
+                    [
+                        'assist:share' => true,
+                        'assist:join' => false,
+                        'assist:follow' => true,
+                        'assist:participants' => true,
+                        'assist:stop' => true,
+                        'assist:leave' => false,
+                        'assist:share_terminal' => true,
+                    ],
                     $this->enabled($ide),
                 );
 
@@ -172,7 +188,15 @@ final class AssistUiE2eTest extends TestCase
                 $this->say(['t' => 'role', 'role' => 'edit']);
                 $this->await(fn (): bool => 'In Hal\'s session, editing' === $this->cell($ide)?->tooltip, what: 'editing');
                 $this->assertSame(
-                    ['assist:share' => false, 'assist:join' => false, 'assist:follow' => true, 'assist:participants' => true, 'assist:stop' => false, 'assist:leave' => true],
+                    [
+                        'assist:share' => false,
+                        'assist:join' => false,
+                        'assist:follow' => true,
+                        'assist:participants' => true,
+                        'assist:stop' => false,
+                        'assist:leave' => true,
+                        'assist:share_terminal' => false,
+                    ],
                     $this->enabled($ide),
                 );
 

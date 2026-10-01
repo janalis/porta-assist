@@ -61,6 +61,8 @@ final class HostSession
 
     private readonly HostFiles $files;
 
+    private readonly HostTerminals $terminals;
+
     private readonly Presence $presence;
 
     private ?Address $address = null;
@@ -100,6 +102,7 @@ final class HostSession
         $root = $api->projectRoot();
         $this->paths = new Paths($root);
         $this->files = new HostFiles($api, $this->paths, $maxFileSize, $this->broadcast(...));
+        $this->terminals = new HostTerminals($api, $this->broadcast(...));
         $this->presence = new Presence($api, $this->paths);
         $this->listener = new Listener($this->accept(...));
     }
@@ -150,6 +153,7 @@ final class HostSession
         foreach (\array_keys($this->relays) as $peer) {
             $this->stopRelays($peer);
         }
+        $this->terminals->stop();
         $this->listener->stop();
         $this->certificate?->forget();
         $this->certificate = null;
@@ -189,6 +193,25 @@ final class HostSession
             $this->stopRelays($peer);
             $guest->connection->close('removed by the host', ['t' => 'bye', 'reason' => 'removed']);
         }
+    }
+
+    // --- Terminals ---------------------------------------------------------------
+
+    /** The terminals shared, and how guests reach them. */
+    public function terminals(): HostTerminals
+    {
+        return $this->terminals;
+    }
+
+    /** Let a guest type into the shared terminals, or not any more. */
+    public function setTyping(string $peer, bool $typing): void
+    {
+        $guest = $this->guests[$peer] ?? null;
+        if (null === $guest) {
+            return;
+        }
+        $guest->typing = $typing;
+        $guest->send(['t' => 'typing', 'allowed' => $typing]);
     }
 
     private function stopRelays(string $peer): void
@@ -455,6 +478,7 @@ final class HostSession
             }
             $guest->send(['t' => 'presence', 'peer' => $id, 'name' => $agent['name'], 'agent' => true, ...$agent['caret']]);
         }
+        $this->terminals->welcome($guest);
         $this->broadcast(['t' => 'peer', 'id' => $peer, 'name' => $name, 'role' => $role->value], except: $peer);
         $this->api->notify(
             Role::Edit === $role
@@ -502,6 +526,7 @@ final class HostSession
             'presence' => $this->guestCaret($guest, $message),
             'agent' => $this->guestAgent($guest, $message),
             'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, 'id')),
+            'terminal-in' => $this->terminals->input($guest, $message),
             'save' => $this->save($guest, Wire::string($message, 'path')),
             'write' => $this->files->write($guest, Wire::string($message, 'path'), Wire::string($message, 'data'), \array_key_exists(Wire::string($message, 'path'), $this->docs)),
             'move' => $this->files->move($guest, Wire::string($message, 'from'), Wire::string($message, 'to')),

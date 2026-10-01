@@ -174,6 +174,50 @@
         <source>reading along</source>
         <target>reading along</target>
       </trans-unit>
+      <trans-unit id="44">
+        <source>This terminal is the host's — ask them to let you type</source>
+        <target>This terminal is the host's — ask them to let you type</target>
+      </trans-unit>
+      <trans-unit id="45">
+        <source>%name% shared a terminal: %title%</source>
+        <target>%name% shared a terminal: %title%</target>
+      </trans-unit>
+      <trans-unit id="46">
+        <source>[no longer shared]</source>
+        <target>[no longer shared]</target>
+      </trans-unit>
+      <trans-unit id="47">
+        <source>(ended)</source>
+        <target>(ended)</target>
+      </trans-unit>
+      <trans-unit id="48">
+        <source>You can type in the shared terminals</source>
+        <target>You can type in the shared terminals</target>
+      </trans-unit>
+      <trans-unit id="49">
+        <source>The shared terminals are read-only for you again</source>
+        <target>The shared terminals are read-only for you again</target>
+      </trans-unit>
+      <trans-unit id="50">
+        <source>No terminal to share — open one first</source>
+        <target>No terminal to share — open one first</target>
+      </trans-unit>
+      <trans-unit id="51">
+        <source>shared — pick to stop</source>
+        <target>shared — pick to stop</target>
+      </trans-unit>
+      <trans-unit id="52">
+        <source>Share which terminal?</source>
+        <target>Share which terminal?</target>
+      </trans-unit>
+      <trans-unit id="53">
+        <source>Let them type in shared terminals</source>
+        <target>Let them type in shared terminals</target>
+      </trans-unit>
+      <trans-unit id="54">
+        <source>Stop them typing in shared terminals</source>
+        <target>Stop them typing in shared terminals</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

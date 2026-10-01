@@ -32,6 +32,12 @@ use Revolt\EventLoop;
  */
 final class GuestSession
 {
+    /** A host's terminal, as it is named here. */
+    private const string TERMINAL = 'assist:';
+
+    /** The mark on a tab that shows the host's terminal. */
+    private const string GLYPH = '⇄';
+
     /** Where the IDE in a guest's copy finds how to reach the host. */
     public const string FILE = '.porta/assist-session.json';
 
@@ -52,6 +58,12 @@ final class GuestSession
 
     /** @var array<string, string> the agents at work HERE, by their own id => name */
     private array $agents = [];
+
+    /** @var array<string, string> the host's terminals shown here, by the host's id => title */
+    private array $terminals = [];
+
+    /** Whether the host lets this guest type into its terminals. */
+    private bool $typing = false;
 
     private ?Connection $connection = null;
 
@@ -373,6 +385,10 @@ final class GuestSession
             'file' => $this->file(Wire::string($message, 'path'), $message),
             'error' => $this->api->flash(Wire::string($message, 'path').': '.Wire::string($message, 'message')),
             'bye' => $this->bye(Wire::string($message, 'reason')),
+            'terminal' => $this->terminal(Wire::string($message, 'id'), Wire::string($message, 'title'), Wire::string($message, 'data')),
+            'terminal-out' => $this->api->runs()->feed(self::TERMINAL.Wire::string($message, 'id'), (string) \base64_decode(Wire::string($message, 'data'), strict: true)),
+            'terminal-end' => $this->terminalEnded(Wire::string($message, 'id')),
+            'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
             default => null,
         };
     }
@@ -455,6 +471,43 @@ final class GuestSession
         $this->api->refreshStatusSegments();
     }
 
+    /** A terminal of the host's, shown here: what it shows now, and what it prints after. */
+    private function terminal(string $id, string $title, string $data): void
+    {
+        $this->terminals[$id] = $title;
+        $runs = $this->api->runs();
+        $runs->mirror(self::TERMINAL.$id, self::GLYPH.' '.$title, function (string $bytes) use ($id): void {
+            if (!$this->typing) {
+                $this->api->flash($this->api->trans('This terminal is the host\'s — ask them to let you type'));
+
+                return;
+            }
+            $this->send(['t' => 'terminal-in', 'id' => $id, 'data' => \base64_encode($bytes)]);
+        });
+        $runs->feed(self::TERMINAL.$id, (string) \base64_decode($data, strict: true));
+        $this->api->notify($this->api->trans('%name% shared a terminal: %title%', ['%name%' => (string) $this->hostName, '%title%' => $title]), slot: 'assist');
+    }
+
+    /** No longer shared: the tab stays, saying so, and takes no keys. */
+    private function terminalEnded(string $id): void
+    {
+        $title = $this->terminals[$id] ?? null;
+        if (null === $title) {
+            return;
+        }
+        unset($this->terminals[$id]);
+        $runs = $this->api->runs();
+        $runs->feed(self::TERMINAL.$id, "\r\n".$this->api->trans('[no longer shared]')."\r\n");
+        $runs->mirror(self::TERMINAL.$id, self::GLYPH.' '.$title.' '.$this->api->trans('(ended)'), null);
+    }
+
+    // @mago-expect lint:no-boolean-flag-parameter -- whether it may type IS the one fact the call carries
+    private function typingAllowed(bool $allowed): void
+    {
+        $this->typing = $allowed;
+        $this->api->notify($allowed ? $this->api->trans('You can type in the shared terminals') : $this->api->trans('The shared terminals are read-only for you again'), slot: 'assist');
+    }
+
     /** The session is over here: the files are the guest's again, everyone else's marks go. */
     private function end(): void
     {
@@ -473,6 +526,9 @@ final class GuestSession
             $this->presence->left($peer);
         }
         $this->follow->stop();
+        foreach (\array_keys($this->terminals) as $id) {
+            $this->terminalEnded($id);
+        }
         $this->docs = [];
         $this->peers = [];
         $this->role = null;

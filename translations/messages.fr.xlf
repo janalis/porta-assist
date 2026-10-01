@@ -174,6 +174,50 @@
         <source>reading along</source>
         <target>lit</target>
       </trans-unit>
+      <trans-unit id="44">
+        <source>This terminal is the host's — ask them to let you type</source>
+        <target>Ce terminal est celui de l’hôte — demandez-lui de vous laisser taper</target>
+      </trans-unit>
+      <trans-unit id="45">
+        <source>%name% shared a terminal: %title%</source>
+        <target>%name% a partagé un terminal : %title%</target>
+      </trans-unit>
+      <trans-unit id="46">
+        <source>[no longer shared]</source>
+        <target>[n’est plus partagé]</target>
+      </trans-unit>
+      <trans-unit id="47">
+        <source>(ended)</source>
+        <target>(terminé)</target>
+      </trans-unit>
+      <trans-unit id="48">
+        <source>You can type in the shared terminals</source>
+        <target>Vous pouvez taper dans les terminaux partagés</target>
+      </trans-unit>
+      <trans-unit id="49">
+        <source>The shared terminals are read-only for you again</source>
+        <target>Les terminaux partagés sont de nouveau en lecture seule pour vous</target>
+      </trans-unit>
+      <trans-unit id="50">
+        <source>No terminal to share — open one first</source>
+        <target>Aucun terminal à partager — ouvrez-en un d’abord</target>
+      </trans-unit>
+      <trans-unit id="51">
+        <source>shared — pick to stop</source>
+        <target>partagé — choisir pour arrêter</target>
+      </trans-unit>
+      <trans-unit id="52">
+        <source>Share which terminal?</source>
+        <target>Partager quel terminal ?</target>
+      </trans-unit>
+      <trans-unit id="53">
+        <source>Let them type in shared terminals</source>
+        <target>Les laisser taper dans les terminaux partagés</target>
+      </trans-unit>
+      <trans-unit id="54">
+        <source>Stop them typing in shared terminals</source>
+        <target>Ne plus les laisser taper dans les terminaux partagés</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

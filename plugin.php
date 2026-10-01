@@ -66,12 +66,14 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->registerCommand('follow', 'Assist: Follow Someone', $this->pickToFollow(...));
         $api->registerCommand('participants', 'Assist: Participants', $this->participants(...));
         $api->registerCommand('leave', 'Assist: Leave the Session', $this->leave(...));
+        $api->registerCommand('share_terminal', 'Assist: Share a Terminal', $this->shareTerminal(...));
         $api->addMenuItem('share', fn (): bool => null === $this->guest);
         $api->addMenuItem('join', fn (): bool => null === $this->host && null === $this->guest);
         $api->addMenuItem('follow', fn (): bool => [] !== $this->peers());
         $api->addMenuItem('participants', fn (): bool => null !== $this->host || null !== $this->guest);
         $api->addMenuItem('stop', fn (): bool => null !== $this->host);
         $api->addMenuItem('leave', fn (): bool => null !== $this->guest);
+        $api->addMenuItem('share_terminal', fn (): bool => null !== $this->host);
         $api->registerStatusSegment($this->status(...));
 
         // In a guest's copy, the host's language servers are this one's: each
@@ -237,17 +239,41 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
                 'follow' => $api->trans('Follow %name%', ['%name%' => $participant['name']]),
                 Role::Edit->value => $api->trans('Let them edit'),
                 Role::ReadOnly->value => $api->trans('Let them read along'),
+                'typing' => $api->trans('Let them type in shared terminals'),
+                'no-typing' => $api->trans('Stop them typing in shared terminals'),
                 'remove' => $api->trans('Remove from the session'),
             ];
             $api->pick($participant['name'], $actions, function (string $action) use ($host, $peer, $participant): void {
                 $role = Role::tryFrom($action);
                 match (true) {
                     null !== $role => $host?->setRole($peer, $role),
+                    'typing' === $action || 'no-typing' === $action => $host?->setTyping($peer, 'typing' === $action),
                     'remove' === $action => $host?->remove($peer),
                     default => $this->follow()->start($peer, $participant['name']),
                 };
             });
         });
+    }
+
+    /** Show one of the host's terminals to everyone — or stop showing it, when it is shown. */
+    private function shareTerminal(): void
+    {
+        $api = $this->api();
+        $host = $this->host;
+        $terminals = $api->runs()->terminals();
+        if (null === $host || [] === $terminals) {
+            $api->flash($api->trans('No terminal to share — open one first'));
+
+            return;
+        }
+        $shared = $host->terminals()->shared();
+        $rows = [];
+        $titles = [];
+        foreach ($terminals as $terminal) {
+            $titles[$terminal['id']] = $terminal['title'];
+            $rows[] = ['label' => $terminal['title'], 'hint' => \array_key_exists($terminal['id'], $shared) ? $api->trans('shared — pick to stop') : '', 'value' => $terminal['id']];
+        }
+        $api->pick($api->trans('Share which terminal?'), $rows, static fn (string $id) => $host->terminals()->toggle($id, $titles[$id]));
     }
 
     private function leave(): void

@@ -174,6 +174,50 @@
         <source>reading along</source>
         <target>קורא</target>
       </trans-unit>
+      <trans-unit id="44">
+        <source>This terminal is the host's — ask them to let you type</source>
+        <target>הטרמינל הזה של המארח — בקשו ממנו לאפשר לכם להקליד</target>
+      </trans-unit>
+      <trans-unit id="45">
+        <source>%name% shared a terminal: %title%</source>
+        <target>%name% שיתף טרמינל: %title%</target>
+      </trans-unit>
+      <trans-unit id="46">
+        <source>[no longer shared]</source>
+        <target>[כבר לא משותף]</target>
+      </trans-unit>
+      <trans-unit id="47">
+        <source>(ended)</source>
+        <target>(הסתיים)</target>
+      </trans-unit>
+      <trans-unit id="48">
+        <source>You can type in the shared terminals</source>
+        <target>אפשר להקליד בטרמינלים המשותפים</target>
+      </trans-unit>
+      <trans-unit id="49">
+        <source>The shared terminals are read-only for you again</source>
+        <target>הטרמינלים המשותפים שוב לקריאה בלבד עבורכם</target>
+      </trans-unit>
+      <trans-unit id="50">
+        <source>No terminal to share — open one first</source>
+        <target>אין טרמינל לשיתוף — פתחו אחד קודם</target>
+      </trans-unit>
+      <trans-unit id="51">
+        <source>shared — pick to stop</source>
+        <target>משותף — בחרו כדי להפסיק</target>
+      </trans-unit>
+      <trans-unit id="52">
+        <source>Share which terminal?</source>
+        <target>איזה טרמינל לשתף?</target>
+      </trans-unit>
+      <trans-unit id="53">
+        <source>Let them type in shared terminals</source>
+        <target>לאפשר הקלדה בטרמינלים משותפים</target>
+      </trans-unit>
+      <trans-unit id="54">
+        <source>Stop them typing in shared terminals</source>
+        <target>להפסיק הקלדה בטרמינלים משותפים</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>
