@@ -56,7 +56,7 @@ final class HostDebugE2eTest extends TestCase
     public function testTheHostsDebuggerIsSharedAndSteppedOnlyWhenLet(): void
     {
         $project = new TempProject([
-            'prog.php' => "<?php\n// l2\n// l3\n// l4\n// l5\n// l6\n// l7\n// l8\n",
+            'prog.php' => "<?php\n// l2\n// l3\n// l4\n// l5\n// l6\n// l7\n// keep running\n",
             '.porta.json' => \json_encode(
                 [
                     'enabledPlugins' => ['assist'],
@@ -121,8 +121,13 @@ final class HostDebugE2eTest extends TestCase
                 $this->assertSame(7, $this->debugState('paused')['line']);
                 $this->assertMatchesRegularExpression('/step: next.*step: stepIn.*step: stepOut/s', (string) $this->api($ide)->runs()->scrollback('debug'), 'each verb the step it names');
                 $this->say(['t' => 'debug-step', 'verb' => 'nonsense']);
+                // Resumed, it runs on; she pauses it where it is.
                 $this->say(['t' => 'debug-step', 'verb' => 'continue']);
-                $this->assertSame(['', -1, []], \array_values(\array_intersect_key($this->debugState('idle'), \array_flip(['path', 'line', 'frames']))), 'the session ended: nothing stopped');
+                $this->assertSame(['', -1, []], \array_values(\array_intersect_key($this->debugState('running'), \array_flip(['path', 'line', 'frames']))), 'running: nothing stopped');
+                $this->say(['t' => 'debug-step', 'verb' => 'pause']);
+                $this->assertSame(7, $this->debugState('paused')['line'], 'paused where it was');
+                $this->api($ide)->runs()->debugger()->stop();
+                $this->debugState('idle');
                 $this->command($ide, 'assist:stop');
                 $this->hangUp();
             },

@@ -9,6 +9,7 @@ use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
+use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\Toasts;
@@ -61,12 +62,16 @@ final class GuestDebugE2eTest extends TestCase
                 // Idle while idle: nothing to say.
                 $this->say(['t' => 'debug', 'status' => 'idle', 'path' => '', 'line' => -1, 'frames' => []]);
                 $this->say(['t' => 'debug', 'status' => 'running', 'path' => '', 'line' => -1, 'frames' => []]);
-                // Running says nothing by itself: asked until the state has landed.
-                $this->await(function () use ($ide, $said): bool {
-                    $this->command($ide, 'assist:debugger');
+                // Running says nothing by itself: awaited where it lands, then paused from here.
+                $this->await(function () use ($ide): bool {
+                    $guest = Probe::get($this->plugin($ide), 'guest');
 
-                    return $said('The host\'s debugger is running');
+                    return \is_object($guest) && 'running' === Probe::get(Probe::get($guest, 'debug'), 'status');
                 }, what: 'running');
+                $this->command($ide, 'assist:debugger');
+                $this->awaitPainted($tui, $terminal, 'Pause Program');
+                $terminal->simulateInput("\r");
+                $this->assertSame('pause', $this->expect('debug-step')['verb']);
                 $this->assertFalse($said('The host stopped debugging'), 'it never started');
 
                 // Paused: said, and listed.

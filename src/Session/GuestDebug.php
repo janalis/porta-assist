@@ -11,7 +11,7 @@ use Porta\Ui\Glyphs;
 
 /**
  * The host's debugger, from a guest: told where it stopped, its stack
- * listed with the step verbs beside it, a frame opened here with its
+ * listed with the step verbs beside it — paused from here while it runs — a frame opened here with its
  * variables shown, and what each holds — and stepped from here when the host
  * has let this guest.
  */
@@ -59,8 +59,17 @@ final class GuestDebug
     /** The host's stack and the step verbs, to pick from. */
     public function show(): void
     {
-        if ('paused' !== $this->status) {
-            $this->api->flash('running' === $this->status ? $this->api->trans('The host\'s debugger is running') : $this->api->trans('The host is not debugging'));
+        if ('idle' === $this->status) {
+            $this->api->flash($this->api->trans('The host is not debugging'));
+
+            return;
+        }
+        if ('running' === $this->status) {
+            $this->api->pick(
+                $this->api->trans('The host\'s debugger is running'),
+                [['label' => $this->api->trans('Pause Program'), 'hint' => '', 'value' => 'pause']],
+                fn (string $verb) => ($this->send)(['t' => 'debug-step', 'verb' => $verb]),
+            );
 
             return;
         }

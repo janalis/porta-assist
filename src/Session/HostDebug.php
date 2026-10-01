@@ -63,6 +63,7 @@ final readonly class HostDebug
             'stepOver' => $debugger->stepOver(),
             'stepIn' => $debugger->stepIn(),
             'stepOut' => $debugger->stepOut(),
+            'pause' => $debugger->pause(),
             default => null,
         };
     }
