@@ -159,10 +159,9 @@ final class JoinCommandTest extends TestCase
     public function testABadInviteOrAnAbsentHostIsSaid(): void
     {
         $this->assertStringContainsString('is not host:port#token.fingerprint', $this->join('nonsense')->getErrorOutput());
-        $closed = \stream_socket_server('tcp://127.0.0.1:0');
-        $this->assertNotFalse($closed);
-        $port = (int) \substr((string) \stream_socket_get_name($closed, remote: false), offset: 10);
-        \fclose($closed);
+        // Port 1 on loopback: nothing listens there, and nothing unprivileged can
+        // start to — a port closed by this test could be taken by a parallel one.
+        $port = 1;
         $this->assertStringContainsString('Cannot reach 127.0.0.1:'.$port, $this->join('127.0.0.1:'.$port.'#'.self::KEY.'.'.\str_repeat('0', times: 64))->getErrorOutput());
     }
 

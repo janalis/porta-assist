@@ -78,16 +78,6 @@ final class TransportTest extends TestCase
         return $results;
     }
 
-    private static function freePort(): int
-    {
-        $closed = \stream_socket_server('tcp://127.0.0.1:0');
-        \assert(false !== $closed, description: 'loopback is there');
-        $port = (int) \substr((string) \stream_socket_get_name($closed, remote: false), offset: 10);
-        \fclose($closed);
-
-        return $port;
-    }
-
     public function testMessagesCrossBothWaysAndALastOneIsDeliveredBeforeTheClose(): void
     {
         $listener = $this->listener();
@@ -225,7 +215,9 @@ final class TransportTest extends TestCase
 
     public function testADialThatCannotConnectSaysWhy(): void
     {
-        $port = self::freePort();
+        // Port 1 on loopback: nothing listens there, and nothing unprivileged can
+        // start to — a port closed by this test could be taken by a parallel one.
+        $port = 1;
         $fingerprint = $this->certificate->fingerprint;
         $results = $this->dials(3, static function (\Closure $done) use ($port, $fingerprint): void {
             new Dialer()->dial('127.0.0.1', $port, $fingerprint, $done);

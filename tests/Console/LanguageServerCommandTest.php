@@ -100,10 +100,9 @@ final class LanguageServerCommandTest extends TestCase
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('The host runs no cobol language server for this session (language)', $tester->getErrorOutput());
 
-        $closed = \stream_socket_server('tcp://127.0.0.1:0');
-        $this->assertNotFalse($closed);
-        $port = (int) \substr((string) \stream_socket_get_name($closed, remote: false), offset: 10);
-        \fclose($closed);
+        // Port 1 on loopback: nothing listens there, and nothing unprivileged can
+        // start to — a port closed by this test could be taken by a parallel one.
+        $port = 1;
         $gone = new TempProject([]);
         GuestSession::store($gone->dir, [
             'host' => '127.0.0.1',

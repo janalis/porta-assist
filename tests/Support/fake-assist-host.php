@@ -27,9 +27,10 @@ use Porta\AssistPlugin\Net\Certificate;
  */
 
 $mode = $argv[1] ?? 'welcome';
-$dir = $argv[2] ?? '.';
+// No directory, no files: never the working directory, which is the whole repository.
+$dir = $argv[2] ?? null;
 $files = [];
-if (is_dir($dir)) {
+if (null !== $dir && is_dir($dir)) {
     $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
     foreach ($iterator as $file) {
         $relative = substr((string) $file, strlen($dir) + 1);
