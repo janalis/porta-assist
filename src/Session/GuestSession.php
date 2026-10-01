@@ -67,6 +67,9 @@ final class GuestSession
 
     private ?Connection $connection = null;
 
+    /** The host's run configurations, started from here. */
+    public readonly GuestRuns $runs;
+
     /** The host's servers, reached through the connection there is now. */
     private ?GuestServers $servers = null;
 
@@ -99,6 +102,7 @@ final class GuestSession
         private readonly Dialer $dialer = new Dialer(),
     ) {
         $this->presence = new Presence($api, $mirror->paths);
+        $this->runs = new GuestRuns($api, $this->send(...));
     }
 
     /**
@@ -407,6 +411,7 @@ final class GuestSession
             'terminal-end' => $this->terminalEnded(Wire::string($message, 'id')),
             'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
             'server', 'server-end', 'tunnel-data', 'tunnel-close' => $this->servers?->receive($message),
+            'runs', 'running', 'run-refused' => $this->runs->receive($message),
             default => null,
         };
     }

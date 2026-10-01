@@ -258,6 +258,46 @@
         <source>Address copied: %url%</source>
         <target>Indirizzo copiato: %url%</target>
       </trans-unit>
+      <trans-unit id="65">
+        <source>Let them run the run configurations</source>
+        <target>Permettigli di avviare le configurazioni di esecuzione</target>
+      </trans-unit>
+      <trans-unit id="66">
+        <source>Stop them running the run configurations</source>
+        <target>Non permettergli più di avviare le configurazioni di esecuzione</target>
+      </trans-unit>
+      <trans-unit id="67">
+        <source>%name% ran %label%</source>
+        <target>%name% ha avviato %label%</target>
+      </trans-unit>
+      <trans-unit id="68">
+        <source>Run on the host</source>
+        <target>Esegui sull’host</target>
+      </trans-unit>
+      <trans-unit id="69">
+        <source>The host has not let you run its configurations</source>
+        <target>L’host non ti permette di avviare le sue configurazioni</target>
+      </trans-unit>
+      <trans-unit id="70">
+        <source>The host has no run configuration</source>
+        <target>L’host non ha alcuna configurazione di esecuzione</target>
+      </trans-unit>
+      <trans-unit id="71">
+        <source>The host has no run configuration %label% any more</source>
+        <target>L’host non ha più la configurazione di esecuzione %label%</target>
+      </trans-unit>
+      <trans-unit id="72">
+        <source>You can run the host's run configurations</source>
+        <target>Puoi avviare le configurazioni di esecuzione dell’host</target>
+      </trans-unit>
+      <trans-unit id="73">
+        <source>You can no longer run the host's run configurations</source>
+        <target>Non puoi più avviare le configurazioni di esecuzione dell’host</target>
+      </trans-unit>
+      <trans-unit id="74">
+        <source>Not in a session</source>
+        <target>Non sei in una sessione</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

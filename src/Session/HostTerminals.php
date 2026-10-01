@@ -51,6 +51,14 @@ final class HostTerminals
         ($this->broadcast)(['t' => 'terminal', 'id' => $id, 'title' => $title, 'data' => \base64_encode($scrollback)]);
     }
 
+    /** Show a terminal to everyone, when it is not shown already. */
+    public function show(string $id, string $title): void
+    {
+        if (!\array_key_exists($id, $this->shared)) {
+            $this->toggle($id, $title);
+        }
+    }
+
     /** A guest just let in sees what is shared, as it stands. */
     public function welcome(Guest $guest): void
     {

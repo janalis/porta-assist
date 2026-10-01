@@ -258,6 +258,46 @@
         <source>Address copied: %url%</source>
         <target>הכתובת הועתקה: %url%</target>
       </trans-unit>
+      <trans-unit id="65">
+        <source>Let them run the run configurations</source>
+        <target>לאפשר להריץ את תצורות ההרצה</target>
+      </trans-unit>
+      <trans-unit id="66">
+        <source>Stop them running the run configurations</source>
+        <target>להפסיק לאפשר להריץ את תצורות ההרצה</target>
+      </trans-unit>
+      <trans-unit id="67">
+        <source>%name% ran %label%</source>
+        <target>%name% הריץ את %label%</target>
+      </trans-unit>
+      <trans-unit id="68">
+        <source>Run on the host</source>
+        <target>הרצה אצל המארח</target>
+      </trans-unit>
+      <trans-unit id="69">
+        <source>The host has not let you run its configurations</source>
+        <target>המארח לא מאפשר לך להריץ את התצורות שלו</target>
+      </trans-unit>
+      <trans-unit id="70">
+        <source>The host has no run configuration</source>
+        <target>למארח אין תצורת הרצה</target>
+      </trans-unit>
+      <trans-unit id="71">
+        <source>The host has no run configuration %label% any more</source>
+        <target>למארח כבר אין תצורת הרצה %label%</target>
+      </trans-unit>
+      <trans-unit id="72">
+        <source>You can run the host's run configurations</source>
+        <target>אפשר להריץ את תצורות ההרצה של המארח</target>
+      </trans-unit>
+      <trans-unit id="73">
+        <source>You can no longer run the host's run configurations</source>
+        <target>כבר אי אפשר להריץ את תצורות ההרצה של המארח</target>
+      </trans-unit>
+      <trans-unit id="74">
+        <source>Not in a session</source>
+        <target>לא בתוך סשן</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -96,6 +96,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:share_terminal' => false,
                         'assist:share_server' => false,
                         'assist:servers' => false,
+                        'assist:run' => false,
                     ],
                     $this->enabled($ide),
                 );
@@ -138,6 +139,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:share_terminal' => true,
                         'assist:share_server' => true,
                         'assist:servers' => false,
+                        'assist:run' => false,
                     ],
                     $this->enabled($ide),
                 );
@@ -204,6 +206,7 @@ final class AssistUiE2eTest extends TestCase
                         'assist:share_terminal' => false,
                         'assist:share_server' => false,
                         'assist:servers' => true,
+                        'assist:run' => true,
                     ],
                     $this->enabled($ide),
                 );

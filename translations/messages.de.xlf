@@ -258,6 +258,46 @@
         <source>Address copied: %url%</source>
         <target>Adresse kopiert: %url%</target>
       </trans-unit>
+      <trans-unit id="65">
+        <source>Let them run the run configurations</source>
+        <target>Ausführungskonfigurationen starten lassen</target>
+      </trans-unit>
+      <trans-unit id="66">
+        <source>Stop them running the run configurations</source>
+        <target>Ausführungskonfigurationen nicht mehr starten lassen</target>
+      </trans-unit>
+      <trans-unit id="67">
+        <source>%name% ran %label%</source>
+        <target>%name% hat %label% gestartet</target>
+      </trans-unit>
+      <trans-unit id="68">
+        <source>Run on the host</source>
+        <target>Auf dem Host ausführen</target>
+      </trans-unit>
+      <trans-unit id="69">
+        <source>The host has not let you run its configurations</source>
+        <target>Der Host lässt Sie seine Konfigurationen nicht ausführen</target>
+      </trans-unit>
+      <trans-unit id="70">
+        <source>The host has no run configuration</source>
+        <target>Der Host hat keine Ausführungskonfiguration</target>
+      </trans-unit>
+      <trans-unit id="71">
+        <source>The host has no run configuration %label% any more</source>
+        <target>Der Host hat keine Ausführungskonfiguration %label% mehr</target>
+      </trans-unit>
+      <trans-unit id="72">
+        <source>You can run the host's run configurations</source>
+        <target>Sie können die Ausführungskonfigurationen des Hosts starten</target>
+      </trans-unit>
+      <trans-unit id="73">
+        <source>You can no longer run the host's run configurations</source>
+        <target>Sie können die Ausführungskonfigurationen des Hosts nicht mehr starten</target>
+      </trans-unit>
+      <trans-unit id="74">
+        <source>Not in a session</source>
+        <target>Nicht in einer Sitzung</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -122,7 +122,7 @@ final class HostTerminalE2eTest extends TestCase
                 $host = Probe::get($this->plugin($ide), 'host');
                 $this->assertIsObject($host);
                 $host->terminals()->toggle('run:gone', 'gone');
-                $host->setTyping('nobody', true);
+                $host->permit('nobody', 'typing', true);
                 $this->assertSame([], $host->terminals()->shared());
 
                 // Shared once more, and the session stops: the host's terminal is its own again.

@@ -65,6 +65,8 @@ final class HostSession
 
     private readonly HostServers $servers;
 
+    private readonly HostRuns $runs;
+
     private readonly Presence $presence;
 
     private ?Address $address = null;
@@ -106,6 +108,7 @@ final class HostSession
         $this->files = new HostFiles($api, $this->paths, $maxFileSize, $this->broadcast(...));
         $this->terminals = new HostTerminals($api, $this->broadcast(...));
         $this->servers = new HostServers($this->broadcast(...));
+        $this->runs = new HostRuns($api, $this->terminals);
         $this->presence = new Presence($api, $this->paths);
         $this->listener = new Listener($this->accept(...));
         $this->relayListener = new RelayListener($this->accept(...), static fn (string $why) => $api->notify($why, ToastSeverity::Error, 8.0));
@@ -252,15 +255,13 @@ final class HostSession
         return $this->servers;
     }
 
-    /** Let a guest type into the shared terminals, or not any more. */
-    public function setTyping(string $peer, bool $typing): void
+    /**
+     * Let a guest type into the shared terminals ($right `typing`), or start
+     * the host's run configurations (`running`) — or not any more.
+     */
+    public function permit(string $peer, string $right, bool $allowed): void
     {
-        $guest = $this->guests[$peer] ?? null;
-        if (null === $guest) {
-            return;
-        }
-        $guest->typing = $typing;
-        $guest->send(['t' => 'typing', 'allowed' => $typing]);
+        ($this->guests[$peer] ?? null)?->permit($right, $allowed);
     }
 
     private function stopRelays(string $peer): void
@@ -578,6 +579,8 @@ final class HostSession
             'agent' => $this->guestAgent($guest, $message),
             'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, 'id')),
             'terminal-in' => $this->terminals->input($guest, $message),
+            'runs' => $this->runs->offer($guest),
+            'run' => $this->runs->run($guest, Wire::string($message, 'label')),
             'tunnel-open' => $this->servers->open($guest, $message),
             'tunnel-data' => $this->servers->data($guest, $message),
             'tunnel-close' => $this->servers->closed($guest, $message),

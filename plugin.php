@@ -77,6 +77,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->registerCommand('share_terminal', 'Assist: Share a Terminal', $this->shareTerminal(...));
         $api->registerCommand('share_server', 'Assist: Share a Server', $this->shareServer(...));
         $api->registerCommand('servers', 'Assist: Shared Servers', $this->servers(...));
+        $api->registerCommand('run', 'Assist: Run on the Host…', $this->runOnHost(...));
         $api->addMenuItem('share', fn (): bool => null === $this->guest);
         $api->addMenuItem('join', fn (): bool => null === $this->host && null === $this->guest);
         $api->addMenuItem('follow', fn (): bool => [] !== $this->peers());
@@ -86,6 +87,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->addMenuItem('share_terminal', fn (): bool => null !== $this->host);
         $api->addMenuItem('share_server', fn (): bool => null !== $this->host);
         $api->addMenuItem('servers', fn (): bool => [] !== ($this->guest?->servers() ?? []));
+        $api->addMenuItem('run', fn (): bool => true === $this->guest?->isConnected());
         $api->registerStatusSegment($this->status(...));
 
         // In a guest's copy, the host's language servers are this one's: each
@@ -256,13 +258,16 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
                 Role::ReadOnly->value => $api->trans('Let them read along'),
                 'typing' => $api->trans('Let them type in shared terminals'),
                 'no-typing' => $api->trans('Stop them typing in shared terminals'),
+                'running' => $api->trans('Let them run the run configurations'),
+                'no-running' => $api->trans('Stop them running the run configurations'),
                 'remove' => $api->trans('Remove from the session'),
             ];
             $api->pick($participant['name'], $actions, function (string $action) use ($host, $peer, $participant): void {
                 $role = Role::tryFrom($action);
                 match (true) {
                     null !== $role => $host?->setRole($peer, $role),
-                    'typing' === $action || 'no-typing' === $action => $host?->setTyping($peer, 'typing' === $action),
+                    \in_array($action, ['typing', 'running'], strict: true) => $host?->permit($peer, $action, true),
+                    \in_array($action, ['no-typing', 'no-running'], strict: true) => $host?->permit($peer, \substr($action, offset: 3), false),
                     'remove' === $action => $host?->remove($peer),
                     default => $this->follow()->start($peer, $participant['name']),
                 };
@@ -339,6 +344,18 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             $api->copyToClipboard($url);
             $api->notify($api->trans('Address copied: %url%', ['%url%' => $url]), slot: 'assist');
         });
+    }
+
+    /** Start one of the host's run configurations, when the host lets this guest. */
+    private function runOnHost(): void
+    {
+        $api = $this->api();
+        if (true !== $this->guest?->isConnected()) {
+            $api->flash($api->trans('Not in a session'));
+
+            return;
+        }
+        $this->guest->runs->ask();
     }
 
     private function leave(): void
