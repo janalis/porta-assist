@@ -9,6 +9,7 @@ use Porta\Plugin\Api\PluginCommand;
 use Revolt\EventLoop;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -40,7 +41,7 @@ final class RelayCommand extends PluginCommand
         $relay = new Relay();
         $listening = $relay->start($bind, $port);
         if (\is_string($listening)) {
-            self::errors($output)->writeln('<error>'.$listening.'</error>');
+            self::errors($output)->writeln('<error>'.OutputFormatter::escape($listening).'</error>');
 
             return self::FAILURE;
         }

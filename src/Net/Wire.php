@@ -43,6 +43,25 @@ final class Wire
         return \is_string($message[$key] ?? null) ? $message[$key] : '';
     }
 
+    /**
+     * A string the other end sent to be SHOWN — a name, a title, a message:
+     * without control or format characters, so it cannot reach the terminal
+     * as an escape sequence or turn the text around it, and no longer than
+     * $max characters.
+     *
+     * @param array<string, mixed> $message
+     */
+    public static function text(array $message, string $key, int $max = 200): string
+    {
+        return self::clean(self::string($message, $key), $max);
+    }
+
+    /** {@see text()}, for a string already in hand. */
+    public static function clean(string $text, int $max = 200): string
+    {
+        return \mb_substr(\trim((string) \preg_replace('/[\p{Cc}\p{Cf}]+/u', replacement: '', subject: $text)), start: 0, length: $max);
+    }
+
     /** @param array<string, mixed> $message */
     public static function int(array $message, string $key, int $default = 0): int
     {

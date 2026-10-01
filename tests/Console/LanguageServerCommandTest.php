@@ -186,4 +186,29 @@ final class LanguageServerCommandTest extends TestCase
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('The relay at 127.0.0.1:'.$port.' says no such session', $tester->getErrorOutput());
     }
+
+    public function testWhatARelaySaysIsPrintedAsTextNotAsMarkup(): void
+    {
+        // A "relay" whose refusal is console markup for a hyperlink.
+        $this->relay = new Process([
+            \PHP_BINARY,
+            '-r',
+            '$s = stream_socket_server("tcp://127.0.0.1:0"); echo explode(":", stream_socket_get_name($s, false))[1], "\n"; $c = stream_socket_accept($s, 20); fgets($c); fwrite($c, json_encode(["error" => "<href=https://evil.example>click</>"]) . "\n"); sleep(1);',
+        ]);
+        $port = self::firstLine($this->relay);
+        $project = new TempProject([]);
+        GuestSession::store($project->dir, [
+            'host' => '127.0.0.1',
+            'port' => (int) $port,
+            'fingerprint' => \str_repeat('0', times: 64),
+            'ticket' => \str_repeat('ab', times: 16),
+            'name' => 'Bo',
+            'languages' => [],
+            'relay' => \str_repeat('0', times: 16),
+        ]);
+
+        [$tester] = $this->bridge($project->dir, 'php', []);
+
+        $this->assertStringContainsString('says <href=https://evil.example>click</>', $tester->getErrorOutput(), 'the tag shown as written');
+    }
 }

@@ -62,6 +62,13 @@ final class HostAdmissionE2eTest extends TestCase
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($project): void {
                 $address = $this->share($ide);
+
+                // A name made to write to the terminal: shown as text, never sent to it.
+                $this->askIn($address, "Ev\x1b]52;c;aGFja2Vk\x07il\x1b[31m");
+                $this->answer($tui, $terminal, 'Ev]52;c;aGFja2Vkil[31m asks to join', downs: 2);
+                $this->assertSame('host', $this->expect('denied')['reason']);
+                $this->assertStringNotContainsString("\x1b]52;c;aGFja2Vk", $terminal->getOutput(), 'her clipboard write never reached the terminal — the invite\'s own copy does');
+
                 $this->askIn($address, 'Ana');
                 $this->answer($tui, $terminal, 'Ana asks to join', downs: 1);
                 $welcome = $this->expect('welcome');

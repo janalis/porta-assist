@@ -37,7 +37,7 @@ final class RelayHandshake
      */
     public static function refusal(array $answer): string
     {
-        return \is_string($answer['error'] ?? null) ? $answer['error'] : 'nothing';
+        return \is_string($answer['error'] ?? null) ? Wire::clean($answer['error']) : 'nothing';
     }
 
     /**

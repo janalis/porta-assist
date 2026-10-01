@@ -398,7 +398,7 @@ final class HostSession
     /** @param array<string, mixed> $message the connection's first */
     private function hello(int $id, Connection $connection, array $message): void
     {
-        $name = \mb_substr(\trim(Wire::string($message, 'name')), start: 0, length: 40);
+        $name = Wire::text($message, 'name', max: 40);
         $ticket = $this->tickets[Wire::string($message, 'ticket')] ?? null;
         $token = Wire::string($message, 'token');
         $refusal = match (true) {
@@ -767,7 +767,7 @@ final class HostSession
     private function guestAgent(Guest $guest, array $message): void
     {
         $peer = $guest->id.'~'.Wire::string($message, 'id');
-        $name = Wire::string($message, 'name');
+        $name = Wire::text($message, 'name', max: 40);
         $caret = Wire::caret($message);
         $this->agents[$peer] = ['name' => $name, 'owner' => $guest->id, 'caret' => $caret];
         $this->place($peer, $name, $caret);

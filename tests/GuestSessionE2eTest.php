@@ -431,4 +431,44 @@ final class GuestSessionE2eTest extends TestCase
             },
         ]);
     }
+
+    public function testWhatTheHostSendsToBeShownCannotReachTheTerminal(): void
+    {
+        $port = $this->listen();
+        $project = $this->copy($port);
+        $evil = static fn (string $mark): string => "X\x1b]52;c;".$mark."\x07\u{202E}Y";
+
+        $this->runIde($project, (string) \realpath($project->path('src/A.php')), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($evil): void {
+                $this->acceptGuest();
+                $this->expect('hello');
+                $this->say(['t' => 'welcome', 'peer' => 'g1', 'role' => 'edit', 'ticket' => self::TICKET, 'peers' => [['id' => 'host', 'name' => $evil('HOSTNAME'), 'role' => 'host']]]);
+                $this->await(static fn (): bool => self::toasted($ide, 'Connected to X]52;c;HOSTNAMEY'), what: 'the host\'s name, as text');
+                $this->say(['t' => 'peer', 'id' => 'g2', 'name' => $evil('PEER'), 'role' => 'edit']);
+                $this->say(['t' => 'focus', 'peer' => 'g2', 'name' => $evil('FOCUS')]);
+                $this->await(static fn (): bool => self::toasted($ide, 'X]52;c;FOCUSY asked everyone'), what: 'the asker\'s name, as text');
+                $this->say(['t' => 'error', 'path' => $evil('PATH'), 'message' => $evil('MESSAGE')]);
+                $this->await(static fn (): bool => self::toasted($ide, 'X]52;c;PATHY: X]52;c;MESSAGEY'), what: 'the error, as text');
+                $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => $evil('TITLE'), 'data' => '']);
+                $this->await(static fn (): bool => self::toasted($ide, 'shared a terminal: X]52;c;TITLEY'), what: 'the title, as text');
+                $this->say(['t' => 'run-refused', 'label' => $evil('LABEL'), 'reason' => 'unknown']);
+                $this->await(static fn (): bool => self::toasted($ide, 'no run configuration X]52;c;LABELY'), what: 'the label, as text');
+                $this->command($ide, 'assist:run');
+                $this->expect('runs');
+                $this->say(['t' => 'runs', 'labels' => [$evil('OFFERED')], 'allowed' => true]);
+                $this->awaitPainted($tui, $terminal, 'X]52;c;OFFEREDY');
+                $this->command($ide, 'assist:participants');
+                $this->awaitPainted($tui, $terminal, 'X]52;c;PEERY');
+                $terminal->simulateInput("\x1b");
+                $this->shareFile('src/A.php', "<?php\n");
+                $this->say(['t' => 'presence', 'peer' => 'g3', 'name' => $evil('CARET'), 'path' => 'src/A.php', 'line' => 0, 'column' => 1]);
+                $this->awaitPainted($tui, $terminal, 'X]52;c;CARETY');
+
+                foreach (['HOSTNAME', 'PEER', 'FOCUS', 'PATH', 'MESSAGE', 'TITLE', 'LABEL', 'OFFERED', 'CARET'] as $mark) {
+                    $this->assertStringNotContainsString("\x1b]52;c;".$mark, $terminal->getOutput(), $mark.' never reached the terminal');
+                }
+                $this->hangUp();
+            },
+        ]);
+    }
 }

@@ -13,6 +13,7 @@ use Porta\Support\JsonRpcFramer;
 use Porta\Support\LineFramer;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -69,7 +70,7 @@ final class LanguageServerCommand extends PluginCommand
         }
         $socket = SecureClient::connect($session['host'], $session['port'], $session['fingerprint'], $this->timeout, $session['relay']);
         if (\is_string($socket)) {
-            $errors->writeln('<error>'.$socket.'</error>');
+            $errors->writeln('<error>'.OutputFormatter::escape($socket).'</error>');
 
             return self::FAILURE;
         }

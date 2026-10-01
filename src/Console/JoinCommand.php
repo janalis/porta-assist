@@ -19,6 +19,7 @@ use Porta\Support\LineFramer;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -83,14 +84,14 @@ final class JoinCommand extends PluginCommand
         try {
             $address = Address::parse($invite);
         } catch (\InvalidArgumentException $e) {
-            $errors->writeln('<error>'.$e->getMessage().'</error>');
+            $errors->writeln('<error>'.OutputFormatter::escape($e->getMessage()).'</error>');
 
             return self::FAILURE;
         }
         $who = '' !== \trim((string) $name) ? \trim((string) $name) : self::user();
         $failure = $this->join($address, $who, $output);
         if (null !== $failure) {
-            $errors->writeln('<error>'.$failure.'</error>');
+            $errors->writeln('<error>'.OutputFormatter::escape($failure).'</error>');
 
             return self::FAILURE;
         }
@@ -119,7 +120,7 @@ final class JoinCommand extends PluginCommand
         // The first-run card walks through setting a project up; this one is
         // the host's, set up already.
         new OnboardingState($mirror->root)->markWelcomeSeen();
-        $output->writeln(\sprintf('Opening <info>%s</info>…', $mirror->root));
+        $output->writeln(\sprintf('Opening <info>%s</info>…', OutputFormatter::escape($mirror->root)));
         $code = ($this->launch ?? self::launch(...))($mirror->root);
 
         return 0 === $code ? null : \sprintf('Porta exited with %d', $code);
@@ -179,7 +180,12 @@ final class JoinCommand extends PluginCommand
                 }
                 $output->writeln(\sprintf('In, %s.', Wire::string($message ?? [], 'role') === 'edit' ? 'editing' : 'reading along'));
 
-                return ['project' => $id, 'name' => \is_string($project['name'] ?? null) ? $project['name'] : '', 'ticket' => $ticket, 'languages' => Wire::strings($message ?? [], 'languages')];
+                return [
+                    'project' => $id,
+                    'name' => \is_string($project['name'] ?? null) ? Wire::clean($project['name']) : '',
+                    'ticket' => $ticket,
+                    'languages' => Wire::strings($message ?? [], 'languages'),
+                ];
             }
 
             return match (null === $message ? 'timeout' : Wire::string($message, 'reason')) {

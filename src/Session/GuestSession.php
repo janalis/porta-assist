@@ -406,7 +406,7 @@ final class GuestSession
             'op' => $this->remote(Wire::string($message, 'path'), $message['ops'] ?? null),
             'ack' => $this->acknowledged(Wire::string($message, 'path')),
             'presence' => $this->peerCaret($message),
-            'peer' => $this->peer(Wire::string($message, 'id'), Wire::string($message, 'name'), Wire::string($message, 'role')),
+            'peer' => $this->peer(Wire::string($message, 'id'), Wire::text($message, 'name'), Wire::string($message, 'role')),
             'left' => $this->peerLeft(Wire::string($message, 'peer')),
             'role' => $this->roleChanged(Role::tryFrom(Wire::string($message, 'role')) ?? Role::ReadOnly),
             'saved' => $this->hostSaved(Wire::string($message, 'path'), Wire::string($message, 'hash')),
@@ -414,15 +414,15 @@ final class GuestSession
             'deleted' => $this->hostDeleted(Wire::string($message, 'path')),
             'changed' => $this->hostChanged(Wire::files($message, 'files'), Wire::strings($message, 'gone')),
             'file' => $this->file(Wire::string($message, 'path'), $message),
-            'error' => $this->api->flash(Wire::string($message, 'path').': '.Wire::string($message, 'message')),
+            'error' => $this->api->flash(Wire::text($message, 'path').': '.Wire::text($message, 'message')),
             'bye' => $this->bye(Wire::string($message, 'reason')),
-            'terminal' => $this->terminal(Wire::string($message, 'id'), Wire::string($message, 'title'), Wire::string($message, 'data')),
+            'terminal' => $this->terminal(Wire::string($message, 'id'), Wire::text($message, 'title'), Wire::string($message, 'data')),
             'terminal-out' => $this->api->runs()->feed(self::TERMINAL.Wire::string($message, 'id'), (string) \base64_decode(Wire::string($message, 'data'), strict: true)),
             'terminal-end' => $this->terminalEnded(Wire::string($message, 'id')),
             'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
             'server', 'server-end', 'tunnel-data', 'tunnel-close' => $this->servers?->receive($message),
             'runs', 'running', 'run-refused' => $this->runs->receive($message),
-            'focus' => $this->follow->asked(Wire::string($message, 'peer'), Wire::string($message, 'name')),
+            'focus' => $this->follow->asked(Wire::string($message, 'peer'), Wire::text($message, 'name')),
             default => null,
         };
     }
@@ -439,7 +439,7 @@ final class GuestSession
             if (!\is_array($peer) || !\is_string($peer['id'] ?? null) || !\is_string($peer['name'] ?? null)) {
                 continue;
             }
-            $this->peers[$peer['id']] = $peer['name'];
+            $this->peers[$peer['id']] = Wire::clean($peer['name']);
             $this->kinds[$peer['id']] = \is_string($peer['role'] ?? null) ? $peer['role'] : 'edit';
         }
         $this->hostName = $this->peers['host'] ?? null;
@@ -653,7 +653,7 @@ final class GuestSession
     private function peerCaret(array $message): void
     {
         $peer = Wire::string($message, 'peer');
-        $name = Wire::string($message, 'name');
+        $name = Wire::text($message, 'name');
         $caret = Wire::caret($message);
         $isNew = !\array_key_exists($peer, $this->peers);
         $this->peers[$peer] = $name;

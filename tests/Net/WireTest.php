@@ -83,4 +83,14 @@ final class WireTest extends TestCase
         );
         $this->assertSame(['path' => '', 'line' => 0, 'column' => 0, 'anchorLine' => null, 'anchorColumn' => null, 'top' => null], Wire::caret(['t' => 'presence', 'anchorLine' => -1, 'top' => 'x']));
     }
+
+    public function testWhatTheOtherEndSendsToBeShownCannotReachTheTerminal(): void
+    {
+        // An OSC 52 clipboard write, a clear screen, a C1 CSI, a bidi override.
+        $name = "  Ev\x1b]52;c;aGFja2Vk\x07il\x1b[2J\u{009B}31m\u{202E}gnp.exe  ";
+        $this->assertSame('Ev]52;c;aGFja2Vkil[2J31mgnp.exe', Wire::text(['name' => $name], 'name'));
+        $this->assertSame('Ev]52', Wire::text(['name' => $name], 'name', max: 5));
+        $this->assertSame('', Wire::text([], 'name'));
+        $this->assertSame('Ana Ünal — שלום', Wire::clean("Ana Ünal — שלום\n"), 'letters of every script stay; a line break does not');
+    }
 }
