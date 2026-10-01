@@ -106,7 +106,7 @@ final class JoinCommandTest extends TestCase
         $this->assertStringContainsString('Meeting the host…', $tester->getDisplay());
         $this->assertStringContainsString('Waiting for the host to let you in', $tester->getDisplay());
         $this->assertStringContainsString('In, reading along.', $tester->getDisplay());
-        $this->assertStringContainsString('3 files shared: 2 to fetch, 1 removed.', $tester->getDisplay());
+        $this->assertStringContainsString('Files shared: 3 — to fetch: 2, removed: 1.', $tester->getDisplay());
         $root = (string) \realpath($copy);
         $this->assertSame([$root], $this->launched);
         $this->assertTrue(new OnboardingState($root)->hasSeenWelcome(), 'no first-run card on someone else\'s project');

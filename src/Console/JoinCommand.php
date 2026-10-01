@@ -217,7 +217,7 @@ final class JoinCommand extends PluginCommand
         $host = Wire::files($message, 'files');
         $pruned = $mirror->prune($host);
         $missing = $mirror->missing($host);
-        $output->writeln(\sprintf('%d files shared: %d to fetch, %d removed.', \count($host), \count($missing), $pruned));
+        $output->writeln(\sprintf('Files shared: %d — to fetch: %d, removed: %d.', \count($host), \count($missing), $pruned));
         foreach (\array_chunk($missing, self::BATCH) as $batch) {
             $this->send(['t' => 'fetch', 'paths' => $batch]);
             while (true) {
