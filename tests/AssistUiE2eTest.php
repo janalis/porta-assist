@@ -94,6 +94,8 @@ final class AssistUiE2eTest extends TestCase
                         'assist:stop' => false,
                         'assist:leave' => false,
                         'assist:share_terminal' => false,
+                        'assist:share_server' => false,
+                        'assist:servers' => false,
                     ],
                     $this->enabled($ide),
                 );
@@ -134,6 +136,8 @@ final class AssistUiE2eTest extends TestCase
                         'assist:stop' => true,
                         'assist:leave' => false,
                         'assist:share_terminal' => true,
+                        'assist:share_server' => true,
+                        'assist:servers' => false,
                     ],
                     $this->enabled($ide),
                 );
@@ -187,6 +191,8 @@ final class AssistUiE2eTest extends TestCase
                 $this->assertSame('In Hal\'s session, reading along', $this->cell($ide)?->tooltip);
                 $this->say(['t' => 'role', 'role' => 'edit']);
                 $this->await(fn (): bool => 'In Hal\'s session, editing' === $this->cell($ide)?->tooltip, what: 'editing');
+                $this->say(['t' => 'server', 'port' => 0]);
+                $this->await(static fn (): bool => self::toasted($ide, 'Hal shared localhost:0'), what: 'a server shared');
                 $this->assertSame(
                     [
                         'assist:share' => false,
@@ -196,6 +202,8 @@ final class AssistUiE2eTest extends TestCase
                         'assist:stop' => false,
                         'assist:leave' => true,
                         'assist:share_terminal' => false,
+                        'assist:share_server' => false,
+                        'assist:servers' => true,
                     ],
                     $this->enabled($ide),
                 );

@@ -218,6 +218,46 @@
         <source>Stop them typing in shared terminals</source>
         <target>להפסיק הקלדה בטרמינלים משותפים</target>
       </trans-unit>
+      <trans-unit id="55">
+        <source>%name% shared localhost:%port% — open http://127.0.0.1:%local%</source>
+        <target>%name% שיתף את localhost:%port% — פתחו את http://127.0.0.1:%local%</target>
+      </trans-unit>
+      <trans-unit id="56">
+        <source>%name% stopped sharing localhost:%port%</source>
+        <target>%name% הפסיק לשתף את localhost:%port%</target>
+      </trans-unit>
+      <trans-unit id="57">
+        <source>Share this project first</source>
+        <target>שתפו קודם את הפרויקט הזה</target>
+      </trans-unit>
+      <trans-unit id="58">
+        <source>Share which local port? (a dev server: 8000, say)</source>
+        <target>איזו יציאה מקומית לשתף? (שרת פיתוח, למשל 8000)</target>
+      </trans-unit>
+      <trans-unit id="59">
+        <source>Not a port: %port%</source>
+        <target>לא יציאה: %port%</target>
+      </trans-unit>
+      <trans-unit id="60">
+        <source>Share which server?</source>
+        <target>איזה שרת לשתף?</target>
+      </trans-unit>
+      <trans-unit id="61">
+        <source>Another port…</source>
+        <target>יציאה אחרת…</target>
+      </trans-unit>
+      <trans-unit id="62">
+        <source>The host shares no server</source>
+        <target>המארח לא משתף שום שרת</target>
+      </trans-unit>
+      <trans-unit id="63">
+        <source>Shared servers</source>
+        <target>שרתים משותפים</target>
+      </trans-unit>
+      <trans-unit id="64">
+        <source>Address copied: %url%</source>
+        <target>הכתובת הועתקה: %url%</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

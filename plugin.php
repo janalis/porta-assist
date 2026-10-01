@@ -75,6 +75,8 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->registerCommand('participants', 'Assist: Participants', $this->participants(...));
         $api->registerCommand('leave', 'Assist: Leave the Session', $this->leave(...));
         $api->registerCommand('share_terminal', 'Assist: Share a Terminal', $this->shareTerminal(...));
+        $api->registerCommand('share_server', 'Assist: Share a Server', $this->shareServer(...));
+        $api->registerCommand('servers', 'Assist: Shared Servers', $this->servers(...));
         $api->addMenuItem('share', fn (): bool => null === $this->guest);
         $api->addMenuItem('join', fn (): bool => null === $this->host && null === $this->guest);
         $api->addMenuItem('follow', fn (): bool => [] !== $this->peers());
@@ -82,6 +84,8 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api->addMenuItem('stop', fn (): bool => null !== $this->host);
         $api->addMenuItem('leave', fn (): bool => null !== $this->guest);
         $api->addMenuItem('share_terminal', fn (): bool => null !== $this->host);
+        $api->addMenuItem('share_server', fn (): bool => null !== $this->host);
+        $api->addMenuItem('servers', fn (): bool => [] !== ($this->guest?->servers() ?? []));
         $api->registerStatusSegment($this->status(...));
 
         // In a guest's copy, the host's language servers are this one's: each
@@ -285,6 +289,56 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             $rows[] = ['label' => $terminal['title'], 'hint' => \array_key_exists($terminal['id'], $shared) ? $api->trans('shared — pick to stop') : '', 'value' => $terminal['id']];
         }
         $api->pick($api->trans('Share which terminal?'), $rows, static fn (string $id) => $host->terminals()->toggle($id, $titles[$id]));
+    }
+
+    /** Let everyone reach a port of this machine — a dev server — or stop, when it is shared. */
+    private function shareServer(): void
+    {
+        $api = $this->api();
+        $host = $this->host;
+        if (null === $host) {
+            $api->flash($api->trans('Share this project first'));
+
+            return;
+        }
+        $ask = static fn () => $api->prompt($api->trans('Share which local port? (a dev server: 8000, say)'), initial: '', onSubmit: static function (string $typed) use ($api, $host): void {
+            $port = \trim($typed);
+            if (!\ctype_digit($port) || (int) $port < 1 || (int) $port > 65_535) {
+                $api->flash($api->trans('Not a port: %port%', ['%port%' => $port]));
+
+                return;
+            }
+            $host->servers()->toggle((int) $port);
+        });
+        $shared = $host->servers()->shared();
+        if ([] === $shared) {
+            $ask();
+
+            return;
+        }
+        $rows = \array_map(static fn (int $port): array => ['label' => 'localhost:'.$port, 'hint' => $api->trans('shared — pick to stop'), 'value' => (string) $port], $shared);
+        $rows[] = ['label' => $api->trans('Another port…'), 'hint' => '', 'value' => ''];
+        $api->pick($api->trans('Share which server?'), $rows, static fn (string $port) => '' === $port ? $ask() : $host->servers()->toggle((int) $port));
+    }
+
+    /** The host's servers, as they are reached here: the address of one, copied. */
+    private function servers(): void
+    {
+        $api = $this->api();
+        $servers = $this->guest?->servers() ?? [];
+        if ([] === $servers) {
+            $api->flash($api->trans('The host shares no server'));
+
+            return;
+        }
+        $rows = [];
+        foreach ($servers as $port => $local) {
+            $rows[] = ['label' => 'localhost:'.$port, 'hint' => 'http://127.0.0.1:'.$local, 'value' => 'http://127.0.0.1:'.$local];
+        }
+        $api->pick($api->trans('Shared servers'), $rows, static function (string $url) use ($api): void {
+            $api->copyToClipboard($url);
+            $api->notify($api->trans('Address copied: %url%', ['%url%' => $url]), slot: 'assist');
+        });
     }
 
     private function leave(): void

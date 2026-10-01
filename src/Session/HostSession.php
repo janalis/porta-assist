@@ -63,6 +63,8 @@ final class HostSession
 
     private readonly HostTerminals $terminals;
 
+    private readonly HostServers $servers;
+
     private readonly Presence $presence;
 
     private ?Address $address = null;
@@ -103,6 +105,7 @@ final class HostSession
         $this->paths = new Paths($root);
         $this->files = new HostFiles($api, $this->paths, $maxFileSize, $this->broadcast(...));
         $this->terminals = new HostTerminals($api, $this->broadcast(...));
+        $this->servers = new HostServers($this->broadcast(...));
         $this->presence = new Presence($api, $this->paths);
         $this->listener = new Listener($this->accept(...));
         $this->relayListener = new RelayListener($this->accept(...), static fn (string $why) => $api->notify($why, ToastSeverity::Error, 8.0));
@@ -192,6 +195,7 @@ final class HostSession
             $this->stopRelays($peer);
         }
         $this->terminals->stop();
+        $this->servers->stop();
         $this->listener->stop();
         $this->relayListener->stop();
         $this->certificate?->forget();
@@ -240,6 +244,12 @@ final class HostSession
     public function terminals(): HostTerminals
     {
         return $this->terminals;
+    }
+
+    /** The local servers shared, and how guests reach them. */
+    public function servers(): HostServers
+    {
+        return $this->servers;
     }
 
     /** Let a guest type into the shared terminals, or not any more. */
@@ -518,6 +528,7 @@ final class HostSession
             $guest->send(['t' => 'presence', 'peer' => $id, 'name' => $agent['name'], 'agent' => true, ...$agent['caret']]);
         }
         $this->terminals->welcome($guest);
+        $this->servers->welcome($guest);
         $this->broadcast(['t' => 'peer', 'id' => $peer, 'name' => $name, 'role' => $role->value], except: $peer);
         $this->api->notify(
             Role::Edit === $role
@@ -543,6 +554,7 @@ final class HostSession
             $this->dropAgent($peer);
         }
         $this->presence->left($guest->id);
+        $this->servers->gone($guest);
         $this->follow->gone($guest->id);
         $this->broadcast(['t' => 'left', 'peer' => $guest->id]);
         if (null !== $this->address) {
@@ -566,6 +578,9 @@ final class HostSession
             'agent' => $this->guestAgent($guest, $message),
             'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, 'id')),
             'terminal-in' => $this->terminals->input($guest, $message),
+            'tunnel-open' => $this->servers->open($guest, $message),
+            'tunnel-data' => $this->servers->data($guest, $message),
+            'tunnel-close' => $this->servers->closed($guest, $message),
             'save' => $this->save($guest, Wire::string($message, 'path')),
             'write' => $this->files->write($guest, Wire::string($message, 'path'), Wire::string($message, 'data'), \array_key_exists(Wire::string($message, 'path'), $this->docs)),
             'move' => $this->files->move($guest, Wire::string($message, 'from'), Wire::string($message, 'to')),

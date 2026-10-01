@@ -67,6 +67,9 @@ final class GuestSession
 
     private ?Connection $connection = null;
 
+    /** The host's servers, reached through the connection there is now. */
+    private ?GuestServers $servers = null;
+
     private ?Role $role = null;
 
     private ?string $hostName = null;
@@ -162,6 +165,7 @@ final class GuestSession
                     return;
                 }
                 $this->connection = $connection;
+                $this->servers = new GuestServers($this->api, $connection, fn (): string => (string) $this->hostName);
                 $connection->listen($this->receive(...), $this->lost(...));
                 $connection->send(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $this->session['name'], 'ticket' => $this->session['ticket']]);
             },
@@ -184,6 +188,12 @@ final class GuestSession
     public function role(): ?Role
     {
         return $this->role;
+    }
+
+    /** @return array<int, int> the host's shared servers: its port => the port they are reached at here */
+    public function servers(): array
+    {
+        return $this->servers?->shared() ?? [];
     }
 
     public function hostName(): ?string
@@ -396,6 +406,7 @@ final class GuestSession
             'terminal-out' => $this->api->runs()->feed(self::TERMINAL.Wire::string($message, 'id'), (string) \base64_decode(Wire::string($message, 'data'), strict: true)),
             'terminal-end' => $this->terminalEnded(Wire::string($message, 'id')),
             'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
+            'server', 'server-end', 'tunnel-data', 'tunnel-close' => $this->servers?->receive($message),
             default => null,
         };
     }
@@ -460,6 +471,8 @@ final class GuestSession
     private function lost(string $reason): void
     {
         $this->connection = null;
+        $this->servers?->stop();
+        $this->servers = null;
         $this->role = null;
         if ($this->over) {
             return;
@@ -518,6 +531,8 @@ final class GuestSession
     /** The session is over here: the files are the guest's again, everyone else's marks go. */
     private function end(): void
     {
+        $this->servers?->stop();
+        $this->servers = null;
         foreach ([...$this->timers, ...(null === $this->retry ? [] : [$this->retry])] as $timer) {
             EventLoop::cancel($timer);
         }

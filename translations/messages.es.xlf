@@ -218,6 +218,46 @@
         <source>Stop them typing in shared terminals</source>
         <target>Dejar de permitir escribir en las terminales compartidas</target>
       </trans-unit>
+      <trans-unit id="55">
+        <source>%name% shared localhost:%port% — open http://127.0.0.1:%local%</source>
+        <target>%name% compartió localhost:%port% — abre http://127.0.0.1:%local%</target>
+      </trans-unit>
+      <trans-unit id="56">
+        <source>%name% stopped sharing localhost:%port%</source>
+        <target>%name% dejó de compartir localhost:%port%</target>
+      </trans-unit>
+      <trans-unit id="57">
+        <source>Share this project first</source>
+        <target>Comparte primero este proyecto</target>
+      </trans-unit>
+      <trans-unit id="58">
+        <source>Share which local port? (a dev server: 8000, say)</source>
+        <target>¿Qué puerto local compartir? (un servidor de desarrollo, p. ej. 8000)</target>
+      </trans-unit>
+      <trans-unit id="59">
+        <source>Not a port: %port%</source>
+        <target>No es un puerto: %port%</target>
+      </trans-unit>
+      <trans-unit id="60">
+        <source>Share which server?</source>
+        <target>¿Qué servidor compartir?</target>
+      </trans-unit>
+      <trans-unit id="61">
+        <source>Another port…</source>
+        <target>Otro puerto…</target>
+      </trans-unit>
+      <trans-unit id="62">
+        <source>The host shares no server</source>
+        <target>El anfitrión no comparte ningún servidor</target>
+      </trans-unit>
+      <trans-unit id="63">
+        <source>Shared servers</source>
+        <target>Servidores compartidos</target>
+      </trans-unit>
+      <trans-unit id="64">
+        <source>Address copied: %url%</source>
+        <target>Dirección copiada: %url%</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

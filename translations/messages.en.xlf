@@ -218,6 +218,46 @@
         <source>Stop them typing in shared terminals</source>
         <target>Stop them typing in shared terminals</target>
       </trans-unit>
+      <trans-unit id="55">
+        <source>%name% shared localhost:%port% — open http://127.0.0.1:%local%</source>
+        <target>%name% shared localhost:%port% — open http://127.0.0.1:%local%</target>
+      </trans-unit>
+      <trans-unit id="56">
+        <source>%name% stopped sharing localhost:%port%</source>
+        <target>%name% stopped sharing localhost:%port%</target>
+      </trans-unit>
+      <trans-unit id="57">
+        <source>Share this project first</source>
+        <target>Share this project first</target>
+      </trans-unit>
+      <trans-unit id="58">
+        <source>Share which local port? (a dev server: 8000, say)</source>
+        <target>Share which local port? (a dev server: 8000, say)</target>
+      </trans-unit>
+      <trans-unit id="59">
+        <source>Not a port: %port%</source>
+        <target>Not a port: %port%</target>
+      </trans-unit>
+      <trans-unit id="60">
+        <source>Share which server?</source>
+        <target>Share which server?</target>
+      </trans-unit>
+      <trans-unit id="61">
+        <source>Another port…</source>
+        <target>Another port…</target>
+      </trans-unit>
+      <trans-unit id="62">
+        <source>The host shares no server</source>
+        <target>The host shares no server</target>
+      </trans-unit>
+      <trans-unit id="63">
+        <source>Shared servers</source>
+        <target>Shared servers</target>
+      </trans-unit>
+      <trans-unit id="64">
+        <source>Address copied: %url%</source>
+        <target>Address copied: %url%</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -34,6 +34,9 @@ final class Connection
     /** @var \Closure(string): void */
     private \Closure $onClose;
 
+    /** @var list<\Closure(): void> waiting for what is queued to go out */
+    private array $drained = [];
+
     /** @param resource $stream connected; switched to non-blocking here */
     public function __construct(
         private $stream,
@@ -83,6 +86,35 @@ final class Connection
         if (!$this->closed) {
             $this->writer->write(Wire::encode($message));
         }
+    }
+
+    /** Bytes queued for the peer and not sent yet. */
+    public function backlog(): int
+    {
+        return $this->writer->pendingBytes();
+    }
+
+    /**
+     * Call $then once what is queued has gone out — at once, when nothing
+     * is: a sender that paces itself on {@see backlog()} resumes here.
+     *
+     * @param \Closure(): void $then
+     */
+    public function afterDrain(\Closure $then): void
+    {
+        if (0 === $this->backlog()) {
+            $then();
+
+            return;
+        }
+        $this->drained[] = $then;
+        $this->writer->onDrain(function (): void {
+            $waiting = $this->drained;
+            $this->drained = [];
+            foreach ($waiting as $then) {
+                $then();
+            }
+        });
     }
 
     /** The peer's address, as the socket names it. */
