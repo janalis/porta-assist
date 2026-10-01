@@ -12,7 +12,7 @@ final class Guest
     /** @var array<string, true> relative paths of the files it has open */
     public array $docs = [];
 
-    /** @var array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null}|null where it said its caret is */
+    /** @var array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}|null where it said its caret is */
     public ?array $caret = null;
 
     public function __construct(

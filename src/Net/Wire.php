@@ -52,11 +52,12 @@ final class Wire
     /**
      * Where someone's caret is, as a presence message says it: the file
      * relative to the project, a 0-based line (negative: in the file, no
-     * caret) and byte column, and the anchor of their selection, if any.
+     * caret) and byte column, the anchor of their selection, if any, and
+     * the first line they see, when they said.
      *
      * @param array<string, mixed> $message
      *
-     * @return array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null}
+     * @return array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}
      */
     public static function caret(array $message): array
     {
@@ -68,6 +69,7 @@ final class Wire
             'column' => self::int($message, 'column'),
             'anchorLine' => $anchored ? self::int($message, 'anchorLine') : null,
             'anchorColumn' => $anchored ? self::int($message, 'anchorColumn') : null,
+            'top' => \is_int($message['top'] ?? null) ? $message['top'] : null,
         ];
     }
 

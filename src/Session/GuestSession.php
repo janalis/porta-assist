@@ -569,7 +569,7 @@ final class GuestSession
         // No line is no caret: in the file, nowhere in its text.
         $caret['line'] < 0 ? $doc?->dropCaret($peer) : $doc?->placeCaret($peer, $caret['line'], $caret['column'], $caret['anchorLine'], $caret['anchorColumn']);
         null === $doc || $caret['line'] < 0 ? $this->presence->inFile($peer, $name, $caret['path']) : $this->presence->show($doc, $this->peers);
-        $this->follow->moved($peer, $path, \max(0, $caret['line']), $caret['column']);
+        $this->follow->moved($peer, $path, \max(0, $caret['line']), $caret['column'], $caret['top']);
     }
 
     private function peer(string $peer, string $name, string $kind): void

@@ -24,7 +24,7 @@ final class Presence
     /** Never faded by time: a peer is shown until it leaves. */
     private const float FADE = 86_400.0;
 
-    /** @var array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null}|null */
+    /** @var array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}|null */
     private ?array $mine = null;
 
     public function __construct(
@@ -73,7 +73,7 @@ final class Presence
      * relative to the project, the caret and its selection's anchor. Null
      * when it did not move, or is in no file the session shares.
      *
-     * @return array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null}|null
+     * @return array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}|null
      */
     public function moved(): ?array
     {
@@ -83,7 +83,7 @@ final class Presence
             return null;
         }
         // A file is active, so there is a caret in it.
-        $caret = $this->api->caretPosition() ?? ['line' => 0, 'column' => 0];
+        $caret = $this->api->caretPosition() ?? ['line' => 0, 'column' => 0, 'top' => 0];
         $selection = $this->api->openBuffers()->selection($path);
         $anchorLine = null;
         $anchorColumn = null;
@@ -94,7 +94,7 @@ final class Presence
             $anchorLine = $atStart ? $selection['endLine'] : $selection['line'];
             $anchorColumn = $atStart ? $selection['endColumn'] : $selection['column'];
         }
-        $mine = ['path' => $relative, 'line' => $caret['line'], 'column' => $caret['column'], 'anchorLine' => $anchorLine, 'anchorColumn' => $anchorColumn];
+        $mine = ['path' => $relative, 'line' => $caret['line'], 'column' => $caret['column'], 'anchorLine' => $anchorLine, 'anchorColumn' => $anchorColumn, 'top' => $caret['top']];
         if ($mine === $this->mine) {
             return null;
         }
@@ -107,7 +107,7 @@ final class Presence
      * Where this side's caret was last said to be — for a peer who arrives
      * after it stopped moving.
      *
-     * @return array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null}|null
+     * @return array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}|null
      */
     public function last(): ?array
     {

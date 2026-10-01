@@ -78,9 +78,9 @@ final class WireTest extends TestCase
     public function testACaretHasAnAnchorOnlyWhenItSaysOne(): void
     {
         $this->assertSame(
-            ['path' => 'a.php', 'line' => 2, 'column' => 3, 'anchorLine' => 1, 'anchorColumn' => 0],
-            Wire::caret(['t' => 'presence', 'path' => 'a.php', 'line' => 2, 'column' => 3, 'anchorLine' => 1, 'anchorColumn' => 0]),
+            ['path' => 'a.php', 'line' => 2, 'column' => 3, 'anchorLine' => 1, 'anchorColumn' => 0, 'top' => 1],
+            Wire::caret(['t' => 'presence', 'path' => 'a.php', 'line' => 2, 'column' => 3, 'anchorLine' => 1, 'anchorColumn' => 0, 'top' => 1]),
         );
-        $this->assertSame(['path' => '', 'line' => 0, 'column' => 0, 'anchorLine' => null, 'anchorColumn' => null], Wire::caret(['t' => 'presence', 'anchorLine' => -1]));
+        $this->assertSame(['path' => '', 'line' => 0, 'column' => 0, 'anchorLine' => null, 'anchorColumn' => null, 'top' => null], Wire::caret(['t' => 'presence', 'anchorLine' => -1, 'top' => 'x']));
     }
 }

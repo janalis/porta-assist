@@ -59,10 +59,11 @@ final class Follow
     }
 
     /**
-     * $peer's caret moved to $path, at a 0-based line and byte column —
-     * followed there when $peer is the one followed.
+     * $peer's caret moved to $path, at a 0-based line and byte column, with
+     * $top the first line they see when they said — followed there, scroll
+     * and all, when $peer is the one followed.
      */
-    public function moved(string $peer, string $path, int $line, int $column): void
+    public function moved(string $peer, string $path, int $line, int $column, ?int $top = null): void
     {
         if ($peer !== ($this->target[0] ?? null)) {
             return;
@@ -74,7 +75,7 @@ final class Follow
         $text = \explode("\n", (string) $this->api->openBuffers()->text($path))[$line] ?? '';
         $before = \substr($text, offset: 0, length: $column);
         $utf16 = \intdiv(\strlen((string) \mb_convert_encoding($before, to_encoding: 'UTF-16LE', from_encoding: 'UTF-8')), num2: 2);
-        $this->api->jumpTo($line, $utf16);
+        $this->api->jumpTo($line, $utf16, $top);
         $this->expected = [$path, $line, $column];
     }
 

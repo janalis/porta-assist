@@ -78,7 +78,7 @@ final class HostSession
     /** @var array<string, array{text: SharedText, server: ServerDocument}> by relative path */
     private array $docs = [];
 
-    /** @var array<string, array{name: string, owner: string, caret: array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null}}> agents at work, by peer id: the host's own and each guest's */
+    /** @var array<string, array{name: string, owner: string, caret: array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}}> agents at work, by peer id: the host's own and each guest's */
     private array $agents = [];
 
     /** @var list<string> */
@@ -565,7 +565,7 @@ final class HostSession
      * on the file's tab and tree row when it is not — and followed, when
      * they are the one followed.
      *
-     * @param array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null} $caret
+     * @param array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null} $caret
      */
     private function place(string $peer, string $name, array $caret): void
     {
@@ -575,7 +575,7 @@ final class HostSession
         $caret['line'] < 0 ? $doc?->dropCaret($peer) : $doc?->placeCaret($peer, $caret['line'], $caret['column'], $caret['anchorLine'], $caret['anchorColumn']);
         null === $doc || $caret['line'] < 0 ? $this->presence->inFile($peer, $name, $caret['path']) : $this->presence->show($doc, $this->names());
         if (null !== $path) {
-            $this->follow->moved($peer, $path, \max(0, $caret['line']), $caret['column']);
+            $this->follow->moved($peer, $path, \max(0, $caret['line']), $caret['column'], $caret['top']);
         }
     }
 
@@ -592,7 +592,7 @@ final class HostSession
             return;
         }
         $peer = self::HOST.'~'.$event->agent;
-        $caret = ['path' => $relative, 'line' => $event->line, 'column' => $event->column, 'anchorLine' => null, 'anchorColumn' => null];
+        $caret = ['path' => $relative, 'line' => $event->line, 'column' => $event->column, 'anchorLine' => null, 'anchorColumn' => null, 'top' => null];
         $this->agents[$peer] = ['name' => $event->name, 'owner' => self::HOST, 'caret' => $caret];
         if ($event->line >= 0) {
             $this->follow->moved($peer, $event->path, $event->line, $event->column);
