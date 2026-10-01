@@ -115,7 +115,7 @@ final class GuestDebugE2eTest extends TestCase
                 $this->assertSame(5, $this->expect('debug-children')['reference']);
                 $this->say(['t' => 'debug-children', 'reference' => 5, 'variables' => [['name' => 'email', 'value' => "'ana@example.org'", 'reference' => 0]]]);
                 $this->awaitPainted($tui, $terminal, "email = 'ana@example.org'");
-                $this->awaitPainted($tui, $terminal, '╭ $user'); // listed under its name
+                $this->awaitPainted($tui, $terminal, '─ $user ─'); // listed under its name, the window's title
                 $terminal->simulateInput("\r");
                 $this->assertStringContainsString("\x1b]52;c;".\base64_encode("'ana@example.org'"), $terminal->getOutput());
                 $this->say(['t' => 'debug-children', 'reference' => 9, 'variables' => []]);
