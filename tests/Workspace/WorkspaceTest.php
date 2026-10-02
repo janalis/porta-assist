@@ -23,6 +23,8 @@ final class WorkspaceTest extends TestCase
         $outside = new TempProject(['secret.txt' => 'no']);
         $project = new TempProject(['src/A.php' => '<?php']);
         \symlink($outside->dir, $project->path('link'));
+        \symlink($outside->path('planted.php'), $project->path('dangling.php')); // a target not there YET
+        \symlink($outside->path('later'), $project->path('dangling-dir'));
         $paths = new Paths($project->dir);
         $root = (string) \realpath($project->dir);
 
@@ -30,7 +32,25 @@ final class WorkspaceTest extends TestCase
         $this->assertSame('src/A.php', $paths->relative($root.'/src/A.php'));
         $this->assertSame($root.'/src/New.php', $paths->absolute('src/New.php'), 'a file that is not there yet is fine');
         $this->assertSame($root.'/a/b/c.php', $paths->absolute('a/b/c.php'), 'in folders not there yet too');
-        foreach (['', '../x', 'src/../../x', '/etc/passwd', 'a//b', './a', "a\0b", 'a\\b', '.git/config', '.porta/assist-session.json', '.porta.json', 'link/secret.txt'] as $refused) {
+        foreach ([
+            '',
+            '../x',
+            'src/../../x',
+            '/etc/passwd',
+            'a//b',
+            './a',
+            "a\0b",
+            'a\\b',
+            '.git/config',
+            '.porta/assist-session.json',
+            '.porta.json',
+            'link/secret.txt',
+            'dangling.php',
+            'dangling-dir/x.php',
+            'sub/.git/config',
+            'vendor/acme/.porta/x',
+            'a/.porta.json',
+        ] as $refused) {
             $this->assertNull($paths->absolute($refused), \json_encode($refused, \JSON_THROW_ON_ERROR));
         }
         $this->assertNull($paths->relative('/elsewhere/a.php'));

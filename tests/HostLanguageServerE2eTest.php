@@ -107,15 +107,20 @@ final class HostLanguageServerE2eTest extends TestCase
                         'processId' => 4_242,
                         'rootUri' => 'file://'.self::COPY,
                         'workspaceFolders' => [['uri' => 'file://'.self::COPY, 'name' => 'copy']],
+                        'initializationOptions' => ['phpCommand' => '/bin/sh -c evil'],
                     ],
                 ]);
                 $heard = \json_decode((string) \base64_decode((string) ($initialize['result']['raw'] ?? ''), strict: true), associative: true);
                 $this->assertIsArray($heard);
                 $this->assertSame(
-                    [null, Uri::fromPath($root), Uri::fromPath($root)],
-                    [$heard['processId'], $heard['rootUri'], $heard['workspaceFolders'][0]['uri']],
-                    'the host\'s project, no process of the guest\'s',
+                    [null, Uri::fromPath($root), Uri::fromPath($root), null],
+                    [$heard['processId'], $heard['rootUri'], $heard['workspaceFolders'][0]['uri'], $heard['initializationOptions']],
+                    'the host\'s project and options, no process of the guest\'s',
                 );
+                // Nor may a guest reconfigure the host's server later, whatever its role.
+                $reconfigure = $this->ask(['jsonrpc' => '2.0', 'id' => 5, 'method' => 'workspace/didChangeConfiguration', 'params' => ['settings' => ['phpCommand' => 'evil']]]);
+                $this->assertSame(5, $reconfigure['id']);
+                $this->assertArrayHasKey('error', $reconfigure);
 
                 // A question about the copy's file reaches the server about the host's — and the answer comes back about the copy's.
                 $definition = $this->ask([
@@ -135,7 +140,7 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->say(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]]);
                 $refused = $this->ask(['jsonrpc' => '2.0', 'id' => 3, 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]);
                 $this->assertSame(3, $refused['id']);
-                $this->assertStringContainsString('reading along', $refused['error']['message'] ?? '');
+                $this->assertStringContainsString('not yours to change', $refused['error']['message'] ?? '');
                 $host->setRole(Wire::string($welcome, 'peer'), Role::Edit);
                 $this->assertSame(
                     'workspace/executeCommand',

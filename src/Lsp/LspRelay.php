@@ -15,13 +15,20 @@ use Porta\Support\JsonRpcTransport;
  *
  * The guest's editor starts the session, so its `initialize` is the one the
  * server answers; it is pointed at the host's project, and given the host's
- * initialization options when it brings none. A guest who may only read
+ * initialization options in place of its own. A guest who may only read
  * along is not let run the server's commands, which may change files.
  */
 final readonly class LspRelay
 {
     /** Requests a guest reading along may not make: what they do, they do to the host's files. */
     private const array WRITES = ['workspace/executeCommand'];
+
+    /**
+     * What no guest may send, whatever the role: how the host's server is
+     * configured is the host's — symfony-lsp's options name a PHP command
+     * it runs.
+     */
+    private const array CONFIGURES = ['workspace/didChangeConfiguration'];
 
     private Roots $toHost;
 
@@ -71,11 +78,12 @@ final readonly class LspRelay
         }
         $lsp = $message['m'];
         $method = \is_string($lsp['method'] ?? null) ? $lsp['method'] : null;
-        if (($this->readOnly)() && \in_array($method, self::WRITES, strict: true)) {
+        $refused = \in_array($method, self::CONFIGURES, strict: true) || ($this->readOnly)() && \in_array($method, self::WRITES, strict: true);
+        if ($refused) {
             if (\array_key_exists('id', $lsp)) {
                 $this->guest->send([
                     't' => 'lsp',
-                    'm' => ['jsonrpc' => '2.0', 'id' => $lsp['id'], 'error' => ['code' => -32_600, 'message' => 'reading along: the host\'s files are not yours to change']],
+                    'm' => ['jsonrpc' => '2.0', 'id' => $lsp['id'], 'error' => ['code' => -32_600, 'message' => 'the host\'s server, and the host\'s files, are not yours to change']],
                 ]);
             }
 
@@ -90,7 +98,8 @@ final readonly class LspRelay
 
     /**
      * The guest's `initialize`, as the host's server must hear it: no
-     * process of the guest's to watch, the host's project as the workspace.
+     * process of the guest's to watch, the host's project as the workspace,
+     * the host's options — never the guest's.
      *
      * @param array<array-key, mixed> $params
      *
@@ -99,7 +108,7 @@ final readonly class LspRelay
     private function initialize(array $params): array
     {
         $params['processId'] = null;
-        $params['initializationOptions'] ??= $this->initializationOptions;
+        $params['initializationOptions'] = $this->initializationOptions;
 
         return $params;
     }

@@ -29,6 +29,9 @@ final class HostFiles
 
     private ?string $rescan = null;
 
+    /** @var array<string, true> files guests wrote this session, fetchable though no listing has them yet */
+    private array $written = [];
+
     private readonly ProjectFiles $files;
 
     /**
@@ -63,8 +66,12 @@ final class HostFiles
      */
     public function fetch(Guest $guest, array $paths): void
     {
+        // Only what the listing shares: a gitignored `.env` is under the root
+        // and a valid path, but never offered — so never sent either.
+        $this->listed ??= $this->files->scan();
         while (null !== ($relative = \array_shift($paths))) {
-            $path = $this->paths->absolute($relative);
+            $shared = \array_key_exists($relative, $this->listed) || \array_key_exists($relative, $this->written);
+            $path = $shared ? $this->paths->absolute($relative) : null;
             $size = null === $path || !\is_file($path) ? null : (int) \filesize($path);
             // A file whose encoding could never be queued at all is sent as
             // not there, not as the end of the connection.
@@ -97,6 +104,8 @@ final class HostFiles
 
             return;
         }
+        // Told to the others as changed: theirs to fetch before a rescan lists it.
+        $this->written[$relative] = true;
         ($this->broadcast)(['t' => 'changed', 'files' => [[$relative, \strlen($text), \hash('xxh128', $text)]], 'gone' => []], $guest->id);
     }
 
@@ -142,6 +151,7 @@ final class HostFiles
         }
         $this->rescan = null;
         $this->listed = null;
+        $this->written = [];
     }
 
     private function rescan(): void

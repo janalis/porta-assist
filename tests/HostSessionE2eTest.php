@@ -36,6 +36,7 @@ final class HostSessionE2eTest extends TestCase
         return new TempProject([
             'src/A.php' => "<?php\necho 'a';\n",
             'README.md' => "# demo\n",
+            'node_modules/x.js' => 'never listed',
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
     }
@@ -71,10 +72,11 @@ final class HostSessionE2eTest extends TestCase
 
                 $this->say(['t' => 'manifest']);
                 $this->assertSame(['README.md', 'src/A.php'], \array_column(Wire::list($this->expect('manifest'), 'files'), 0), 'the project, not its settings');
-                $this->say(['t' => 'fetch', 'paths' => ['src/A.php', '../escape', '.porta.json']]);
+                $this->say(['t' => 'fetch', 'paths' => ['src/A.php', '../escape', '.porta.json', 'node_modules/x.js']]);
                 $this->assertSame("<?php\necho 'a';\n", \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true));
                 $this->assertTrue($this->expect('file')['missing'], 'nothing outside the project');
                 $this->assertTrue($this->expect('file')['missing'], 'nor its settings');
+                $this->assertTrue($this->expect('file')['missing'], 'nor a file the listing never offered');
                 $this->expect('fetched');
 
                 $this->say(['t' => 'open', 'path' => 'src/A.php']);

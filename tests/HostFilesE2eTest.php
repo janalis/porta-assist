@@ -81,6 +81,11 @@ final class HostFilesE2eTest extends TestCase
                 $this->assertSame('<?php // new', \file_get_contents($root.'/src/New.php'));
                 $this->assertSame('rewritten', \file_get_contents($root.'/notes.txt'));
                 $this->assertFileDoesNotExist($root.'/src/Bad.php', 'not base64: nothing written');
+                // Where no listing looks, what a guest wrote is still the others' to fetch.
+                $this->say(['t' => 'write', 'path' => 'node_modules/w.js', 'data' => \base64_encode('mine')]);
+                $this->say(['t' => 'fetch', 'paths' => ['node_modules/w.js']]);
+                $this->assertSame('mine', \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true));
+                $this->expect('fetched');
 
                 // Moved and deleted, the host's editor doing it: everyone told.
                 $this->say(['t' => 'move', 'from' => 'src/New.php', 'to' => 'src/Moved.php']);

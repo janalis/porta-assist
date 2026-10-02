@@ -52,9 +52,11 @@ final readonly class Paths
         }
         $path = \rtrim($this->root, characters: '/').'/'.$relative;
         // The deepest part that exists, resolved: a link in it that points
-        // out of the project is as good as `..`.
+        // out of the project is as good as `..`. A dangling link counts as
+        // existing — skipping past it would let a write create its target,
+        // wherever that is — and realpath() refuses it below.
         $existing = $path;
-        while (!\file_exists($existing) && \dirname($existing) !== $existing) {
+        while (!\file_exists($existing) && !\is_link($existing) && \dirname($existing) !== $existing) {
             $existing = \dirname($existing);
         }
         $real = \realpath($existing);
@@ -108,6 +110,7 @@ final readonly class Paths
             }
         }
 
-        return !\in_array($segments[0], self::PRIVATE, strict: true);
+        // At any depth: a submodule's `.git`, a vendored project's `.porta`.
+        return [] === \array_intersect($segments, self::PRIVATE);
     }
 }
