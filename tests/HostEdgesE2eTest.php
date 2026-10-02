@@ -9,6 +9,8 @@ use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Event\AgentActivity;
+use Porta\Event\FileDeleted;
+use Porta\Event\FileRenamed;
 use Porta\Event\WorkingTreeChanged;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
@@ -136,8 +138,13 @@ final class HostEdgesE2eTest extends TestCase
                 $buffers->open($far);
                 $buffers->edit($far, 0, 0, 0, 0, '!');
                 $buffers->save($far);
-                $buffers->move($far, $outside->path('farther.txt'));
-                $buffers->delete($outside->path('farther.txt'));
+                // Moved and deleted by hand (the plugin API's own stay inside the
+                // project): the host hears of it, and tells no one.
+                $events = Services::resolve($ide, EventDispatcherInterface::class);
+                \rename($far, $outside->path('farther.txt'));
+                $events->dispatch(new FileRenamed($far, $outside->path('farther.txt')));
+                \unlink($outside->path('farther.txt'));
+                $events->dispatch(new FileDeleted($outside->path('farther.txt')));
                 \file_put_contents($outside->path('x.txt'), data: 'x');
                 $this->api($ide)->openFile($outside->path('x.txt'));
                 $this->await(fn (): bool => \str_ends_with((string) $this->api($ide)->activeFile(), '/x.txt'), what: 'a file of nobody else\'s in front');
