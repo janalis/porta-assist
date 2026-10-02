@@ -40,7 +40,12 @@ final class Tcp
             context: \stream_context_create($context),
         );
         if (false === $stream) {
+            // An address already looked up fails here only when the system
+            // is out of sockets: nothing a test can arrange.
+            // @codeCoverageIgnoreStart
             return \sprintf('cannot reach %s: %s', $where, $error);
+
+            // @codeCoverageIgnoreEnd
         }
         $writable = '';
         $timer = '';

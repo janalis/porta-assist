@@ -245,12 +245,9 @@ final class Connection
         return \hrtime(true) / 1e9;
     }
 
-    /** Let go of the socket, once. */
+    /** Let go of the socket: once — the linger timer and the drain each cancel the other. */
     private function hangUp(): void
     {
-        if (!\is_resource($this->stream)) {
-            return;
-        }
         $this->writer->close();
         \fclose($this->stream);
     }

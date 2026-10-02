@@ -702,10 +702,8 @@ final class GuestSession
      */
     private function keep(string $relative, array $doc): void
     {
-        $operation = Role::Edit === $this->role ? $doc['text']->read() : null;
-        if (null !== $operation) {
-            $doc['client']->local($operation);
-        }
+        $operations = Role::Edit === $this->role ? \array_filter([$doc['text']->read()]) : [];
+        \array_map($doc['client']->local(...), $operations);
         $this->carried->keep($relative, $doc['client']);
     }
 

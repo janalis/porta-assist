@@ -573,10 +573,9 @@ final class HostSession
             }
             $guest->send(['t' => 'presence', 'peer' => $other->id, 'name' => $other->name, ...$other->caret]);
         }
+        // Its own are not among them: what hung on an old connection of its
+        // went with it ({@see release()}).
         foreach ($this->agents as $id => $agent) {
-            if ($peer === $agent['owner']) {
-                continue;
-            }
             $guest->send(['t' => 'presence', 'peer' => $id, 'name' => $agent['name'], 'agent' => true, ...$agent['caret']]);
         }
         // What it was let do before it dropped, it may do again — and is told.

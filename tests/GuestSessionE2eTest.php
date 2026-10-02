@@ -203,6 +203,38 @@ final class GuestSessionE2eTest extends TestCase
         ]);
     }
 
+    public function testBackReadingAlongWhatWasTypedIsSaidAndATerminalIsShownOnce(): void
+    {
+        $invite = $this->listen();
+        $project = $this->copy($invite);
+        $path = (string) \realpath($project->path('src/A.php'));
+
+        $this->runIde($project, $path, [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
+                $this->welcomeGuest();
+                $this->shareFile('src/A.php', "one\n");
+                $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => 'tests', 'data' => \base64_encode('first')]);
+                $this->await(static fn (): bool => self::toasted($ide, 'shared a terminal: tests'), what: 'the terminal');
+                $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
+                $terminal->simulateInput('x');
+                $this->expect('op');
+
+                $this->dropPeer();
+                $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
+                $this->welcomeGuest('read');
+                $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => 'tests', 'data' => \base64_encode('again')]);
+                $this->shareFile('src/A.php', "one\n");
+
+                $this->await(static fn (): bool => self::toasted($ide, 'What you typed in src/A.php while away was not sent: you can only read along now'), what: 'said, not dropped silently');
+                $this->assertSame("one\n", $this->bufferText($ide, $path));
+                $runs = $this->api($ide)->runs();
+                $this->await(static fn (): bool => \str_contains((string) $runs->scrollback('assist:run:x'), 'again'), what: 'the terminal sent again');
+                $this->assertStringNotContainsString('first', (string) $runs->scrollback('assist:run:x'), 'from the top, not on top of what was there');
+                $this->hangUp();
+            },
+        ]);
+    }
+
     public function testSomeoneElseAnsweringAtTheHostsAddressIsNotRejoined(): void
     {
         $invite = $this->listen();

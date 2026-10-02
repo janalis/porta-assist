@@ -241,11 +241,9 @@ final class HostServersE2eTest extends TestCase
                 $this->say(['t' => 'tunnel-close', 'conn' => 2]);
                 $this->awaitClosed($this->devAccepts($port), 'the connection let go');
 
-                // A port shared with nothing behind it: said closed, the IDE never held.
-                $free = \stream_socket_server('tcp://127.0.0.1:0');
-                $this->assertNotFalse($free);
-                $dead = (int) \substr((string) \stream_socket_get_name($free, remote: false), offset: 10);
-                \fclose($free);
+                // A port shared with nothing behind it — port 1, which no parallel
+                // test can take, as a freed one could be: said closed, the IDE never held.
+                $dead = 1;
                 $this->command($ide, 'assist:share_server');
                 $this->awaitPainted($tui, $terminal, 'Another port');
                 $terminal->simulateInput(self::DOWN."\r");

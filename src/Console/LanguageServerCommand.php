@@ -148,7 +148,12 @@ final class LanguageServerCommand extends PluginCommand
                     return;
                 }
                 if ('' === $bytes) {
+                    // A TLS record with nothing in it for this side: when the
+                    // server sends one is OpenSSL's, not a test's, to choose.
+                    // @codeCoverageIgnoreStart
                     continue;
+
+                    // @codeCoverageIgnoreEnd
                 }
                 $stream === $socket ? $this->toEditor($lines->feed($bytes)) : $this->toHost($socket, $frames->feed($bytes));
             }

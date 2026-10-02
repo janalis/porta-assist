@@ -188,7 +188,7 @@ final class TransportTest extends TestCase
     {
         [$connection, $client] = $this->loopback();
         $connection->listen(static function (array $message): void {}, static function (): void {});
-        $pad = \str_repeat('x', times: 2_000_000);
+        $pad = \str_repeat('x', times: 600_000); // past what the socket takes at once, well within the linger
 
         $connection->close('removed', ['t' => 'bye', 'pad' => $pad]);
 
