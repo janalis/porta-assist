@@ -229,8 +229,21 @@ trait TalksAssist
     /** @param array<string, mixed> $message */
     private function say(array $message): void
     {
+        $this->sayTogether($message);
+    }
+
+    /**
+     * Several messages in ONE write, so the other end reads them together and
+     * handles them in one turn of its loop — what a test of "this arrived
+     * before that had happened" needs. Sent one write apiece, a slower machine
+     * reads them apart, with the loop turning in between.
+     *
+     * @param array<string, mixed> ...$messages
+     */
+    private function sayTogether(array ...$messages): void
+    {
         $this->assertIsResource($this->peer);
-        \fwrite($this->peer, Wire::encode($message));
+        \fwrite($this->peer, \implode('', \array_map(Wire::encode(...), $messages)));
     }
 
     /**

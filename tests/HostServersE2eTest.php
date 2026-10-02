@@ -229,16 +229,20 @@ final class HostServersE2eTest extends TestCase
                 $this->expect('server');
 
                 // Sent before the host is connected: held, then passed on.
-                $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 1]);
-                $this->say(['t' => 'tunnel-data', 'conn' => 1, 'data' => \base64_encode('early')]);
-                $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 1]);
+                $this->sayTogether(
+                    ['t' => 'tunnel-open', 'port' => $port, 'conn' => 1],
+                    ['t' => 'tunnel-data', 'conn' => 1, 'data' => \base64_encode('early')],
+                    ['t' => 'tunnel-open', 'port' => $port, 'conn' => 1],
+                );
                 $this->assertSame(1, $this->expect('tunnel-close')['conn'], 'one connection id, once — even while it is made');
                 $served = $this->devAccepts($port);
                 $this->await(static fn (): bool => 'early' === \fread($served, length: 100), what: 'what was sent early');
 
                 // Closed at her end before the host got through: not kept.
-                $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 2]);
-                $this->say(['t' => 'tunnel-close', 'conn' => 2]);
+                $this->sayTogether(
+                    ['t' => 'tunnel-open', 'port' => $port, 'conn' => 2],
+                    ['t' => 'tunnel-close', 'conn' => 2],
+                );
                 $this->awaitClosed($this->devAccepts($port), 'the connection let go');
 
                 // A port shared with nothing behind it — port 1, which no parallel
