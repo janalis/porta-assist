@@ -9,6 +9,7 @@ use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Event\AgentActivity;
 use Porta\Event\AgentLeft;
+use Porta\Event\FileRenamed;
 use Porta\Event\WorkingTreeChanged;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
@@ -112,10 +113,11 @@ final class HostFilesE2eTest extends TestCase
                 $this->expect('error');
                 $this->assertSame([], \array_filter($this->inbox, static fn (array $m): bool => 'changed' === $m['t']), 'nothing changed, nothing said');
 
-                // The host renames a file outside the project: to the others, it is gone.
-                $api = $this->api($ide);
+                // The file moves outside the project (a shell's `mv`; the plugin
+                // API's own move stays inside it): to the others, it is gone.
                 $outside = new TempProject([]);
-                $api->openBuffers()->move($root.'/notes.txt', $outside->path('notes.txt'));
+                \rename($root.'/notes.txt', $outside->path('notes.txt'));
+                $this->emit($ide, new FileRenamed($root.'/notes.txt', $outside->path('notes.txt')));
                 $this->assertSame('notes.txt', $this->expect('deleted')['path']);
                 $this->hangUp();
             },
