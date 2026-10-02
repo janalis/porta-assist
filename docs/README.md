@@ -111,7 +111,13 @@ In a session, as a guest:
   refuse your keystrokes, with a message saying why. The caret, selection and
   copy still work.
 - **If the connection drops**, the shared files go read-only and Porta keeps
-  trying to reconnect. When it gets back in, it carries on from the host's copy.
+  trying to reconnect, less and less often. A connection that died silently —
+  a laptop asleep, a Wi-Fi changed — is noticed within half a minute. When it
+  gets back in, it carries on from the host's copy, and what you typed that
+  had not reached the host yet is sent again on top of it. Rights the host
+  gave you, to type in its terminals or run its configurations, come back
+  with you. A host that answers with another certificate than the invite
+  named is not rejoined.
 - **Assist: Leave the Session** ends it for you. The copy stays on disk for you
   to keep.
 - **Closing Porta** keeps the session. Opening the copy again rejoins it, as
