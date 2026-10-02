@@ -51,7 +51,9 @@ final readonly class LspRelay
         if (!$started) {
             return false;
         }
-        $this->guest->listen($this->fromGuest(...), $this->server->stop(...));
+        $this->guest->listen($this->fromGuest(...), function (): void {
+            $this->server->stop();
+        });
 
         return true;
     }
