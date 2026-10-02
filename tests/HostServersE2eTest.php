@@ -210,4 +210,52 @@ final class HostServersE2eTest extends TestCase
             },
         ]);
     }
+
+    public function testWhatHappensWhileAConnectionIsStillBeingMade(): void
+    {
+        $project = new TempProject([
+            'src/A.php' => "<?php\n",
+            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
+        ]);
+        $port = $this->devServer();
+
+        $this->runIde($project, $project->path('src/A.php'), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($port): void {
+                $invite = $this->invited($ide);
+                $this->letIn($tui, $terminal, $invite, 'Ana');
+                $this->command($ide, 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                $terminal->simulateInput($port."\r");
+                $this->expect('server');
+
+                // Sent before the host is connected: held, then passed on.
+                $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 1]);
+                $this->say(['t' => 'tunnel-data', 'conn' => 1, 'data' => \base64_encode('early')]);
+                $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 1]);
+                $this->assertSame(1, $this->expect('tunnel-close')['conn'], 'one connection id, once — even while it is made');
+                $served = $this->devAccepts($port);
+                $this->await(static fn (): bool => 'early' === \fread($served, length: 100), what: 'what was sent early');
+
+                // Closed at her end before the host got through: not kept.
+                $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 2]);
+                $this->say(['t' => 'tunnel-close', 'conn' => 2]);
+                $this->awaitClosed($this->devAccepts($port), 'the connection let go');
+
+                // A port shared with nothing behind it: said closed, the IDE never held.
+                $free = \stream_socket_server('tcp://127.0.0.1:0');
+                $this->assertNotFalse($free);
+                $dead = (int) \substr((string) \stream_socket_get_name($free, remote: false), offset: 10);
+                \fclose($free);
+                $this->command($ide, 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, 'Another port');
+                $terminal->simulateInput(self::DOWN."\r");
+                $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                $terminal->simulateInput($dead."\r");
+                $this->assertSame($dead, $this->expect('server')['port']);
+                $this->say(['t' => 'tunnel-open', 'port' => $dead, 'conn' => 4]);
+                $this->assertSame(4, $this->expect('tunnel-close')['conn']);
+                $this->hangUp();
+            },
+        ]);
+    }
 }

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Session;
 
+use Porta\AssistPlugin\Net\Rendezvous\Tcp;
 use Porta\AssistPlugin\Net\Tunnel;
 use Porta\AssistPlugin\Net\Wire;
+use Revolt\EventLoop;
 
 /**
  * The host's local servers, as the guests reach them: a port the host
@@ -21,6 +23,17 @@ final class HostServers
 
     /** @var array<string, array<int, array{port: int, tunnel: Tunnel}>> guest id => its connection id => where it goes */
     private array $tunnels = [];
+
+    /**
+     * Connections still being made here, and what the guest sent through
+     * them meanwhile: the connect waits on the loop, never holds it.
+     *
+     * @var array<string, array<int, array{port: int, early: string}>> guest id => its connection id => what to send once connected
+     */
+    private array $connecting = [];
+
+    /** Seconds a port here has to answer. */
+    private const float TIMEOUT = 2.0;
 
     /** @param \Closure(array<string, mixed>, ?string=): void $broadcast to every guest, or every one but the one named */
     public function __construct(
@@ -73,9 +86,36 @@ final class HostServers
     {
         $port = Wire::int($message, 'port');
         $conn = Wire::int($message, 'conn', -1);
-        $stream = \array_key_exists($port, $this->shared) && !\array_key_exists($conn, $this->tunnels[$guest->id] ?? []) ? self::connect($port) : null;
-        if (null === $stream) {
+        $taken = \array_key_exists($conn, $this->tunnels[$guest->id] ?? []) || \array_key_exists($conn, $this->connecting[$guest->id] ?? []);
+        if (!\array_key_exists($port, $this->shared) || $taken) {
             $guest->send(['t' => 'tunnel-close', 'conn' => $conn]);
+
+            return;
+        }
+        $this->connecting[$guest->id][$conn] = ['port' => $port, 'early' => ''];
+        EventLoop::queue(fn () => $this->connect($guest, $conn, $port));
+    }
+
+    /**
+     * Connect to $port here, on the loop — a port that drops what it is sent
+     * would otherwise freeze the IDE for the whole timeout — and tie it to
+     * the guest's connection, when that is still wanted.
+     */
+    private function connect(Guest $guest, int $conn, int $port): void
+    {
+        $stream = Tcp::connect('127.0.0.1', $port, self::TIMEOUT);
+        $stream = \is_string($stream) ? Tcp::connect('::1', $port, self::TIMEOUT) : $stream;
+        $pending = $this->connecting[$guest->id][$conn] ?? null;
+        unset($this->connecting[$guest->id][$conn]);
+        if (\is_string($stream)) {
+            $guest->send(['t' => 'tunnel-close', 'conn' => $conn]);
+
+            return;
+        }
+        // Closed at the guest's end, the guest gone, or the port unshared
+        // meanwhile — when it was, the guest was told so already.
+        if (null === $pending || !\array_key_exists($port, $this->shared)) {
+            \fclose($stream);
 
             return;
         }
@@ -91,15 +131,25 @@ final class HostServers
                 },
             ),
         ];
+        if ('' !== $pending['early']) {
+            $this->tunnels[$guest->id][$conn]['tunnel']->write($pending['early']);
+        }
     }
 
     /** @param array<string, mixed> $message bytes for one of a guest's connections */
     public function data(Guest $guest, array $message): void
     {
         $bytes = \base64_decode(Wire::string($message, 'data'), strict: true);
-        if (false !== $bytes) {
-            ($this->tunnels[$guest->id][Wire::int($message, 'conn', -1)]['tunnel'] ?? null)?->write($bytes);
+        $conn = Wire::int($message, 'conn', -1);
+        if (false === $bytes) {
+            return;
         }
+        if (\array_key_exists($conn, $this->connecting[$guest->id] ?? [])) {
+            $this->connecting[$guest->id][$conn]['early'] .= $bytes;
+
+            return;
+        }
+        ($this->tunnels[$guest->id][$conn]['tunnel'] ?? null)?->write($bytes);
     }
 
     /** @param array<string, mixed> $message one of a guest's connections, closed at its end */
@@ -107,7 +157,7 @@ final class HostServers
     {
         $conn = Wire::int($message, 'conn', -1);
         ($this->tunnels[$guest->id][$conn]['tunnel'] ?? null)?->finish();
-        unset($this->tunnels[$guest->id][$conn]);
+        unset($this->tunnels[$guest->id][$conn], $this->connecting[$guest->id][$conn]);
     }
 
     /** A guest gone: what it had open goes with it. */
@@ -116,7 +166,7 @@ final class HostServers
         foreach ($this->tunnels[$guest->id] ?? [] as $tunnel) {
             $tunnel['tunnel']->close();
         }
-        unset($this->tunnels[$guest->id]);
+        unset($this->tunnels[$guest->id], $this->connecting[$guest->id]);
     }
 
     /**
@@ -127,20 +177,7 @@ final class HostServers
     public function stop(): void
     {
         $this->tunnels = [];
+        $this->connecting = [];
         $this->shared = [];
-    }
-
-    /** @return resource|null a connection to the port on this machine, or null when nothing answers there */
-    private static function connect(int $port)
-    {
-        foreach (['127.0.0.1', '[::1]'] as $host) {
-            // @mago-expect lint:no-error-control-operator -- a refused connection warns as well as returning false; false is the answer
-            $stream = @\stream_socket_client(\sprintf('tcp://%s:%d', $host, $port), timeout: 2.0);
-            if (false !== $stream) {
-                return $stream;
-            }
-        }
-
-        return null;
     }
 }
