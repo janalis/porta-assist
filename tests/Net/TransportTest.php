@@ -316,18 +316,26 @@ final class TransportTest extends TestCase
         $door = new Door(new SessionKey(\random_bytes(32)), (string) \stream_socket_get_name($relay, remote: false), $this->certificate, static function (): void {}, 1.0, rewait: 0.2);
         $asked = [];
         $held = [];
+        $buffers = [];
 
         $door->open();
         $this->await(
-            static function () use ($relay, &$asked, &$held): bool {
+            static function () use ($relay, &$asked, &$held, &$buffers): bool {
                 // @mago-expect lint:no-error-control-operator -- nothing waiting to be accepted warns; false is the answer
                 while (false !== ($socket = @\stream_socket_accept($relay, timeout: 0))) {
+                    // Non-blocking: each wait is a fresh connection sending ONE
+                    // line, and a blocking read of one already read waits for a
+                    // second that never comes — on a runner slower to close it
+                    // than this loop is to come back, until the time limit.
+                    \stream_set_blocking($socket, enable: false);
                     $held[] = $socket;
+                    $buffers[] = '';
                 }
-                foreach ($held as $socket) {
-                    $line = \fgets($socket);
-                    if (\is_string($line)) {
-                        $asked[] = \trim($line);
+                foreach ($held as $i => $socket) {
+                    $buffers[$i] .= (string) \fread($socket, length: 8192);
+                    while (false !== ($end = \strpos($buffers[$i], needle: "\n"))) {
+                        $asked[] = \trim(\substr($buffers[$i], offset: 0, length: $end));
+                        $buffers[$i] = \substr($buffers[$i], $end + 1);
                     }
                 }
 
