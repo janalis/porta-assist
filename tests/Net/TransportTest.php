@@ -186,19 +186,35 @@ final class TransportTest extends TestCase
 
     public function testALastMessageToAPeerThatReadsArrivesWholeBeforeTheSocketCloses(): void
     {
-        [$connection, $client] = $this->loopback();
+        // A socket pair, not loopback TCP. TCP's buffers autotune, so a fresh
+        // loopback socket took anywhere from ~330 KB to all of 600 KB at once
+        // (all of it 85 times in 200), and between two writes the kernel moves
+        // more to the peer. Then the last message went out inside close(),
+        // nothing was left to drain, and the drain this test is about never
+        // ran. A Unix pair holds a fixed 8 KB here (~200 KB on Linux).
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertNotFalse($pair);
+        [$ours, $client] = $pair;
+        $connection = new Connection($ours);
         $connection->listen(static function (array $message): void {}, static function (): void {});
-        $pad = \str_repeat('x', times: 600_000); // past what the socket takes at once, well within the linger
+        $pad = \str_repeat('x', times: 1_000_000);
 
         $connection->close('removed', ['t' => 'bye', 'pad' => $pad]);
+        $this->assertGreaterThan(0, $connection->backlog(), 'the message is still queued, so it leaves by the drain');
 
+        // Read on the loop, not between await turns: a turn is ~20 ms, and one
+        // buffer's worth per turn would outlast the linger.
         \stream_set_blocking($client, enable: false);
         $received = '';
-        $this->await(static function () use (&$received, $client): bool {
+        $reader = EventLoop::onReadable($client, static function () use (&$received, $client): void {
             $received .= (string) \fread($client, length: 1_048_576);
-
-            return \feof($client);
-        }, what: 'the whole message, then the close');
+        });
+        try {
+            // By value is right here: the handle never changes, only its state.
+            $this->await(static fn (): bool => \feof($client), what: 'the whole message, then the close');
+        } finally {
+            EventLoop::cancel($reader);
+        }
         $this->assertSame(['t' => 'bye', 'pad' => $pad], \json_decode(\rtrim($received), associative: true));
         \fclose($client);
     }

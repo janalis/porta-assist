@@ -130,7 +130,11 @@ final class HostFilesE2eTest extends TestCase
                 $this->emit($ide, new AgentActivity('claude', 'Claude', $root.'/src/A.php', AgentActivityKind::Editing, 1, 2, 10.0));
                 $this->emit($ide, new AgentActivity('assist:'.$ana, 'Ana', $root.'/src/A.php', AgentActivityKind::Editing, 1, 2, 10.0));
                 $this->emit($ide, new AgentActivity('elsewhere', 'X', '/elsewhere/a.php', AgentActivityKind::Editing, 1, 2, 10.0));
-                $claude = $this->expect('presence');
+                // The host's own caret may come first: on a loaded box its first
+                // sample lands after the welcome, and is broadcast when taken.
+                do {
+                    $claude = $this->expect('presence');
+                } while ('host' === $claude['peer']);
                 $this->assertSame(['host~claude', 'Claude', true, 'src/A.php', 1, 2], [$claude['peer'], $claude['name'], $claude['agent'], $claude['path'], $claude['line'], $claude['column']]);
 
                 // The guest's agent, shown here with its name.

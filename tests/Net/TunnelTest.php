@@ -112,13 +112,17 @@ final class TunnelTest extends TestCase
         $this->assertTrue($resumed, 'nothing queued: at once');
 
         // The peer is not reading: the session's queue fills past the mark.
-        $connection->send(['t' => 'file', 'data' => \str_repeat('a', times: 3 * Tunnel::HIGH_WATER)]);
+        // Far past it: an unread loopback pair goes on absorbing up to ~3 MB
+        // while the loop turns, and 3x the mark once fell under it during the
+        // pump below on a loaded box, so reading rightly resumed.
+        $connection->send(['t' => 'file', 'data' => \str_repeat('a', times: 6 * Tunnel::HIGH_WATER)]);
         $this->assertGreaterThan(Tunnel::HIGH_WATER, $connection->backlog());
         [$app, $held, $out] = $this->tunnel($connection);
         [$gone, $closed] = $this->tunnel($connection);
         \fwrite($app, data: 'more');
         \fwrite($gone, data: 'never sent');
         $this->pump(0.2);
+        $this->assertGreaterThan(Tunnel::HIGH_WATER, $connection->backlog(), 'still behind after the pump, or the next assertion proves nothing');
         $this->assertSame([], (array) $out, 'held back while the session is behind');
         $closed->close();
 
