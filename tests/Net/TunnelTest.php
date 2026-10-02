@@ -127,8 +127,13 @@ final class TunnelTest extends TestCase
         $closed->close();
 
         // The peer catches up: reading resumes.
+        // Everything there is, each turn: a non-blocking fread returns one
+        // 8 KiB chunk whatever length it is asked for, and at one chunk a turn
+        // the ~8 MB queue outlasted the 10 s limit — the "flake" was arithmetic.
         $this->await(static function () use ($peer, $connection): bool {
-            \fread($peer, length: 1_048_576);
+            while ('' !== (string) \fread($peer, length: 1_048_576)) {
+                // drained a chunk; there may be more
+            }
 
             return 0 === $connection->backlog();
         }, what: 'the session to catch up');
