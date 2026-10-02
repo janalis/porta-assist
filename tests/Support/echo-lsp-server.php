@@ -25,6 +25,26 @@ while (false !== ($chunk = fread(STDIN, length: 65_536)) && '' !== $chunk) {
         if (!array_key_exists('id', $message)) {
             continue;
         }
+        // `test/askConfiguration`: ask the client how it is configured, then
+        // tell it what the answer was (`test/configured`) — so a test can see
+        // who answered, and what.
+        if ('cfg' === $message['id'] && !array_key_exists('method', $message)) {
+            $told = json_encode(['jsonrpc' => '2.0', 'method' => 'test/configured', 'params' => ['result' => $message['result'] ?? null]], JSON_UNESCAPED_SLASHES);
+            fwrite(STDOUT, 'Content-Length: '.strlen($told)."\r\n\r\n".$told);
+            fflush(STDOUT);
+
+            continue;
+        }
+        if ('test/askConfiguration' === ($message['method'] ?? null)) {
+            $ask = json_encode([
+                'jsonrpc' => '2.0',
+                'id' => 'cfg',
+                'method' => 'workspace/configuration',
+                'params' => ['items' => [['section' => 'php'], ['section' => 'symfony']]],
+            ], JSON_UNESCAPED_SLASHES);
+            fwrite(STDOUT, 'Content-Length: '.strlen($ask)."\r\n\r\n".$ask);
+            fflush(STDOUT);
+        }
         $answer = json_encode([
             'jsonrpc' => '2.0',
             'id' => $message['id'],

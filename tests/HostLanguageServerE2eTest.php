@@ -121,6 +121,18 @@ final class HostLanguageServerE2eTest extends TestCase
                 $reconfigure = $this->ask(['jsonrpc' => '2.0', 'id' => 5, 'method' => 'workspace/didChangeConfiguration', 'params' => ['settings' => ['phpCommand' => 'evil']]]);
                 $this->assertSame(5, $reconfigure['id']);
                 $this->assertArrayHasKey('error', $reconfigure);
+                $widen = $this->ask([
+                    'jsonrpc' => '2.0',
+                    'id' => 6,
+                    'method' => 'workspace/didChangeWorkspaceFolders',
+                    'params' => ['event' => ['added' => [['uri' => 'file:///', 'name' => 'all']], 'removed' => []]],
+                ]);
+                $this->assertArrayHasKey('error', $widen, 'nor read past the share');
+                // The server asking how it is configured is answered by the host —
+                // with nothing, so it keeps the host's options — never by the guest.
+                $this->assertSame(7, $this->ask(['jsonrpc' => '2.0', 'id' => 7, 'method' => 'test/askConfiguration'])['id']);
+                $told = $this->expect('lsp')['m'];
+                $this->assertSame(['test/configured', [null, null]], [$told['method'] ?? null, $told['params']['result'] ?? null]);
 
                 // A question about the copy's file reaches the server about the host's — and the answer comes back about the copy's.
                 $definition = $this->ask([

@@ -43,6 +43,7 @@ final class HostFilesE2eTest extends TestCase
             'src/A.php' => "<?php\necho 'a';\n",
             'README.md' => "# demo\nsecond line\n",
             'notes.txt' => "notes\n",
+            'node_modules/.env' => "SECRET=1\n", // under the root, never listed
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
     }
@@ -87,6 +88,17 @@ final class HostFilesE2eTest extends TestCase
                 $this->say(['t' => 'fetch', 'paths' => ['node_modules/w.js']]);
                 $this->assertSame('mine', \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true));
                 $this->expect('fetched');
+
+                // What the listing never offered is not a guest's to touch: not
+                // renamed to a listed name (and fetched), overwritten, or deleted.
+                $this->say(['t' => 'move', 'from' => 'node_modules/.env', 'to' => 'leak.txt']);
+                $this->assertSame(['node_modules/.env', 'not a file the host shares'], [($error = $this->expect('error'))['path'], $error['message']]);
+                $this->say(['t' => 'write', 'path' => 'node_modules/.env', 'data' => \base64_encode('SECRET=evil')]);
+                $this->assertSame('not a file the host shares', $this->expect('error')['message']);
+                $this->say(['t' => 'delete', 'path' => 'node_modules/.env']);
+                $this->assertSame('not a file the host shares', $this->expect('error')['message']);
+                $this->assertSame("SECRET=1\n", \file_get_contents($root.'/node_modules/.env'));
+                $this->assertFileDoesNotExist($root.'/leak.txt');
 
                 // Moved and deleted, the host's editor doing it: everyone told.
                 $this->say(['t' => 'move', 'from' => 'src/New.php', 'to' => 'src/Moved.php']);

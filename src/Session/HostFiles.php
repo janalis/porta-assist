@@ -21,6 +21,9 @@ final class HostFiles
     /** Bytes queued for a guest past which a batch waits for it to catch up. */
     public const int HIGH_WATER = 1_048_576;
 
+    /** Why a guest may not touch a file under the root the listing leaves out. */
+    private const string NOT_SHARED = 'not a file the host shares';
+
     /** The largest file whose encoding fits the queue a connection keeps, with room to spare. */
     private const int LARGEST = ((NonBlockingWriter::DEFAULT_LIMIT - self::HIGH_WATER) / 4) * 3;
 
@@ -66,12 +69,8 @@ final class HostFiles
      */
     public function fetch(Guest $guest, array $paths): void
     {
-        // Only what the listing shares: a gitignored `.env` is under the root
-        // and a valid path, but never offered — so never sent either.
-        $this->listed ??= $this->files->scan();
         while (null !== ($relative = \array_shift($paths))) {
-            $shared = \array_key_exists($relative, $this->listed) || \array_key_exists($relative, $this->written);
-            $path = $shared ? $this->paths->absolute($relative) : null;
+            $path = $this->offered($relative) ? $this->paths->absolute($relative) : null;
             $size = null === $path || !\is_file($path) ? null : (int) \filesize($path);
             // A file whose encoding could never be queued at all is sent as
             // not there, not as the end of the connection.
@@ -95,7 +94,14 @@ final class HostFiles
     {
         $path = $this->paths->absolute($relative);
         $text = \base64_decode($data, strict: true);
+        // A new file, or one the host offered: overwriting an existing file it
+        // never listed (a gitignored `.env`) is not a guest's to do blind.
         if (Role::Edit !== $guest->role || null === $path || false === $text || $shared) {
+            return;
+        }
+        if (\file_exists($path) && !$this->offered($relative)) {
+            $this->refused($guest, $relative, self::NOT_SHARED);
+
             return;
         }
         $refused = $this->writeFile($path, $text);
@@ -113,10 +119,16 @@ final class HostFiles
     {
         $source = $this->paths->absolute($from);
         $target = $this->paths->absolute($to);
+        // Only what was offered: renaming an unlisted `.env` to a listed name
+        // would be fetching it with one more step.
         if (Role::Edit !== $guest->role || null === $source || null === $target) {
             return;
         }
-        $this->refused($guest, $from, $this->api->openBuffers()->move($source, $target));
+        $why = $this->offered($from) ? $this->api->openBuffers()->move($source, $target) : self::NOT_SHARED;
+        if (null === $why) {
+            $this->written[$to] = true; // the guest's own doing, under its new name
+        }
+        $this->refused($guest, $from, $why);
     }
 
     public function delete(Guest $guest, string $relative): void
@@ -125,7 +137,7 @@ final class HostFiles
         if (Role::Edit !== $guest->role || null === $path) {
             return;
         }
-        $this->refused($guest, $relative, $this->api->openBuffers()->delete($path));
+        $this->refused($guest, $relative, $this->offered($relative) ? $this->api->openBuffers()->delete($path) : self::NOT_SHARED);
     }
 
     /**
@@ -171,6 +183,19 @@ final class HostFiles
         if ([] !== $changed || [] !== $gone) {
             ($this->broadcast)(['t' => 'changed', 'files' => $changed, 'gone' => $gone]);
         }
+    }
+
+    /**
+     * Whether the host shares $relative: listed (the project as git shows it,
+     * plus vendor), or written by a guest this session. A path under the root
+     * that the listing leaves out — a gitignored `.env` — is not a guest's to
+     * read, move, overwrite or delete.
+     */
+    private function offered(string $relative): bool
+    {
+        $this->listed ??= $this->files->scan();
+
+        return \array_key_exists($relative, $this->listed) || \array_key_exists($relative, $this->written);
     }
 
     /** Write a guest's file to disk: null once written, else why not — an open one is the host's to save. */

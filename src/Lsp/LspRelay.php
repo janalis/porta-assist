@@ -26,9 +26,10 @@ final readonly class LspRelay
     /**
      * What no guest may send, whatever the role: how the host's server is
      * configured is the host's — symfony-lsp's options name a PHP command
-     * it runs.
+     * it runs — and so is what it reads: a folder added past the share is
+     * the host's disk, read back through hover and symbols.
      */
-    private const array CONFIGURES = ['workspace/didChangeConfiguration'];
+    private const array CONFIGURES = ['workspace/didChangeConfiguration', 'workspace/didChangeWorkspaceFolders'];
 
     private Roots $toHost;
 
@@ -52,7 +53,7 @@ final readonly class LspRelay
     {
         $toGuest = $this->toHost->reversed();
         $started = $this->server->start(
-            fn (array $message) => $this->guest->send(['t' => 'lsp', 'm' => $toGuest->rewrite($message)]),
+            fn (array $message) => $this->fromServer($message, $toGuest),
             fn () => $this->guest->close('the language server stopped'),
         );
         if (!$started) {
@@ -68,6 +69,25 @@ final readonly class LspRelay
     public function stop(): void
     {
         $this->guest->close('the session ended');
+    }
+
+    /**
+     * The server's message, on to the guest — except its question of how it is
+     * configured, which is the host's to answer and not the guest's: the guest's
+     * answer would be its own settings, a PHP command among them. Answered here
+     * with nothing per item, so the server keeps the host's options.
+     *
+     * @param array<array-key, mixed> $message
+     */
+    private function fromServer(array $message, Roots $toGuest): void
+    {
+        if ('workspace/configuration' === ($message['method'] ?? null) && \array_key_exists('id', $message)) {
+            $items = \is_array($message['params'] ?? null) && \is_array($message['params']['items'] ?? null) ? $message['params']['items'] : [];
+            $this->server->send(['jsonrpc' => '2.0', 'id' => $message['id'], 'result' => \array_fill(0, \count($items), value: null)]);
+
+            return;
+        }
+        $this->guest->send(['t' => 'lsp', 'm' => $toGuest->rewrite($message)]);
     }
 
     /** @param array<string, mixed> $message */
