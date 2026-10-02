@@ -10,6 +10,7 @@ use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Editor\BufferManager;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
+use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\Services;
 use Porta\Tests\Support\TempProject;
@@ -110,6 +111,17 @@ final class HostSessionE2eTest extends TestCase
 
                 $this->say(['t' => 'bye']);
                 $this->await(static fn (): bool => self::toasted($ide, 'Ana left'), what: 'the host told');
+
+                // A goodbye for the moment keeps the way back open; one for good closes it.
+                $this->dial($invite);
+                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
+                $this->expect('welcome');
+                $this->say(['t' => 'bye', 'for' => 'good']);
+                $this->await($this->hungUp(...), what: 'let go');
+                $host = Probe::get($this->plugin($ide), 'host');
+                $this->assertIsObject($host);
+                $this->assertSame([], Probe::get($host, 'tickets'), 'the ticket lets nobody in now');
+                $this->assertSame([], Probe::get($host, 'doors'), 'and its door no longer waits at the relay');
                 $this->hangUp();
             },
         ]);

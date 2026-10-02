@@ -47,6 +47,9 @@ final class JoinCommand extends PluginCommand
     /** @var resource|null */
     private $socket;
 
+    /** Whether the host closed the connection — not the same news as it saying nothing. */
+    private bool $hungUp = false;
+
     private readonly LineFramer $framer;
 
     /** @var list<array<string, mixed>> */
@@ -199,7 +202,8 @@ final class JoinCommand extends PluginCommand
             return match (null === $message ? 'timeout' : Wire::string($message, 'reason')) {
                 'host' => 'The host turned you away',
                 'full' => 'The session is full',
-                'unanswered', 'timeout' => 'The host did not answer',
+                'busy' => 'Too many are waiting to be let in — try again in a moment',
+                'unanswered', 'timeout' => $this->silence('The host did not answer'),
                 'version' => 'The host runs a Porta that speaks another version of assist',
                 default => 'The host does not know this guest any more — ask the host for a new code',
             };
@@ -212,7 +216,7 @@ final class JoinCommand extends PluginCommand
         $this->send(['t' => 'manifest']);
         $message = $this->next($this->timeout * 6, 'manifest');
         if (null === $message) {
-            return 'The host did not list its files';
+            return $this->silence('The host did not list its files');
         }
         $host = Wire::files($message, 'files');
         $pruned = $mirror->prune($host);
@@ -223,7 +227,7 @@ final class JoinCommand extends PluginCommand
             while (true) {
                 $message = $this->next($this->timeout * 6);
                 if (null === $message) {
-                    return 'The host stopped sending files';
+                    return $this->silence('The host stopped sending files');
                 }
                 if ('fetched' === $message['t']) {
                     break;
@@ -238,9 +242,16 @@ final class JoinCommand extends PluginCommand
         return null;
     }
 
+    /** $why — or, when the host closed the connection, that. */
+    private function silence(string $why): string
+    {
+        return $this->hungUp ? 'The host closed the connection' : $why;
+    }
+
     /** @param array<string, mixed> $message */
     private function send(array $message): void
     {
+        // A write to a host that hung up is not checked: the read after it finds out.
         if (null !== $this->socket) {
             \fwrite($this->socket, Wire::encode($message));
         }
@@ -284,6 +295,8 @@ final class JoinCommand extends PluginCommand
             $bytes = \fread($socket, length: 262_144);
             \stream_set_blocking($socket, enable: true);
             if (false === $bytes || '' === $bytes && \feof($socket)) {
+                $this->hungUp = true;
+
                 return null;
             }
             foreach ($this->framer->feed($bytes) as $line) {

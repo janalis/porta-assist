@@ -264,7 +264,8 @@ final class GuestSession
     public function leave(): void
     {
         $this->over = true;
-        $this->connection?->close('left', ['t' => 'bye']);
+        // For good: the host forgets the ticket, and stops waiting for it.
+        $this->connection?->close('left', ['t' => 'bye', 'for' => 'good']);
         $this->end();
         $file = $this->mirror->root.'/'.self::FILE;
         if (\is_file($file)) {

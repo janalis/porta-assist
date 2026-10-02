@@ -248,7 +248,7 @@ final class AssistUiE2eTest extends TestCase
                 $this->assertSame('src/A.php', $this->expect('presence')['path'], 'where this guest is, sent again at once');
                 $this->await(static fn (): bool => self::toasted($ide, 'Asked everyone to follow you'), what: 'the ask said');
                 ($this->menu($ide)['Leave the session']->run)();
-                $this->assertSame('bye', $this->expect('bye')['t']);
+                $this->assertSame('good', $this->expect('bye')['for'], 'for good: the host need not keep its way back');
                 $this->await(fn (): bool => null === $this->cell($ide), what: 'gone from the status bar');
                 $this->hangUp();
             },

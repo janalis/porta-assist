@@ -182,7 +182,7 @@ final class HostAdmissionE2eTest extends TestCase
                 $this->askIn($invite, 'Fay');
                 $this->hangUp();
                 $this->await(static fn (): bool => [] === Probe::get($host, 'pending'), what: 'the host to see Fay give up');
-                $this->answer($tui, $terminal, 'Fay asks to join', downs: 0);
+                $this->assertNull(Probe::get(Probe::object($tui->getById('editor'), 'overlayHost'), 'overlay'), 'the question about Fay went with her');
                 $this->assertIsResource($di);
                 \fclose($di);
                 $this->await(static fn (): bool => self::toasted($ide, 'Di left'), what: 'Di gone, Fay never in');

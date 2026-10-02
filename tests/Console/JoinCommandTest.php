@@ -147,13 +147,14 @@ final class JoinCommandTest extends TestCase
         $cases = [
             'deny:host' => 'The host turned you away',
             'deny:full' => 'The session is full',
+            'deny:busy' => 'Too many are waiting to be let in',
             'deny:unanswered' => 'The host did not answer',
             'deny:version' => 'speaks another version of assist',
             'deny:expired' => 'The host does not know this guest any more',
             'silent' => 'The host did not answer',
             'garbled' => 'a welcome this Porta does not understand',
             'no-list' => 'The host did not list its files',
-            'cut' => 'The host stopped sending files',
+            'cut' => 'The host closed the connection',
         ];
         $project = new TempProject(['a.txt' => 'a']);
         foreach ($cases as $mode => $says) {

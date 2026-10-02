@@ -258,13 +258,24 @@ final class HostSession
     {
         $guest = $this->guests[$peer] ?? null;
         if (null !== $guest) {
-            unset($this->tickets[$guest->ticket], $this->rights[$peer]);
-            // Nor the way back the code gave it.
-            ($this->doors[$peer] ?? null)?->close();
-            unset($this->doors[$peer]);
-            $this->stopRelays($peer);
-            $guest->connection->close('removed by the host', ['t' => 'bye', 'reason' => 'removed']);
+            $this->forgetTicket($guest, ['t' => 'bye', 'reason' => 'removed']);
         }
+    }
+
+    /**
+     * $guest is not coming back — removed, or it left for good: its ticket
+     * lets nobody in, its door stops waiting at the relay, and its
+     * connection goes, after $last when there is one.
+     *
+     * @param array<string, mixed>|null $last
+     */
+    private function forgetTicket(Guest $guest, ?array $last = null): void
+    {
+        unset($this->tickets[$guest->ticket], $this->rights[$guest->id]);
+        ($this->doors[$guest->id] ?? null)?->close();
+        unset($this->doors[$guest->id]);
+        $this->stopRelays($guest->id);
+        $guest->connection->close(null === $last ? 'left for good' : 'removed by the host', $last);
     }
 
     // --- Terminals ---------------------------------------------------------------
@@ -460,25 +471,22 @@ final class HostSession
             return;
         }
         $connection->send(['t' => 'pending']);
-        $answered = false;
-        $timeout = EventLoop::unreference(EventLoop::delay($this->answerTimeout, static function () use ($connection, &$answered): void {
-            $answered = true;
+        // Unanswered in time: turned away — and, closed, the question withdrawn below.
+        $timeout = EventLoop::unreference(EventLoop::delay($this->answerTimeout, static function () use ($connection): void {
             $connection->close('not answered', ['t' => 'denied', 'reason' => 'unanswered']);
         }));
-        $this->api->pick(
+        $withdraw = $this->api->pick(
             $this->api->trans('%name% asks to join', ['%name%' => $name]),
             [
                 Role::Edit->value => $this->api->trans('Let them edit'),
                 Role::ReadOnly->value => $this->api->trans('Let them read along'),
                 'deny' => $this->api->trans('Turn them away'),
             ],
-            function (string $answer) use ($id, $connection, $name, $timeout, &$answered): void {
+            // Only ever answered while the asker is there: a connection that
+            // closes — gone, or timed out — withdraws the question with it.
+            function (string $answer) use ($id, $connection, $name, $timeout): void {
                 EventLoop::cancel($timeout);
                 $role = Role::tryFrom($answer);
-                if ($answered || $connection->isClosed()) {
-                    return;
-                }
-                $answered = true;
                 if (null === $role) {
                     $connection->close('turned away', ['t' => 'denied', 'reason' => 'host']);
 
@@ -487,6 +495,12 @@ final class HostSession
                 $this->admit($id, $connection, 'g'.$id, $name, $role, \bin2hex(\random_bytes(16)));
             },
         );
+        // Gone before anyone answered: the question goes with them.
+        $connection->listen(static function (array $message): void {}, function () use ($id, $timeout, $withdraw): void {
+            EventLoop::cancel($timeout);
+            $this->unpend($id);
+            $withdraw();
+        });
     }
 
     /**
@@ -656,7 +670,7 @@ final class HostSession
             'write' => $this->files->write($guest, Wire::string($message, 'path'), Wire::string($message, 'data'), \array_key_exists(Wire::string($message, 'path'), $this->docs)),
             'move' => $this->files->move($guest, Wire::string($message, 'from'), Wire::string($message, 'to')),
             'delete' => $this->files->delete($guest, Wire::string($message, 'path')),
-            'bye' => $guest->connection->close('left'),
+            'bye' => 'good' === Wire::string($message, 'for') ? $this->forgetTicket($guest) : $guest->connection->close('left'),
             default => null,
         };
     }
