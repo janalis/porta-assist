@@ -6,6 +6,7 @@ namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
 use Porta\AssistPlugin\Net\Wire;
@@ -170,6 +171,49 @@ final class GuestSessionE2eTest extends TestCase
                 $this->assertFileDoesNotExist($project->path(GuestSession::FILE), 'the copy forgets the session');
                 $this->assertSame([], $roster->all(), 'and its people');
                 $this->command($ide, 'assist:leave');
+            },
+        ]);
+    }
+
+    public function testWhatWasTypedAndNeverAcknowledgedIsSentAgainOnceBack(): void
+    {
+        $invite = $this->listen();
+        $project = $this->copy($invite);
+        $path = (string) \realpath($project->path('src/A.php'));
+
+        $this->runIde($project, $path, [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
+                $this->welcomeGuest();
+                $this->shareFile('src/A.php', "one\n");
+                $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
+                $terminal->simulateInput('x');
+                $this->assertSame(['x', 4], $this->expect('op')['ops'], 'sent — and never acknowledged');
+
+                $this->dropPeer();
+                $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
+
+                // The host never applied it, and someone else wrote meanwhile.
+                $this->welcomeGuest();
+                $this->shareFile('src/A.php', "one\ntheirs\n");
+
+                $this->await(fn (): bool => "xone\ntheirs\n" === $this->bufferText($ide, $path), what: 'theirs, and mine on top');
+                $this->assertSame(['x', 11], $this->expect('op')['ops'], 'sent again, onto the host\'s text');
+                $this->hangUp();
+            },
+        ]);
+    }
+
+    public function testSomeoneElseAnsweringAtTheHostsAddressIsNotRejoined(): void
+    {
+        $invite = $this->listen();
+        // The invite names another certificate than the one that answers.
+        $project = $this->copy(new Invite($invite->key, $invite->transit, Certificate::create()->fingerprint, $invite->token));
+
+        $this->runIde($project, (string) \realpath($project->path('src/A.php')), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
+                $this->await(static fn (): bool => self::toasted($ide, 'Not rejoining: the host is not the one the invite names'), what: 'the impostor refused');
+                $this->assertFalse(self::toasted($ide, 'trying again'), 'and not tried again');
+                $this->hangUp();
             },
         ]);
     }

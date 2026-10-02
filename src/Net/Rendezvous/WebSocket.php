@@ -33,6 +33,12 @@ final class WebSocket
 
     private ?string $closed = null;
 
+    /** Pings sent since the server last said anything at all. */
+    private int $unanswered;
+
+    /** How many pings may go unanswered before the server is taken for gone. */
+    public const int PATIENCE = 2;
+
     /** @param resource $stream connected, non-blocking, past the handshake */
     private function __construct(
         private $stream,
@@ -120,8 +126,19 @@ final class WebSocket
     }
 
     /** A ping, for a server that drops a quiet socket. */
+    /**
+     * Keep a quiet socket open — and notice a server that is no longer
+     * there: TCP would take minutes to, and meanwhile the code a host reads
+     * out names a mailbox nobody can reach it through.
+     */
     public function ping(): void
     {
+        if ($this->unanswered >= self::PATIENCE) {
+            $this->hangUp('the server stopped answering');
+
+            return;
+        }
+        ++$this->unanswered;
         $this->writer->write(Frames::encode(Frames::PING, '', \random_bytes(4)));
     }
 
@@ -142,6 +159,7 @@ final class WebSocket
 
     private function received(string $bytes): void
     {
+        $this->unanswered = 0;
         foreach ($this->frames->feed($bytes) as [$opcode, $payload]) {
             match ($opcode) {
                 Frames::TEXT => $this->deliver($payload),

@@ -27,6 +27,14 @@ final class Door
     /** Channels waited on past the last one joined. */
     public const int WINDOW = 4;
 
+    /**
+     * Seconds one wait at the relay lasts before it is made again. A wait
+     * sends nothing, so one whose socket died with the network — the host's
+     * laptop asleep, its Wi-Fi changed — would otherwise wait forever, and
+     * every guest's way back with it.
+     */
+    public const float REWAIT = 120.0;
+
     /** @var array<int, Transit> the waits, by channel */
     private array $waits = [];
 
@@ -46,6 +54,7 @@ final class Door
         private readonly Certificate $certificate,
         private readonly \Closure $onStream,
         private readonly float $timeout = 10.0,
+        private readonly float $rewait = self::REWAIT,
     ) {
         $this->side = \bin2hex(\random_bytes(8));
     }
@@ -89,7 +98,7 @@ final class Door
             $since = \hrtime(true);
             $transit = Transit::at($this->transit, $this->timeout);
             $this->waits[$channel] = $transit;
-            $stream = $transit->pair($this->key->channel($channel), $this->side, wait: null, context: $this->certificate->serverContext());
+            $stream = $transit->pair($this->key->channel($channel), $this->side, wait: $this->rewait, context: $this->certificate->serverContext());
             // @mago-expect analysis:redundant-null-coalesce -- close() and widen() unset it while pair() waits
             if (($this->waits[$channel] ?? null) !== $transit) {
                 // Called off — by close(), or left behind by widen(): pair()

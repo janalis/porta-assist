@@ -138,9 +138,17 @@ final class LanguageServerCommand extends PluginCommand
                 // @codeCoverageIgnoreEnd
             }
             foreach ($read as $stream) {
+                // The socket is read without blocking: readable can be a TLS
+                // record with nothing in it for this side — a session ticket —
+                // which is no end of anything, and a blocking read would wait
+                // out the socket's timeout on it and take it for one.
+                \stream_set_blocking($stream, enable: $stream !== $socket);
                 $bytes = \fread($stream, length: 262_144);
-                if (false === $bytes || '' === $bytes) {
+                if (false === $bytes || '' === $bytes && \feof($stream)) {
                     return;
+                }
+                if ('' === $bytes) {
+                    continue;
                 }
                 $stream === $socket ? $this->toEditor($lines->feed($bytes)) : $this->toHost($socket, $frames->feed($bytes));
             }

@@ -7,6 +7,7 @@ namespace Porta\AssistPlugin\Session;
 use Porta\AssistPlugin\Net\Connection;
 use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
 use Porta\AssistPlugin\Net\Rendezvous\Invite;
+use Porta\AssistPlugin\Net\Tls;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Ot\ClientDocument;
 use Porta\AssistPlugin\Ot\TextDiff;
@@ -54,6 +55,12 @@ final class GuestSession
 
     /** @var array<string, true> files asked for, not answered yet */
     private array $opening = [];
+
+    /** What was typed and never acknowledged when the connection dropped: carried onto the host's copy when it is shared again. */
+    private readonly CarriedEdits $carried;
+
+    /** Why the host was last lost, while it is: said once, not at every try. */
+    private ?string $lostFor = null;
 
     /** @var array<string, string> peer => name */
     private array $peers = [];
@@ -113,6 +120,7 @@ final class GuestSession
         private readonly float $timeout = 10.0,
     ) {
         $this->presence = new Presence($api, $mirror->paths);
+        $this->carried = new CarriedEdits();
         $this->runs = new GuestRuns($api, $this->send(...));
         $this->debug = new GuestDebug($api, $mirror->paths, $this->send(...));
     }
@@ -213,6 +221,7 @@ final class GuestSession
             return;
         }
         $connection = new Connection($stream);
+        $connection->keepAlive();
         $this->connection = $connection;
         $this->servers = new GuestServers($this->api, $connection, fn (): string => (string) $this->hostName);
         $connection->listen($this->receive(...), $this->lost(...));
@@ -450,7 +459,7 @@ final class GuestSession
             'deleted' => $this->hostDeleted(Wire::string($message, 'path')),
             'changed' => $this->hostChanged(Wire::files($message, 'files'), Wire::strings($message, 'gone')),
             'file' => $this->file(Wire::string($message, 'path'), $message),
-            'error' => $this->api->flash(Wire::text($message, 'path').': '.Wire::text($message, 'message')),
+            'error' => $this->refused(Wire::string($message, 'path'), Wire::text($message, 'path').': '.Wire::text($message, 'message')),
             'bye' => $this->bye(Wire::string($message, 'reason')),
             'terminal' => $this->terminal(Wire::string($message, 'id'), Wire::text($message, 'title'), Wire::string($message, 'data')),
             'terminal-out' => $this->api->runs()->feed(self::TERMINAL.Wire::string($message, 'id'), (string) \base64_decode(Wire::string($message, 'data'), strict: true)),
@@ -468,7 +477,9 @@ final class GuestSession
     private function welcome(array $message): void
     {
         $this->tries = 0;
+        $this->lostFor = null;
         $this->role = Role::tryFrom(Wire::string($message, 'role')) ?? Role::ReadOnly;
+        $before = $this->peers;
         $this->peers = [];
         $this->kinds = [];
         // @mago-expect analysis:mixed-assignment -- narrowed below
@@ -481,8 +492,14 @@ final class GuestSession
         }
         $this->hostName = $this->peers['host'] ?? null;
         $this->api->notify($this->api->trans('Connected to %name%\'s session', ['%name%' => (string) $this->hostName]), ToastSeverity::Success, slot: 'assist');
+        // Whoever left while this side was away: their marks go.
+        \array_map($this->presence->left(...), \array_keys(\array_diff_key($before, $this->peers)));
         // What is open here is asked again: after a drop, the host's copy is
-        // the one to carry on from.
+        // the one to carry on from — and what was typed here and never
+        // reached it is carried onto that ({@see share()}). Undo is the
+        // editor's own until then.
+        $buffers = $this->api->openBuffers();
+        \array_map(static fn (array $doc) => $buffers->reclaimHistory($doc['text']->path), $this->docs);
         $this->docs = [];
         $this->opening = [];
         foreach ($this->api->openBuffers()->files() as $file) {
@@ -523,6 +540,9 @@ final class GuestSession
     /** The connection is gone without a goodbye: read-only until it is back. */
     private function lost(string $reason): void
     {
+        // What was typed and not read yet is read now — it is carried over
+        // with what was sent and never acknowledged.
+        \array_map($this->keep(...), \array_keys($this->docs), $this->docs);
         $this->connection = null;
         $this->debug->reset();
         $this->servers?->stop();
@@ -531,13 +551,26 @@ final class GuestSession
         if ($this->over) {
             return;
         }
+        if (Tls::IMPOSTOR === $reason) {
+            // Not the link: someone else answers at the host's address, and
+            // will at the next try too.
+            $this->api->notify($this->api->trans('Not rejoining: %why%', ['%why%' => $reason]), ToastSeverity::Error, 8.0, slot: 'assist');
+            $this->over = true;
+            $this->end();
+
+            return;
+        }
         $buffers = $this->api->openBuffers();
         foreach ($this->docs as $doc) {
             $buffers->makeReadOnly($doc['text']->path);
         }
         $delay = Backoff::after($this->tries);
         ++$this->tries;
-        $this->api->notify($this->api->trans('Lost the host (%why%) — trying again', ['%why%' => $reason]), ToastSeverity::Warn, slot: 'assist');
+        // Said when it is news — every thirty seconds of the same reason is not.
+        if ($reason !== $this->lostFor) {
+            $this->api->notify($this->api->trans('Lost the host (%why%) — trying again', ['%why%' => $reason]), ToastSeverity::Warn, slot: 'assist');
+        }
+        $this->lostFor = $reason;
         // Everyone stays in the roster as last seen until the host is back —
         // or, for as long as it is not, until core takes them out.
         $this->api->participants()->outOfTouch();
@@ -551,8 +584,13 @@ final class GuestSession
     /** A terminal of the host's, shown here: what it shows now, and what it prints after. */
     private function terminal(string $id, string $title, string $data): void
     {
+        $again = \array_key_exists($id, $this->terminals);
         $this->terminals[$id] = $title;
         $runs = $this->api->runs();
+        if ($again) {
+            // Back after a drop: the host sends all of it again, from the top.
+            $runs->feed(self::TERMINAL.$id, "\x1b[3J");
+        }
         $runs->mirror(self::TERMINAL.$id, self::GLYPH.' '.$title, function (string $bytes) use ($id): void {
             if (!$this->typing) {
                 $this->api->flash($this->api->trans('This terminal is the host\'s — ask them to let you type'));
@@ -562,7 +600,9 @@ final class GuestSession
             $this->send(['t' => 'terminal-in', 'id' => $id, 'data' => \base64_encode($bytes)]);
         });
         $runs->feed(self::TERMINAL.$id, (string) \base64_decode($data, strict: true));
-        $this->api->notify($this->api->trans('%name% shared a terminal: %title%', ['%name%' => (string) $this->hostName, '%title%' => $title]), slot: 'assist');
+        if (!$again) {
+            $this->api->notify($this->api->trans('%name% shared a terminal: %title%', ['%name%' => (string) $this->hostName, '%title%' => $title]), slot: 'assist');
+        }
     }
 
     /** No longer shared: the tab stays, saying so, and takes no keys. */
@@ -609,6 +649,7 @@ final class GuestSession
             $this->terminalEnded($id);
         }
         $this->docs = [];
+        $this->carried->clear();
         $this->peers = [];
         $this->role = null;
         $this->api->participants()->set([]);
@@ -647,9 +688,62 @@ final class GuestSession
         }
         $buffers->edits($path, TextDiff::between($local, $text)->toEdits($local));
         $shared = SharedText::of($buffers, $path, $text);
-        $this->docs[$relative] = ['text' => $shared, 'client' => new ClientDocument($revision)];
+        $this->docs[$relative] = ['text' => $shared, 'client' => new ClientDocument($revision, $text)];
         $buffers->delegateHistory($path, fn (): bool => $this->replay($relative, undo: true), fn (): bool => $this->replay($relative, undo: false));
         Role::Edit === $this->role ? $buffers->makeWritable($path) : $buffers->makeReadOnly($path);
+        $this->carry($relative, $path, $text);
+    }
+
+    /**
+     * The connection dropped: what was typed into $relative and not read yet
+     * is read now, and kept with what was sent and never acknowledged.
+     *
+     * @param array{text: SharedText, client: ClientDocument} $doc
+     */
+    private function keep(string $relative, array $doc): void
+    {
+        $operation = Role::Edit === $this->role ? $doc['text']->read() : null;
+        if (null !== $operation) {
+            $doc['client']->local($operation);
+        }
+        $this->carried->keep($relative, $doc['client']);
+    }
+
+    /**
+     * Back after a drop: what was typed into $relative and never reached the
+     * host goes onto its copy now, as an edit made here — the next read
+     * sends it. One that can no longer be made here is said, not dropped
+     * without a word.
+     */
+    private function carry(string $relative, string $path, string $host): void
+    {
+        $operation = $this->carried->take($relative, $host);
+        if (null === $operation) {
+            return;
+        }
+        Role::Edit === $this->role
+            ? $this->api->openBuffers()->edits($path, $operation->toEdits($host))
+            : $this->api->notify($this->api->trans('What you typed in %file% while away was not sent: you can only read along now', ['%file%' => $relative]), ToastSeverity::Warn, slot: 'assist');
+        $this->read($relative);
+    }
+
+    /**
+     * The host would not share $relative: said — $said, already made safe
+     * to show — and a file asked for and not shared is this side's own
+     * again, undo and all.
+     */
+    private function refused(string $relative, string $said): void
+    {
+        $this->api->flash($said);
+        unset($this->opening[$relative]);
+        $this->carried->drop($relative);
+        $path = $this->mirror->paths->absolute($relative);
+        if (null === $path || \array_key_exists($relative, $this->docs)) {
+            return;
+        }
+        $buffers = $this->api->openBuffers();
+        $buffers->reclaimHistory($path);
+        $buffers->makeWritable($path);
     }
 
     private function reopen(string $relative): void

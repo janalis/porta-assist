@@ -41,7 +41,7 @@ final class ConvergenceTest extends TestCase
     {
         $this->host = new ServerDocument('one two');
         $this->hostUndo = new UndoStack();
-        $this->guests = [['text' => 'one two', 'doc' => new ClientDocument(0), 'undo' => new UndoStack(), 'inbox' => []]];
+        $this->guests = [['text' => 'one two', 'doc' => new ClientDocument(0, 'one two'), 'undo' => new UndoStack(), 'inbox' => []]];
 
         $this->guestTypes(0, 'one! two');
         $this->hostTypes('ONE two');
@@ -69,7 +69,7 @@ final class ConvergenceTest extends TestCase
         $this->guests = [];
         $this->toHost = [];
         for ($g = 0; $g < 3; ++$g) {
-            $this->guests[] = ['text' => $this->host->text, 'doc' => new ClientDocument(0), 'undo' => new UndoStack(), 'inbox' => []];
+            $this->guests[] = ['text' => $this->host->text, 'doc' => new ClientDocument(0, $this->host->text), 'undo' => new UndoStack(), 'inbox' => []];
         }
         for ($step = 0; $step < 400; ++$step) {
             $guest = \mt_rand(0, max: 2);

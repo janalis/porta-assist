@@ -105,4 +105,43 @@ final class HostRunsE2eTest extends TestCase
             },
         ]);
     }
+
+    public function testAGuestBackOnItsTicketMayDoWhatItWasLetDoBefore(): void
+    {
+        $project = new TempProject([
+            'src/A.php' => "<?php\n",
+            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
+        ]);
+
+        $this->runIde($project, $project->path('src/A.php'), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
+                $invite = $this->invited($ide);
+                $this->askIn($invite, 'Ana');
+                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $terminal->simulateInput("\r");
+                $welcome = $this->expect('welcome');
+                $this->permit($tui, $terminal, $ide, 'Ana', 'Let them run the run configurations', downs: 5);
+                $this->assertTrue($this->expect('running')['allowed']);
+
+                // Back before the host saw the old connection go.
+                $old = $this->peer;
+                $this->dial($invite);
+                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
+                $this->expect('welcome');
+                $this->assertTrue($this->expect('running')['allowed'], 'still hers');
+                $this->assertIsResource($old);
+                \fclose($old);
+
+                // Gone, the host seeing it go — then back.
+                $this->dropPeer();
+                $this->await(static fn (): bool => self::toasted($ide, 'Ana left'), what: 'the host to see her go');
+                $this->dial($invite);
+                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
+                $this->expect('welcome');
+                $this->assertTrue($this->expect('running')['allowed'], 'kept while she was away');
+                $this->command($ide, 'assist:stop');
+                $this->hangUp();
+            },
+        ]);
+    }
 }

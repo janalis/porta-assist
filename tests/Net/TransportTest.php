@@ -231,6 +231,101 @@ final class TransportTest extends TestCase
         $this->assertSame(['handler broke'], $errors);
     }
 
+    public function testAPeerThatFallsSilentIsTakenForGone(): void
+    {
+        [$connection, $client] = $this->loopback();
+        $why = null;
+        $connection->listen(static function (array $message): void {}, static function (string $reason) use (&$why): void {
+            $why = $reason;
+        });
+
+        $connection->keepAlive(every: 0.05, silence: 0.3);
+
+        $pings = '';
+        \stream_set_blocking($client, enable: false);
+        $this->await(static function () use (&$why, &$pings, $client): bool {
+            $pings .= (string) \fread($client, length: 4096);
+
+            return null !== $why;
+        }, what: 'the silence to be noticed');
+        $this->assertSame('no answer in 0 seconds', $why);
+        $this->assertGreaterThanOrEqual(2, \substr_count($pings, needle: '{"t":"ping"}'), 'it asked, more than once');
+        \fclose($client);
+    }
+
+    public function testAPeerThatPingsIsKeptAndKeepsUsAliveInTurn(): void
+    {
+        [$guest, $host] = $this->pair();
+        $closed = [];
+        $heard = [];
+        foreach (['guest' => $guest, 'host' => $host] as $name => $end) {
+            $end->listen(static function (array $message) use (&$heard): void {
+                $heard[] = $message['t'];
+            }, static function (string $why) use (&$closed, $name): void {
+                $closed[] = $name.': '.$why;
+            });
+        }
+
+        $host->keepAlive(every: 0.05, silence: 0.3);
+        $guest->keepAlive(every: 0.05, silence: 0.3);
+        $this->pump(0.6);
+
+        $this->assertSame([], $closed, 'both alive: each hears the other');
+        $this->assertSame([], $heard, 'pings are the connection\'s own, never a message');
+        $guest->close('done');
+        $this->await(static function () use (&$closed): bool {
+            return 2 === \count($closed);
+        }, what: 'both closed');
+    }
+
+    public function testTheFirstPingArmsTheOtherEnd(): void
+    {
+        [$guest, $host] = $this->pair();
+        $guest->listen(static function (array $message): void {}, static function (): void {});
+        $host->listen(static function (array $message): void {}, static function (): void {});
+        $this->assertNull(Probe::get($host, 'heartbeat'));
+
+        $guest->keepAlive();
+
+        $this->await(static fn (): bool => null !== Probe::get($host, 'heartbeat'), what: 'the ping to arrive');
+        $guest->close('done');
+        $host->close('done');
+    }
+
+    public function testAWaitAtTheRelayIsMadeAgainBeforeItCanGoStale(): void
+    {
+        $relay = \stream_socket_server('tcp://127.0.0.1:0');
+        $this->assertNotFalse($relay);
+        \stream_set_blocking($relay, enable: false);
+        $door = new Door(new SessionKey(\random_bytes(32)), (string) \stream_socket_get_name($relay, remote: false), $this->certificate, static function (): void {}, 1.0, rewait: 0.2);
+        $asked = [];
+        $held = [];
+
+        $door->open();
+        $this->await(
+            static function () use ($relay, &$asked, &$held): bool {
+                // @mago-expect lint:no-error-control-operator -- nothing waiting to be accepted warns; false is the answer
+                while (false !== ($socket = @\stream_socket_accept($relay, timeout: 0))) {
+                    $held[] = $socket;
+                }
+                foreach ($held as $socket) {
+                    $line = \fgets($socket);
+                    if (\is_string($line)) {
+                        $asked[] = \trim($line);
+                    }
+                }
+
+                return \count($asked) > \count(\array_unique($asked));
+            },
+            what: 'the same channel asked for again',
+        );
+
+        $door->close();
+        \array_map(\fclose(...), $held);
+        \fclose($relay);
+        $this->assertStringStartsWith('please relay ', $asked[0]);
+    }
+
     /** @return array{Connection, resource} a connection on plain loopback, and the other end, raw */
     private function loopback(): array
     {

@@ -7,6 +7,7 @@ namespace Porta\AssistPlugin\Session;
 use Porta\AssistPlugin\Workspace\Paths;
 use Porta\AssistPlugin\Workspace\ProjectFiles;
 use Porta\Plugin\Api\PluginApi;
+use Porta\Support\NonBlockingWriter;
 use Revolt\EventLoop;
 
 /**
@@ -17,6 +18,12 @@ use Revolt\EventLoop;
  */
 final class HostFiles
 {
+    /** Bytes queued for a guest past which a batch waits for it to catch up. */
+    public const int HIGH_WATER = 1_048_576;
+
+    /** The largest file whose encoding fits the queue a connection keeps, with room to spare. */
+    private const int LARGEST = ((NonBlockingWriter::DEFAULT_LIMIT - self::HIGH_WATER) / 4) * 3;
+
     /** @var array<string, array{size: int, hash: string}>|null the project as last listed, null before anyone asked */
     private ?array $listed = null;
 
@@ -46,13 +53,28 @@ final class HostFiles
         $guest->send(['t' => 'manifest', 'files' => $files]);
     }
 
-    /** @param list<string> $paths */
+    /**
+     * The files a guest asked for, as fast as it takes them: a batch is sent
+     * a file at a time, and waits whenever what is queued for the guest
+     * passes {@see HIGH_WATER} — all at once, a batch of large files would
+     * overflow the queue, and cost the guest its connection.
+     *
+     * @param list<string> $paths
+     */
     public function fetch(Guest $guest, array $paths): void
     {
-        foreach ($paths as $relative) {
+        while (null !== ($relative = \array_shift($paths))) {
             $path = $this->paths->absolute($relative);
-            $content = null === $path || !\is_file($path) || (int) \filesize($path) > $this->maxFileSize ? false : \file_get_contents($path);
+            $size = null === $path || !\is_file($path) ? null : (int) \filesize($path);
+            // A file whose encoding could never be queued at all is sent as
+            // not there, not as the end of the connection.
+            $content = null === $size || $size > $this->maxFileSize || $size > self::LARGEST ? false : \file_get_contents((string) $path);
             $guest->send(false === $content ? ['t' => 'file', 'path' => $relative, 'missing' => true] : ['t' => 'file', 'path' => $relative, 'data' => \base64_encode($content)]);
+            if ($guest->connection->backlog() > self::HIGH_WATER) {
+                $guest->connection->afterDrain(fn () => $this->fetch($guest, $paths));
+
+                return;
+            }
         }
         $guest->send(['t' => 'fetched']);
     }

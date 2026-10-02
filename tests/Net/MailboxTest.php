@@ -190,6 +190,28 @@ final class MailboxTest extends TestCase
         $this->assertSame('closed', $socket->closed());
     }
 
+    public function testAServerThatStopsAnsweringPingsIsTakenForGone(): void
+    {
+        $url = $this->serve();
+        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $this->answer();
+        $socket = $socket();
+        $this->assertInstanceOf(WebSocket::class, $socket);
+        $client = $this->client;
+        $this->assertIsResource($client);
+
+        $socket->ping();
+        \fwrite($client, Frames::encode(Frames::PONG, ''));
+        $this->start(static fn (): mixed => $socket->receive(0.05))();
+        $socket->ping();
+        $socket->ping();
+        $this->assertNull($socket->closed(), 'an answer resets the count');
+
+        $socket->ping();
+
+        $this->assertSame('the server stopped answering', $socket->closed());
+    }
+
     public function testAMailboxServerThatRefusesSaysNonsenseOrHangsUpIsSaid(): void
     {
         $refusing = new FakeWormhole(['FAKE_WORMHOLE_REFUSE' => "too old \x1b[31m"]);

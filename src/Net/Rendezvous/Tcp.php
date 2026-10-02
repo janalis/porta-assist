@@ -24,11 +24,15 @@ final class Tcp
     public static function connect(string $host, int $port, float $timeout, array $context = [])
     {
         $where = \sprintf('%s:%d', $host, $port);
+        $address = Resolver::resolve($host, $timeout);
+        if (null === $address) {
+            return \sprintf('cannot reach %s: its name could not be looked up', $where);
+        }
         $errno = 0;
         $error = '';
-        // @mago-expect lint:no-error-control-operator -- an unresolvable host warns as well as returning false; the message is carried in $error
+        // @mago-expect lint:no-error-control-operator -- a refused address warns as well as returning false; the message is carried in $error
         $stream = @\stream_socket_client(
-            \sprintf('tcp://%s', \str_contains($host, ':') ? '['.$host.']:'.$port : $where),
+            \sprintf('tcp://%s', \str_contains($address, ':') ? '['.\trim($address, characters: '[]').']:'.$port : $address.':'.$port),
             $errno,
             $error,
             timeout: $timeout,

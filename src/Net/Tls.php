@@ -12,6 +12,9 @@ use Revolt\EventLoop;
  */
 final class Tls
 {
+    /** Why a connection is refused when the certificate is not the one the invite names. */
+    public const string IMPOSTOR = 'the host is not the one the invite names';
+
     /**
      * Shake hands on $stream as a client or a server; $done gets null once
      * the connection is encrypted — and, for a client given $fingerprint,
@@ -34,7 +37,7 @@ final class Tls
             EventLoop::cancel((string) $timer);
             $done(match (true) {
                 !$result => 'the secure connection failed',
-                null !== $fingerprint && !Certificate::presentedBy($stream, $fingerprint) => 'the host is not the one the invite names',
+                null !== $fingerprint && !Certificate::presentedBy($stream, $fingerprint) => self::IMPOSTOR,
                 default => null,
             });
         };

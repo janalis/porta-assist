@@ -218,4 +218,32 @@ final class HostFilesE2eTest extends TestCase
             },
         ]);
     }
+
+    public function testABatchLargerThanTheQueueArrivesWhole(): void
+    {
+        $big = \str_repeat('x', times: 3 * 1_048_576);
+        $project = new TempProject([
+            'a.bin' => $big,
+            'b.bin' => $big,
+            'c.bin' => $big,
+            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
+        ]);
+
+        $this->runIde($project, $project->path('a.bin'), [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($big): void {
+                $this->editor($tui, $terminal, $ide);
+
+                $this->say(['t' => 'fetch', 'paths' => ['a.bin', 'b.bin', 'c.bin']]);
+
+                foreach (['a.bin', 'b.bin', 'c.bin'] as $name) {
+                    $file = $this->expect('file', timeout: 20.0);
+                    $this->assertSame($name, $file['path']);
+                    $this->assertSame($big, \base64_decode(Wire::string($file, 'data'), strict: true));
+                }
+                $this->expect('fetched');
+                $this->assertFalse($this->hungUp(), 'twelve megabytes of base64, and still connected');
+                $this->hangUp();
+            },
+        ]);
+    }
 }

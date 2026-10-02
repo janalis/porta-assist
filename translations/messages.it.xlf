@@ -366,6 +366,14 @@
         <source>Lost the mailbox server (%why%) — trying again</source>
         <target>Server mailbox perso (%why%) — nuovo tentativo</target>
       </trans-unit>
+      <trans-unit id="93">
+        <source>What you typed in %file% while away was not sent: you can only read along now</source>
+        <target>Ciò che hai scritto in %file% durante l’assenza non è stato inviato: ora puoi solo leggere</target>
+      </trans-unit>
+      <trans-unit id="94">
+        <source>Not rejoining: %why%</source>
+        <target>Nessun nuovo accesso: %why%</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

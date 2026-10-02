@@ -30,7 +30,7 @@ final class Mailbox
     public const string APPID = 'github.com/janalis/porta/assist';
 
     /** Seconds between pings, for a server that drops a quiet socket. */
-    private const float PING_EVERY = 60.0;
+    private const float PING_EVERY = 20.0;
 
     /** @var array<string, string> what the other side added, by phase */
     private array $phases = [];

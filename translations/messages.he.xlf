@@ -366,6 +366,14 @@
         <source>Lost the mailbox server (%why%) — trying again</source>
         <target>החיבור לשרת תיבת הדואר אבד (%why%) — מנסה שוב</target>
       </trans-unit>
+      <trans-unit id="93">
+        <source>What you typed in %file% while away was not sent: you can only read along now</source>
+        <target>מה שהקלדתם ב-%file% בזמן הניתוק לא נשלח: כעת אפשר רק לקרוא</target>
+      </trans-unit>
+      <trans-unit id="94">
+        <source>Not rejoining: %why%</source>
+        <target>לא מצטרפים שוב: %why%</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

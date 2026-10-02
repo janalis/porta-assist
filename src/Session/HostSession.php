@@ -92,6 +92,14 @@ final class HostSession
     /** @var array<string, array{name: string, role: Role, id: string}> ticket => who it lets back in */
     private array $tickets = [];
 
+    /**
+     * What each guest was let do beyond its role, kept when its connection
+     * goes: a guest back on its ticket has them again.
+     *
+     * @var array<string, array{typing: bool, running: bool, debugging: bool}> by peer id
+     */
+    private array $rights = [];
+
     /** @var array<string, array{text: SharedText, server: ServerDocument}> by relative path */
     private array $docs = [];
 
@@ -250,7 +258,7 @@ final class HostSession
     {
         $guest = $this->guests[$peer] ?? null;
         if (null !== $guest) {
-            unset($this->tickets[$guest->ticket]);
+            unset($this->tickets[$guest->ticket], $this->rights[$peer]);
             // Nor the way back the code gave it.
             ($this->doors[$peer] ?? null)?->close();
             unset($this->doors[$peer]);
@@ -527,9 +535,12 @@ final class HostSession
         // The door it came through is the guest's: removing it closes that too.
         $this->doors[$peer] = $this->pendingDoors[$id] ?? null;
         unset($this->pending[$id], $this->pendingDoors[$id]);
-        // The same guest back on a new connection: the old one is over —
-        // replaced first, so its closing is not taken for the guest leaving.
+        // The same guest back on a new connection before its old one was
+        // seen to drop: everything that hung on the old one goes first — its
+        // tunnels, its agents, its carets — then the connection, whose
+        // closing is not taken for the guest leaving.
         $previous = $this->guests[$peer] ?? null;
+        \array_map($this->release(...), \array_filter([$previous]));
         $guest = new Guest($peer, $name, $role, $ticket, $connection);
         $this->guests[$peer] = $guest;
         $previous?->connection->close('replaced');
@@ -568,6 +579,8 @@ final class HostSession
             }
             $guest->send(['t' => 'presence', 'peer' => $id, 'name' => $agent['name'], 'agent' => true, ...$agent['caret']]);
         }
+        // What it was let do before it dropped, it may do again — and is told.
+        \array_map(static fn (string $right) => $guest->permit($right, allowed: true), \array_keys(\array_filter($this->rights[$peer] ?? [])));
         $this->terminals->welcome($guest);
         $this->servers->welcome($guest);
         $this->debug->welcome($guest);
@@ -588,7 +601,21 @@ final class HostSession
         if (($this->guests[$guest->id] ?? null) !== $guest) {
             return;
         }
+        $this->release($guest);
+        $this->broadcast(['t' => 'left', 'peer' => $guest->id]);
+        if (null !== $this->rendezvous) {
+            $this->api->notify($this->api->trans('%name% left', ['%name%' => $guest->name]), slot: 'assist');
+        }
+        $this->api->participants()->set(Presence::people($this->participants()));
+        $this->api->refreshStatusSegments();
+    }
+
+    /** Everything that hung on $guest's connection: gone with it. What it was let do is kept for its return. */
+    private function release(Guest $guest): void
+    {
         unset($this->guests[$guest->id]);
+        $this->rights[$guest->id] = ['typing' => $guest->typing, 'running' => $guest->running, 'debugging' => $guest->debugging];
+        $this->stopRelays($guest->id);
         foreach ($this->docs as $doc) {
             $doc['text']->dropCaret($guest->id);
         }
@@ -599,12 +626,6 @@ final class HostSession
         $this->presence->left($guest->id);
         $this->servers->gone($guest);
         $this->follow->gone($guest->id);
-        $this->broadcast(['t' => 'left', 'peer' => $guest->id]);
-        if (null !== $this->rendezvous) {
-            $this->api->notify($this->api->trans('%name% left', ['%name%' => $guest->name]), slot: 'assist');
-        }
-        $this->api->participants()->set(Presence::people($this->participants()));
-        $this->api->refreshStatusSegments();
     }
 
     // --- What guests ask ------------------------------------------------------

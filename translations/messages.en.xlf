@@ -366,6 +366,14 @@
         <source>Lost the mailbox server (%why%) — trying again</source>
         <target>Lost the mailbox server (%why%) — trying again</target>
       </trans-unit>
+      <trans-unit id="93">
+        <source>What you typed in %file% while away was not sent: you can only read along now</source>
+        <target>What you typed in %file% while away was not sent: you can only read along now</target>
+      </trans-unit>
+      <trans-unit id="94">
+        <source>Not rejoining: %why%</source>
+        <target>Not rejoining: %why%</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

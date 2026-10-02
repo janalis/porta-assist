@@ -16,6 +16,13 @@ use Revolt\EventLoop;
  *
  * Its watcher is unreferenced: a session must never be what keeps the IDE
  * from quitting.
+ *
+ * Both ends talk through a relay, so a peer whose network silently died —
+ * a laptop asleep, a Wi-Fi changed — closes nothing: the relay keeps this
+ * side's socket open, and only silence tells. {@see keepAlive()} listens for
+ * it: a ping when there was nothing else to say, and a close when nothing
+ * was heard for too long. A peer that pings is kept alive in turn — the
+ * first ping arms this side too, so only one end has to start it.
  */
 final class Connection
 {
@@ -24,6 +31,21 @@ final class Connection
 
     /** Seconds a last message gets to go out before the socket closes anyway. */
     public const float LINGER = 2.0;
+
+    /** Seconds of saying nothing before a ping says the link is still there. */
+    public const float PING = 10.0;
+
+    /** Seconds of hearing nothing before the peer is taken for gone. */
+    public const float SILENCE = 30.0;
+
+    private const string PING_MESSAGE = 'ping';
+
+    /** The timer that pings and listens for silence, once {@see keepAlive()} armed it. */
+    private ?string $heartbeat = null;
+
+    /** When the peer was last heard, and this side last spoke: hrtime seconds. */
+    private float $heard;
+    private float $said;
 
     private readonly NonBlockingWriter $writer;
 
@@ -46,6 +68,8 @@ final class Connection
         int $maxLine = self::MAX_LINE,
     ) {
         \stream_set_blocking($stream, enable: false);
+        $this->heard = self::now();
+        $this->said = $this->heard;
         $this->onMessage = static function (array $message): void {};
         $this->onClose = static function (string $reason): void {};
         $this->writer = new NonBlockingWriter($stream, $this->close(...));
@@ -57,12 +81,18 @@ final class Connection
 
                 return;
             }
+            $this->heard = self::now();
             foreach ($framer->feed($bytes) as $line) {
                 if ($this->closed) {
                     return;
                 }
                 $message = Wire::decode($line);
                 if (null === $message) {
+                    continue;
+                }
+                if (self::PING_MESSAGE === $message['t']) {
+                    $this->keepAlive();
+
                     continue;
                 }
                 // The lines after a throwing one were read already: dropped
@@ -96,8 +126,34 @@ final class Connection
     public function send(array $message): void
     {
         if (!$this->closed) {
+            $this->said = self::now();
             $this->writer->write(Wire::encode($message));
         }
+    }
+
+    /**
+     * Ping the peer whenever this side has said nothing for $every seconds,
+     * and take it for gone — closed, "no answer" — once nothing at all was
+     * heard from it for $silence. Once is enough: the peer's first ping arms
+     * it on the other end, so a session armed on one side is on both.
+     */
+    public function keepAlive(float $every = self::PING, float $silence = self::SILENCE): void
+    {
+        if (null !== $this->heartbeat || $this->closed) {
+            return;
+        }
+        $this->heartbeat = EventLoop::unreference(EventLoop::repeat(\min($every, $silence) / 2, function () use ($every, $silence): void {
+            $now = self::now();
+            if (($now - $this->heard) >= $silence) {
+                $this->close(\sprintf('no answer in %d seconds', (int) $silence));
+
+                return;
+            }
+            if (($now - $this->said) >= $every) {
+                $this->send(['t' => self::PING_MESSAGE]);
+            }
+        }));
+        $this->send(['t' => self::PING_MESSAGE]);
     }
 
     /** Bytes queued for the peer and not sent yet. */
@@ -158,6 +214,10 @@ final class Connection
         }
         $this->closed = true;
         EventLoop::cancel($this->watcher);
+        if (null !== $this->heartbeat) {
+            EventLoop::cancel($this->heartbeat);
+            $this->heartbeat = null;
+        }
         if (null !== $last) {
             $this->writer->write(Wire::encode($last));
         }
@@ -178,6 +238,11 @@ final class Connection
             EventLoop::cancel($timer);
             $this->hangUp();
         });
+    }
+
+    private static function now(): float
+    {
+        return \hrtime(true) / 1e9;
     }
 
     /** Let go of the socket, once. */

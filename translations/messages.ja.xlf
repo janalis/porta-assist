@@ -366,6 +366,14 @@
         <source>Lost the mailbox server (%why%) — trying again</source>
         <target>メールボックスサーバーとの接続が切れました (%why%) — 再試行します</target>
       </trans-unit>
+      <trans-unit id="93">
+        <source>What you typed in %file% while away was not sent: you can only read along now</source>
+        <target>切断中に %file% に入力した内容は送信されませんでした: 現在は閲覧のみ可能です</target>
+      </trans-unit>
+      <trans-unit id="94">
+        <source>Not rejoining: %why%</source>
+        <target>再参加しません: %why%</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>
