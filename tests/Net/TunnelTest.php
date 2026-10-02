@@ -131,9 +131,9 @@ final class TunnelTest extends TestCase
         // 8 KiB chunk whatever length it is asked for, and at one chunk a turn
         // the ~8 MB queue outlasted the 10 s limit — the "flake" was arithmetic.
         $this->await(static function () use ($peer, $connection): bool {
-            while ('' !== (string) \fread($peer, length: 1_048_576)) {
-                // drained a chunk; there may be more
-            }
+            do {
+                $chunk = (string) \fread($peer, length: 1_048_576);
+            } while ('' !== $chunk);
 
             return 0 === $connection->backlog();
         }, what: 'the session to catch up');
