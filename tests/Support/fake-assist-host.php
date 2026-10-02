@@ -29,6 +29,8 @@ use Revolt\EventLoop;
  *   chatty       as welcome, with the session talking in between
  *   lsp          a language-server channel: ready for php, each request
  *                answered with its own method, hung up on `exit`
+ *   lsp-mute     ready, then never another word — a connection dead with
+ *                the network — printing the type of each message it gets
  *
  * With PORTA_FAKE_DOOR set, it skips the mailbox: it prints the invite a
  * guest holds already, as JSON, and waits at the relay for that guest.
@@ -136,6 +138,11 @@ $fetch = static function (array $paths) use ($send, $files): void {
 while (false !== ($line = fgets($client))) {
     $message = json_decode($line, associative: true);
     $type = $message['t'] ?? '';
+    if ('lsp-mute' === $mode) {
+        'hello' === $type ? $send(['t' => 'ready']) : (print $type."\n");
+
+        continue;
+    }
     if ('lsp' === $mode) {
         $lsp = $message['m'] ?? [];
         if ('exit' === ($lsp['method'] ?? null) || 'hello' === $type && 'php' !== ($message['language'] ?? null)) {

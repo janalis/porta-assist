@@ -112,7 +112,8 @@ final class GuestSessionE2eTest extends TestCase
     }
 
     /** Let the guest IDE in: accept it, read its hello, welcome it with $role. */
-    private function welcomeGuest(string $role = 'edit'): void
+    /** @param list<string> $terminals the host's shared terminals, as it says them */
+    private function welcomeGuest(string $role = 'edit', array $terminals = []): void
     {
         $this->acceptGuest();
         $this->expect('hello');
@@ -122,6 +123,7 @@ final class GuestSessionE2eTest extends TestCase
             'role' => $role,
             'ticket' => self::TICKET,
             'peers' => [['id' => 'host', 'name' => 'Hal', 'role' => 'host'], ['id' => 'g2', 'name' => 'Cy', 'role' => 'read'], 'junk'],
+            'terminals' => $terminals,
         ]);
     }
 
@@ -214,14 +216,15 @@ final class GuestSessionE2eTest extends TestCase
                 $this->welcomeGuest();
                 $this->shareFile('src/A.php', "one\n");
                 $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => 'tests', 'data' => \base64_encode('first')]);
-                $this->await(static fn (): bool => self::toasted($ide, 'shared a terminal: tests'), what: 'the terminal');
+                $this->say(['t' => 'terminal', 'id' => 'run:y', 'title' => 'server', 'data' => \base64_encode('up')]);
+                $this->await(static fn (): bool => self::toasted($ide, 'shared a terminal: server'), what: 'the terminals');
                 $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
                 $terminal->simulateInput('x');
                 $this->expect('op');
 
                 $this->dropPeer();
                 $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
-                $this->welcomeGuest('read');
+                $this->welcomeGuest('read', terminals: ['run:x']); // run:y stopped while away
                 $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => 'tests', 'data' => \base64_encode('again')]);
                 $this->shareFile('src/A.php', "one\n");
 
@@ -230,6 +233,7 @@ final class GuestSessionE2eTest extends TestCase
                 $runs = $this->api($ide)->runs();
                 $this->await(static fn (): bool => \str_contains((string) $runs->scrollback('assist:run:x'), 'again'), what: 'the terminal sent again');
                 $this->assertStringNotContainsString('first', (string) $runs->scrollback('assist:run:x'), 'from the top, not on top of what was there');
+                $this->assertStringContainsString('[no longer shared]', (string) $runs->scrollback('assist:run:y'), 'the one that stopped meanwhile says so');
                 $this->hangUp();
             },
         ]);

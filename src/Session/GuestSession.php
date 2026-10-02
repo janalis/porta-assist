@@ -492,8 +492,10 @@ final class GuestSession
         }
         $this->hostName = $this->peers['host'] ?? null;
         $this->api->notify($this->api->trans('Connected to %name%\'s session', ['%name%' => (string) $this->hostName]), ToastSeverity::Success, slot: 'assist');
-        // Whoever left while this side was away: their marks go.
+        // Whoever left while this side was away: their marks go — and the
+        // terminals no longer shared, theirs.
         \array_map($this->presence->left(...), \array_keys(\array_diff_key($before, $this->peers)));
+        \array_map($this->terminalEnded(...), \array_keys(\array_diff_key($this->terminals, \array_flip(Wire::strings($message, 'terminals')))));
         // What is open here is asked again: after a drop, the host's copy is
         // the one to carry on from — and what was typed here and never
         // reached it is carried onto that ({@see share()}). Undo is the

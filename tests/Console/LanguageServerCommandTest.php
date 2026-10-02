@@ -6,6 +6,7 @@ namespace Porta\AssistPlugin\Tests\Console;
 
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Console\LanguageServerCommand;
+use Porta\AssistPlugin\Net\Connection;
 use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
 use Porta\AssistPlugin\Session\GuestSession;
@@ -91,7 +92,7 @@ final class LanguageServerCommandTest extends TestCase
      *
      * @return array{CommandTester, string} the run, and what the editor was sent
      */
-    private function bridge(string $root, string $language, array $frames): array
+    private function bridge(string $root, string $language, array $frames, float $ping = Connection::PING, float $silence = Connection::SILENCE): array
     {
         $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
         $this->assertNotFalse($pair);
@@ -102,7 +103,7 @@ final class LanguageServerCommandTest extends TestCase
         $output = \fopen('php://memory', mode: 'w+');
         $this->assertNotFalse($output);
         $application = new Application();
-        $application->addCommand(new LanguageServerCommand($root, $input, $output, timeout: 2.0));
+        $application->addCommand(new LanguageServerCommand($root, $input, $output, timeout: 2.0, ping: $ping, silence: $silence));
         $tester = new CommandTester($application->find('assist-lsp'));
         $tester->execute(['language' => $language], ['capture_stderr_separately' => true]);
         \rewind($output);
@@ -153,6 +154,18 @@ final class LanguageServerCommandTest extends TestCase
             $this->assertSame(1, $tester->getStatusCode(), $mode);
             $this->assertStringContainsString('The host runs no php language server for this session '.$says, $tester->getErrorOutput(), $mode);
         }
+    }
+
+    public function testAHostThatFallsSilentIsLeftAndPingedUntilThen(): void
+    {
+        $root = $this->store(new TempProject([]), $this->host('lsp-mute'));
+
+        [$tester] = $this->bridge($root, 'php', [], ping: 0.1, silence: 0.6);
+
+        $this->assertSame(1, $tester->getStatusCode(), 'the editor sees its server exit, and starts it again');
+        $this->assertStringContainsString('The host stopped answering.', $tester->getErrorOutput());
+        $this->assertInstanceOf(Process::class, $this->host);
+        $this->assertStringContainsString("ping\n", $this->host->getIncrementalOutput(), 'asked, while it waited');
     }
 
     public function testEachBridgeTakesAChannelOfItsOwn(): void

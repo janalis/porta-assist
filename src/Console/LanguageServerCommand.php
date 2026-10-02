@@ -24,7 +24,10 @@ use Symfony\Component\Console\Output\OutputInterface;
  * stdout; this carries every message to the host of the session the copy is
  * in, which runs its own server for the language on its own files and
  * answers. A plain blocking loop: it has nothing else to do, and ends when
- * either side does.
+ * either side does — or when the host has said nothing for
+ * {@see Connection::SILENCE} seconds, which a connection dead with the
+ * network says. Pings, when this side has said nothing for a while, keep a
+ * live one talking. The editor sees the server exit, and starts it again.
  */
 #[AsCommand(
     name: 'assist-lsp',
@@ -49,6 +52,8 @@ final class LanguageServerCommand extends PluginCommand
         $input = null,
         $output = null,
         private readonly float $timeout = 10.0,
+        private readonly float $ping = Connection::PING,
+        private readonly float $silence = Connection::SILENCE,
     ) {
         parent::__construct($root);
         $this->input = $input ?? \STDIN;
@@ -94,8 +99,13 @@ final class LanguageServerCommand extends PluginCommand
 
             return self::FAILURE;
         }
-        $this->relay($socket, $lines);
+        $gone = $this->relay($socket, $lines);
         \fclose($socket);
+        if ($gone) {
+            $errors->writeln('<error>The host stopped answering.</error>');
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }
@@ -119,21 +129,33 @@ final class LanguageServerCommand extends PluginCommand
 
     /**
      * The editor's messages to the host, the host's to the editor, until
-     * either side hangs up.
+     * either side hangs up — false — or the host falls silent: true.
      *
      * @param resource $socket
      */
-    private function relay($socket, LineFramer $lines): void
+    private function relay($socket, LineFramer $lines): bool
     {
         $frames = new JsonRpcFramer(static function (string $why): void {});
+        $heard = \hrtime(true) / 1e9;
+        $said = $heard;
         while (true) {
+            $now = \hrtime(true) / 1e9;
+            if (($now - $heard) >= $this->silence) {
+                return true;
+            }
+            if (($now - $said) >= $this->ping) {
+                \stream_set_blocking($socket, enable: true);
+                \fwrite($socket, Wire::encode(['t' => 'ping']));
+                $said = $now;
+            }
+            $wait = \max(0.0, \min($this->ping - ($now - $said), $this->silence - ($now - $heard)));
             $read = [$this->input, $socket];
             $write = null;
             $except = null;
-            if (false === \stream_select($read, $write, $except, seconds: null)) {
+            if (false === \stream_select($read, $write, $except, (int) $wait, (int) (($wait - (int) $wait) * 1e6))) {
                 // A select interrupted by a signal: not reproducible on demand.
                 // @codeCoverageIgnoreStart
-                return;
+                return false;
 
                 // @codeCoverageIgnoreEnd
             }
@@ -145,7 +167,7 @@ final class LanguageServerCommand extends PluginCommand
                 \stream_set_blocking($stream, enable: $stream !== $socket);
                 $bytes = \fread($stream, length: 262_144);
                 if (false === $bytes || '' === $bytes && \feof($stream)) {
-                    return;
+                    return false;
                 }
                 if ('' === $bytes) {
                     // A TLS record with nothing in it for this side: when the
@@ -155,6 +177,10 @@ final class LanguageServerCommand extends PluginCommand
 
                     // @codeCoverageIgnoreEnd
                 }
+                // Anything from the host says it is there; anything to it, that this side is.
+                $at = \hrtime(true) / 1e9;
+                $heard = $stream === $socket ? $at : $heard;
+                $said = $stream === $socket ? $said : $at;
                 $stream === $socket ? $this->toEditor($lines->feed($bytes)) : $this->toHost($socket, $frames->feed($bytes));
             }
         }

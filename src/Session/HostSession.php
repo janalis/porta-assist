@@ -552,6 +552,9 @@ final class HostSession
             'role' => $role->value,
             'ticket' => $ticket,
             'languages' => \array_keys($this->api->codeIntelligence()->languageServers()),
+            // Which terminals are shared now: a guest back from a drop ends
+            // the ones that stopped while it was away.
+            'terminals' => \array_map(\strval(...), \array_keys($this->terminals->shared())),
             'project' => ['id' => \substr(\hash('xxh128', (string) \gethostname().$this->paths->root), offset: 0, length: 16), 'name' => \basename($this->paths->root)],
             'peers' => [
                 ['id' => self::HOST, 'name' => $this->name, 'role' => 'host'],
