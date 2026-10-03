@@ -18,7 +18,6 @@ use Porta\AssistPlugin\Workspace\Paths;
 use Porta\Event\AgentActivity;
 use Porta\Overlay\State\ToastSeverity;
 use Porta\Plugin\Api\PluginApi;
-use Porta\Support\JsonRpcTransport;
 use Revolt\EventLoop;
 
 /**
@@ -514,7 +513,8 @@ final class HostSession
     private function languageServer(int $id, Connection $connection, array $message, ?array $ticket): void
     {
         unset($this->pending[$id], $this->pendingDoors[$id]);
-        $server = $this->api->codeIntelligence()->languageServers()[Wire::string($message, 'language')] ?? null;
+        $intelligence = $this->api->codeIntelligence();
+        $server = $intelligence->languageServers()[Wire::string($message, 'language')] ?? null;
         $guestRoot = Wire::string($message, 'root');
         if (null === $ticket || null === $server || '' === $guestRoot) {
             $refusal = match (true) {
@@ -529,7 +529,8 @@ final class HostSession
         $peer = $ticket['id'];
         $relay = new LspRelay(
             $connection,
-            new JsonRpcTransport($server['command'], $this->paths->root, \sprintf('%s (for %s)', $server['name'], $ticket['name'])),
+            // Run the way the IDE runs it, and ended with the IDE however the IDE ends.
+            $intelligence->serverTransport($server, $this->paths->root, \sprintf('%s (for %s)', $server['name'], $ticket['name'])),
             $guestRoot,
             $this->paths->root,
             $server['initializationOptions'] ?? null,
