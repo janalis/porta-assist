@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Tests\Console;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Console\JoinCommand;
 use Porta\AssistPlugin\Session\GuestSession;
@@ -142,33 +143,40 @@ final class JoinCommandTest extends TestCase
         $this->assertSame([...IdeConfig::DEFAULT_ENABLED_PLUGINS, 'assist'], $config['enabledPlugins'] ?? null);
     }
 
-    public function testEachWayOfNotGettingInIsSaid(): void
+    /**
+     * One case per test: each starts a host process of its own, and some wait
+     * out the command's answer timeout — ten in one test came near the
+     * ten-second limit on a loaded box.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function refusals(): iterable
     {
-        $cases = [
-            'deny:host' => 'The host turned you away',
-            'deny:full' => 'The session is full',
-            'deny:busy' => 'Too many are waiting to be let in',
-            'deny:unanswered' => 'The host did not answer',
-            'deny:version' => 'speaks another version of assist',
-            'deny:expired' => 'The host does not know this guest any more',
-            'silent' => 'The host did not answer',
-            'garbled' => 'a welcome this Porta does not understand',
-            'no-list' => 'The host did not list its files',
-            'cut' => 'The host closed the connection',
-        ];
-        $project = new TempProject(['a.txt' => 'a']);
-        foreach ($cases as $mode => $says) {
-            $code = $this->host($mode, $project);
-            $started = \hrtime(true);
-            $tester = $this->join($code);
-            // The command's own timeout, not the socket's minute: a host's
-            // TLS session ticket makes the socket readable with nothing to read.
-            $this->assertLessThan(20.0, (\hrtime(true) - $started) / 1e9, $mode.' answered in its own time');
-            $this->assertSame(1, $tester->getStatusCode(), $mode.': '.$tester->getDisplay());
-            $this->assertStringContainsString($says, $tester->getErrorOutput(), $mode);
-            $this->host?->stop(0);
-        }
-        $this->assertSame([], $this->launched, 'no IDE opened for any of them');
+        yield 'the host refuses' => ['deny:host', 'The host turned you away'];
+        yield 'a full session' => ['deny:full', 'The session is full'];
+        yield 'too many waiting' => ['deny:busy', 'Too many are waiting to be let in'];
+        yield 'no answer from the host' => ['deny:unanswered', 'The host did not answer'];
+        yield 'another version' => ['deny:version', 'speaks another version of assist'];
+        yield 'a guest forgotten' => ['deny:expired', 'The host does not know this guest any more'];
+        yield 'a silent host' => ['silent', 'The host did not answer'];
+        yield 'a garbled welcome' => ['garbled', 'a welcome this Porta does not understand'];
+        yield 'no file list' => ['no-list', 'The host did not list its files'];
+        yield 'a cut connection' => ['cut', 'The host closed the connection'];
+    }
+
+    #[DataProvider('refusals')]
+    public function testEachWayOfNotGettingInIsSaid(string $mode, string $says): void
+    {
+        $code = $this->host($mode, new TempProject(['a.txt' => 'a']));
+        $started = \hrtime(true);
+        $tester = $this->join($code);
+
+        // The command's own timeout, not the socket's minute: a host's
+        // TLS session ticket makes the socket readable with nothing to read.
+        $this->assertLessThan(20.0, (\hrtime(true) - $started) / 1e9, 'answered in its own time');
+        $this->assertSame(1, $tester->getStatusCode(), $tester->getDisplay());
+        $this->assertStringContainsString($says, $tester->getErrorOutput());
+        $this->assertSame([], $this->launched, 'no IDE opened');
     }
 
     public function testABadCodeAWrongOneOrAnAbsentHostIsSaid(): void
