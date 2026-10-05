@@ -12,6 +12,7 @@ use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\UsesBundledPlugins;
+use Porta\Tests\Support\Widgets;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui;
 
@@ -78,7 +79,7 @@ final class HostDebugE2eTest extends TestCase
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'debug' === $m['t'])), 'not told of a debugger that is not there');
 
                 // A breakpoint on line 5, and the host debugs: she is told where it stopped.
-                $tui->getById('editor')->getDocument()->setCursor(4, 0);
+                Widgets::editor($tui)->getDocument()->setCursor(4, 0);
                 $tui->handleInput("\x1b[19;5~"); // ctrl+f8
                 $tui->handleInput("\x1b[20;2~"); // shift+f9
                 $paused = $this->debugState('paused');
