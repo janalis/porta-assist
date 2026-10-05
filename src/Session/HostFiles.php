@@ -54,7 +54,9 @@ final class HostFiles
         $this->listed = $this->files->scan();
         $files = [];
         foreach ($this->listed as $path => $file) {
-            $files[] = [$path, $file['size'], $file['hash']];
+            // A path in digits keys as an int: sent as one, the guest drops it.
+            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
+            $files[] = [(string) $path, $file['size'], $file['hash']];
         }
         $guest->send(['t' => 'manifest', 'files' => $files]);
     }
@@ -177,9 +179,10 @@ final class HostFiles
             if (($before[$path] ?? null) === $file) {
                 continue;
             }
-            $changed[] = [$path, $file['size'], $file['hash']];
+            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
+            $changed[] = [(string) $path, $file['size'], $file['hash']];
         }
-        $gone = \array_values(\array_diff(\array_keys($before), \array_keys($now)));
+        $gone = \array_map(\strval(...), \array_values(\array_diff(\array_keys($before), \array_keys($now))));
         if ([] !== $changed || [] !== $gone) {
             ($this->broadcast)(['t' => 'changed', 'files' => $changed, 'gone' => $gone]);
         }

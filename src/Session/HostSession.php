@@ -373,7 +373,8 @@ final class HostSession
     public function readAll(): void
     {
         foreach (\array_keys($this->docs) as $relative) {
-            $this->read($relative);
+            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
+            $this->read((string) $relative); // a path in digits keys as an int
         }
     }
 

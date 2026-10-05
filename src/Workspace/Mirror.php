@@ -43,7 +43,7 @@ final readonly class Mirror
     /**
      * Which of the host's files this copy lacks or has different.
      *
-     * @param array<string, array{size: int, hash: string}> $host
+     * @param array<array-key, array{size: int, hash: string}> $host
      *
      * @return list<string>
      */
@@ -51,6 +51,7 @@ final readonly class Mirror
     {
         $missing = [];
         foreach ($host as $relative => $file) {
+            $relative = (string) $relative; // a path in digits keys as an int
             $path = $this->paths->absolute($relative);
             if (null === $path) {
                 continue;
@@ -66,7 +67,7 @@ final readonly class Mirror
     /**
      * Remove the files the host does not have — never the private folders.
      *
-     * @param array<string, array{size: int, hash: string}> $host
+     * @param array<array-key, array{size: int, hash: string}> $host
      *
      * @return int how many went
      */

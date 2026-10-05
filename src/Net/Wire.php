@@ -115,11 +115,12 @@ final class Wire
 
     /**
      * A list of files as the host sends them — `[path, size, digest]` each —
-     * keyed by path; an entry of any other shape is left out.
+     * keyed by path; an entry of any other shape is left out. A path in
+     * digits keys as an int: whoever reads the keys casts them back.
      *
      * @param array<string, mixed> $message
      *
-     * @return array<string, array{size: int, hash: string}>
+     * @return array<array-key, array{size: int, hash: string}>
      */
     public static function files(array $message, string $key): array
     {

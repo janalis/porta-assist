@@ -36,6 +36,7 @@ final class HostSessionE2eTest extends TestCase
         return new TempProject([
             'src/A.php' => "<?php\necho 'a';\n",
             'README.md' => "# demo\n",
+            '2024' => "a name in digits keys as an int, and is listed as the string it is\n",
             'node_modules/x.js' => 'never listed',
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
@@ -71,7 +72,7 @@ final class HostSessionE2eTest extends TestCase
                 $this->assertSame([['id' => 'host', 'name' => \is_string($user) && '' !== $user ? $user : 'host', 'role' => 'host']], $welcome['peers'], 'the host, by login name');
 
                 $this->say(['t' => 'manifest']);
-                $this->assertSame(['README.md', 'src/A.php'], \array_column(Wire::list($this->expect('manifest'), 'files'), 0), 'the project, not its settings');
+                $this->assertSame(['2024', 'README.md', 'src/A.php'], \array_column(Wire::list($this->expect('manifest'), 'files'), 0), 'the project, not its settings');
                 $this->say(['t' => 'fetch', 'paths' => ['src/A.php', '../escape', '.porta.json', 'node_modules/x.js']]);
                 $this->assertSame("<?php\necho 'a';\n", \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true));
                 $this->assertTrue($this->expect('file')['missing'], 'nothing outside the project');

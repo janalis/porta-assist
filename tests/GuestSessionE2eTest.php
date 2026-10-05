@@ -351,8 +351,13 @@ final class GuestSessionE2eTest extends TestCase
         $this->say(['t' => 'file', 'path' => 'old.txt', 'data' => '***']);
         $this->say(['t' => 'file', 'path' => 'src/A.php', 'data' => \base64_encode('shared: never written this way')]);
         $this->await(static fn (): bool => 'from the host' === \file_get_contents($root.'/old.txt'), what: 'fetched');
-        $this->say(['t' => 'changed', 'files' => [['old.txt', 13, \hash('xxh128', data: 'from the host')], ['new.txt', 1, 'h'], ['src/A.php', 1, 'h']], 'gone' => ['notes.txt', 'src/A.php']]);
-        $this->assertSame(['new.txt'], $this->expect('fetch')['paths'], 'only what differs, and nothing shared');
+        // `2024` keys as an int once it indexes an array; it is fetched as the string it is.
+        $this->say([
+            't' => 'changed',
+            'files' => [['old.txt', 13, \hash('xxh128', data: 'from the host')], ['new.txt', 1, 'h'], ['src/A.php', 1, 'h'], ['2024', 1, 'h']],
+            'gone' => ['notes.txt', 'src/A.php'],
+        ]);
+        $this->assertSame(['new.txt', '2024'], $this->expect('fetch')['paths'], 'only what differs, and nothing shared');
         $this->say(['t' => 'changed', 'files' => [['old.txt', 13, \hash('xxh128', data: 'from the host')]], 'gone' => []]);
         $this->say(['t' => 'moved', 'from' => 'old.txt', 'to' => 'docs/old.txt']);
         $this->await(static fn (): bool => \is_file($root.'/docs/old.txt'), what: 'moved');

@@ -336,7 +336,8 @@ final class GuestSession
     public function readAll(): void
     {
         foreach (\array_keys($this->docs) as $relative) {
-            $this->read($relative);
+            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
+            $this->read((string) $relative); // a path in digits keys as an int
         }
     }
 
@@ -545,7 +546,10 @@ final class GuestSession
     {
         // What was typed and not read yet is read now — it is carried over
         // with what was sent and never acknowledged.
-        \array_map($this->keep(...), \array_keys($this->docs), $this->docs);
+        foreach ($this->docs as $relative => $doc) {
+            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
+            $this->keep((string) $relative, $doc); // a path in digits keys as an int
+        }
         $this->connection = null;
         $this->debug->reset();
         $this->servers?->stop();
@@ -891,7 +895,7 @@ final class GuestSession
     }
 
     /**
-     * @param array<string, array{size: int, hash: string}> $files
+     * @param array<array-key, array{size: int, hash: string}> $files
      * @param list<string>                                   $gone
      */
     private function hostChanged(array $files, array $gone): void
