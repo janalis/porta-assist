@@ -170,7 +170,7 @@ while (false !== ($line = fgets($client))) {
         'hello' === $type => $welcome(),
         'manifest' === $type && 'no-list' !== $mode => $send([
             't' => 'manifest',
-            'files' => array_map(static fn (string $path, string $content): array => [$path, strlen($content), hash('xxh128', $content)], array_keys($files), array_values($files)),
+            'files' => array_map(static fn (int|string $path, string $content): array => [(string) $path, strlen($content), hash('xxh128', $content)], array_keys($files), array_values($files)),
         ]),
         'fetch' === $type => $fetch($message['paths']),
         default => null,
