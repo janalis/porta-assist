@@ -47,8 +47,12 @@ final class MailboxTest extends TestCase
         return 'ws://'.\stream_socket_get_name($server, remote: false).'/v1?x=1';
     }
 
-    /** Take the client's connection, and its request — answered with $answer, or as a WebSocket server would. */
-    private function answer(?string $answer = null): void
+    /**
+     * Take the client's connection, and its request — answered with $answer, or as a WebSocket server would.
+     *
+     * @return resource the connection, also kept for {@see heard()}
+     */
+    private function answer(?string $answer = null)
     {
         $server = $this->server;
         $this->assertIsResource($server);
@@ -79,6 +83,8 @@ final class MailboxTest extends TestCase
             $answer ?? "HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: ".\base64_encode(\sha1(($key[1] ?? '').'258EAFA5-E914-47DA-95CA-C5AB0DC85B11', binary: true))."\r\n\r\n",
         );
         $this->client = $client;
+
+        return $client;
     }
 
     /** @return list<array{int, string}> what the client sent, once $count frames have come */
@@ -220,25 +226,24 @@ final class MailboxTest extends TestCase
 
         $url = $this->serve();
         $result = $this->start(static fn (): mixed => Mailbox::connect($url, 'ab', 0.3));
-        $this->answer();
-        \fwrite($this->client, Frames::encode(Frames::TEXT, 'not json').Frames::encode(Frames::TEXT, '{"type": 3}'));
+        $client = $this->answer();
+        \fwrite($client, Frames::encode(Frames::TEXT, 'not json').Frames::encode(Frames::TEXT, '{"type": 3}'));
         $failure = $result();
         $this->assertInstanceOf(RendezvousFailed::class, $failure);
         $this->assertSame('the mailbox server sent no welcome', $failure->getMessage(), 'what is not a message skipped');
 
         $result = $this->start(static fn (): mixed => Mailbox::connect($url, 'ab', 2.0));
-        $this->answer();
-        \fclose($this->client);
+        \fclose($this->answer());
         $failure = $result();
         $this->assertInstanceOf(RendezvousFailed::class, $failure);
         $this->assertSame('the mailbox server hung up (the server hung up)', $failure->getMessage());
 
         // A claim the server refuses for its own reason: passed on.
         $result = $this->start(static fn (): mixed => GuestRendezvous::redeem($url, Code::parse('5-AAAA-AAAA'), 2.0));
-        $this->answer();
-        \fwrite($this->client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
+        $client = $this->answer();
+        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
         $this->heard(2);
-        \fwrite($this->client, Frames::encode(Frames::TEXT, '{"type": "error", "error": "nope"}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "error", "error": "nope"}'));
         $failure = $result();
         $this->assertInstanceOf(RendezvousFailed::class, $failure);
         $this->assertSame('the mailbox server says: nope', $failure->getMessage());
@@ -286,9 +291,9 @@ final class MailboxTest extends TestCase
             static function (): void {},
         );
         $host->start();
-        $this->answer();
+        $client = $this->answer();
         $host->stop();
-        \fwrite($this->client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
         $this->assertSame(Frames::CLOSE, $this->heard(2)[1][0] ?? null, 'bound, then hung up on');
         $this->pump(0.1);
         $this->assertSame([], $codes);
