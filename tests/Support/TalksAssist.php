@@ -33,6 +33,14 @@ trait TalksAssist
     /** Satisfied by {@see \Porta\Tests\Support\PumpsLoop::await()} on the composing class. */
     abstract private function await(callable $done, float $timeout = 10.0, string $what = 'condition'): void;
 
+    /**
+     * Satisfied by PHPUnit's Assert on the composing class — declared so the
+     * guards below narrow where an analyser reads the trait alone.
+     *
+     * @phpstan-assert resource $actual
+     */
+    abstract public static function assertIsResource(mixed $actual, string $message = ''): void;
+
     /** @var resource|null */
     private $peer;
 
