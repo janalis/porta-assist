@@ -190,7 +190,7 @@ final class JoinCommand extends PluginCommand
                 if (null === $id || '' === $ticket) {
                     return 'The host sent a welcome this Porta does not understand';
                 }
-                $output->writeln(\sprintf('In, %s.', Wire::string($message ?? [], 'role') === 'edit' ? 'editing' : 'reading along'));
+                $output->writeln(\sprintf('In, %s.', 'edit' === Wire::string($message ?? [], 'role') ? 'editing' : 'reading along'));
 
                 return [
                     'project' => $id,
