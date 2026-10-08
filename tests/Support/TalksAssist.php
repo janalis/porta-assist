@@ -27,8 +27,6 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
  * under test, or a host the guest IDE under test joins — meeting it through
  * a {@see FakeWormhole} of the test's own, speaking the wire by hand, and
  * pumping the loop the IDE runs on while it waits.
- *
- * @noinspection StaticInvocationViaThisInspection -- assertIsResource() is PHPUnit's, redeclared abstract so mago narrows through it; custos cannot see that
  */
 trait TalksAssist
 {
