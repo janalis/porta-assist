@@ -317,6 +317,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         }
         $ask = static fn () => $api->prompt($api->trans('Share which local port? (a dev server: 8000, say)'), initial: '', onSubmit: static function (string $typed) use ($api, $host): void {
             $port = \trim($typed);
+            // @noinspection NotOptimalIfConditionsInspection -- the digits are checked before the number they make
             if (!\ctype_digit($port) || (int) $port < 1 || (int) $port > 65_535) {
                 $api->flash($api->trans('Not a port: %port%', ['%port%' => $port]));
 

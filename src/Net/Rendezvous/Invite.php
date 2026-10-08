@@ -32,7 +32,7 @@ final readonly class Invite
         $transit = \is_string($fields['transit'] ?? null) ? $fields['transit'] : '';
         $fingerprint = \is_string($fields['fingerprint'] ?? null) ? $fields['fingerprint'] : '';
         $token = \is_string($fields['token'] ?? null) ? $fields['token'] : '';
-        if (1 !== \preg_match('/^[0-9a-f]{64}$/', $key) || '' === $transit || 1 !== \preg_match('/^[0-9a-f]{64}$/', $fingerprint) || 1 !== \preg_match('/^[0-9a-f]{32}$/', $token)) {
+        if ('' === $transit || 1 !== \preg_match('/^[0-9a-f]{64}$/', $key) || 1 !== \preg_match('/^[0-9a-f]{64}$/', $fingerprint) || 1 !== \preg_match('/^[0-9a-f]{32}$/', $token)) {
             return null;
         }
 

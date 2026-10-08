@@ -110,7 +110,7 @@ final class HostLanguageServerE2eTest extends TestCase
                         'initializationOptions' => ['phpCommand' => '/bin/sh -c evil'],
                     ],
                 ]);
-                $heard = \json_decode((string) \base64_decode((string) ($initialize['result']['raw'] ?? ''), strict: true), associative: true);
+                $heard = \json_decode((string) \base64_decode((string) ($initialize['result']['raw'] ?? ''), strict: true), associative: true, flags: \JSON_THROW_ON_ERROR);
                 $this->assertIsArray($heard);
                 $this->assertSame(
                     [null, Uri::fromPath($root), Uri::fromPath($root), null],

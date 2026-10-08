@@ -48,7 +48,7 @@ final class AssistUiE2eTest extends TestCase
     /** The plugin's cell in the status bar, or null when it shows none. */
     private function cell(Ide $ide): ?StatusCell
     {
-        return \array_find($this->plugins($ide)->statusSegments(), static fn (mixed $segment): bool => $segment instanceof StatusCell && \str_starts_with($segment->text, '⇄')) ?? null;
+        return \array_find($this->plugins($ide)->statusSegments(), static fn (mixed $segment): bool => $segment instanceof StatusCell && \str_starts_with($segment->text, '⇄'));
     }
 
     /** @return array<string, MenuItem> the cell's menu, by label */

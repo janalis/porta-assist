@@ -137,6 +137,7 @@ final class GuestSession
     {
         $file = $root.'/'.self::FILE;
         // @mago-expect analysis:mixed-assignment -- narrowed below
+        // @noinspection JsonEncodingApiUsageInspection -- a file that is not JSON (hand-edited, half-written) reads as none, it does not throw
         $json = \is_file($file) ? \json_decode((string) \file_get_contents($file), associative: true) : null;
         $invite = \is_array($json) ? Invite::fromArray($json) : null;
         if (null === $invite || !\is_string($json['ticket'] ?? null) || !\is_string($json['name'] ?? null)) {

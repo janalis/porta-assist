@@ -170,6 +170,7 @@ final class Mailbox
             throw new RendezvousFailed(null === $this->socket->closed() ? \sprintf('the mailbox server sent no %s', $what) : \sprintf('the mailbox server hung up (%s)', $this->socket->closed()));
         }
         // @mago-expect analysis:mixed-assignment -- narrowed below
+        // @noinspection JsonEncodingApiUsageInspection -- a peer's line that is not JSON is dropped, not thrown: it comes off the network
         $message = \json_decode($line, associative: true);
         if (!\is_array($message) || !\is_string($message['type'] ?? null)) {
             return ['type' => ''];

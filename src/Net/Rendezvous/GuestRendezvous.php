@@ -49,6 +49,7 @@ final class GuestRendezvous
             $key = new SessionKey($key ?? \random_bytes(32));
             $opened = $key->open('invite', $sealed);
             // @mago-expect analysis:mixed-assignment -- narrowed by Invite::fromArray
+            // @noinspection JsonEncodingApiUsageInspection -- a peer's line that is not JSON is dropped, not thrown: it comes off the network
             $fields = null === $opened ? null : \json_decode($opened, associative: true);
             $invite = \is_array($fields) ? Invite::fromArray($fields) : null;
             // Said either way: the host learns from this whether the code was right.

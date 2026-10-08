@@ -84,7 +84,7 @@ final class GuestDebug
         }
         $this->api->pick($this->api->trans('Host\'s debugger — %where%', ['%where%' => $this->where]), $rows, function (string $value): void {
             $frame = $this->frames[(int) $value] ?? null;
-            if (!\ctype_digit($value) || null === $frame) {
+            if (null === $frame || !\ctype_digit($value)) {
                 ($this->send)(['t' => 'debug-step', 'verb' => $value]);
 
                 return;

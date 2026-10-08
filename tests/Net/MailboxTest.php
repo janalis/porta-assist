@@ -71,7 +71,7 @@ final class MailboxTest extends TestCase
         \stream_set_blocking($client, enable: false);
         $request = '';
         $this->await(static function () use ($client, &$request): bool {
-            $request .= (string) \fread($client, length: 8_192);
+            $request .= \fread($client, length: 8_192);
 
             return \str_contains($request, "\r\n\r\n");
         }, what: 'the request');

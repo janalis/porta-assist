@@ -66,7 +66,7 @@ $say = static function (string $line): void {
 $door = static function () use ($transit, $certificate, $token, $take, $say): void {
     $invite = new Invite(new SessionKey(random_bytes(32)), $transit, $certificate->fingerprint, $token);
     new Door($invite->key, $transit, $certificate, $take)->open();
-    $say((string) json_encode($invite->toArray()));
+    $say((string) json_encode($invite->toArray(), \JSON_THROW_ON_ERROR));
 };
 $code = static fn () => new HostRendezvous(
     (string) getenv('PORTA_FAKE_MAILBOX'),
@@ -98,7 +98,7 @@ if (null === $client) {
 }
 stream_set_blocking($client, enable: true);
 $send = static function (array $message) use ($client): void {
-    fwrite($client, json_encode($message, JSON_UNESCAPED_SLASHES)."\n");
+    fwrite($client, json_encode($message, \JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n");
 };
 $welcome = static function () use ($mode, $send): void {
     if ('silent' === $mode) {
@@ -136,7 +136,7 @@ $fetch = static function (array $paths) use ($send, $files): void {
     $send(['t' => 'fetched']);
 };
 while (false !== ($line = fgets($client))) {
-    $message = json_decode($line, associative: true);
+    $message = json_decode($line, associative: true, flags: \JSON_THROW_ON_ERROR);
     $type = $message['t'] ?? '';
     if ('lsp-mute' === $mode) {
         'hello' === $type ? $send(['t' => 'ready']) : (print $type."\n");
@@ -160,7 +160,7 @@ while (false !== ($line = fgets($client))) {
         continue;
     }
     // A denial, a cut, a goodbye: this host is done.
-    if ('bye' === $type || ('hello' === $type && str_starts_with($mode, 'deny:')) || ('fetch' === $type && 'cut' === $mode)) {
+    if (('fetch' === $type && 'cut' === $mode) || 'bye' === $type || ('hello' === $type && str_starts_with($mode, 'deny:'))) {
         if ('hello' === $type) {
             $welcome();
         }

@@ -17,7 +17,7 @@ while (false !== ($chunk = fread(STDIN, length: 65_536)) && '' !== $chunk) {
         if (strlen($buffer) < ($end + 4 + $length)) {
             break;
         }
-        $message = json_decode(substr($buffer, $end + 4, $length), associative: true);
+        $message = json_decode(substr($buffer, $end + 4, $length), associative: true, flags: \JSON_THROW_ON_ERROR);
         $buffer = substr($buffer, $end + 4 + $length);
         if ('exit' === ($message['method'] ?? null)) {
             exit(0);
@@ -29,30 +29,36 @@ while (false !== ($chunk = fread(STDIN, length: 65_536)) && '' !== $chunk) {
         // tell it what the answer was (`test/configured`) — so a test can see
         // who answered, and what.
         if ('cfg' === $message['id'] && !array_key_exists('method', $message)) {
-            $told = json_encode(['jsonrpc' => '2.0', 'method' => 'test/configured', 'params' => ['result' => $message['result'] ?? null]], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $told = json_encode(['jsonrpc' => '2.0', 'method' => 'test/configured', 'params' => ['result' => $message['result'] ?? null]], JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
             fwrite(STDOUT, 'Content-Length: '.strlen($told)."\r\n\r\n".$told);
             fflush(STDOUT);
 
             continue;
         }
         if ('test/askConfiguration' === ($message['method'] ?? null)) {
-            $ask = json_encode([
-                'jsonrpc' => '2.0',
-                'id' => 'cfg',
-                'method' => 'workspace/configuration',
-                'params' => ['items' => [['section' => 'php'], ['section' => 'symfony']]],
-            ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $ask = json_encode(
+                [
+                    'jsonrpc' => '2.0',
+                    'id' => 'cfg',
+                    'method' => 'workspace/configuration',
+                    'params' => ['items' => [['section' => 'php'], ['section' => 'symfony']]],
+                ],
+                JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
+            );
             fwrite(STDOUT, 'Content-Length: '.strlen($ask)."\r\n\r\n".$ask);
             fflush(STDOUT);
         }
-        $answer = json_encode([
-            'jsonrpc' => '2.0',
-            'id' => $message['id'],
-            'result' => [
-                'heard' => ['method' => $message['method'] ?? null, 'params' => $message['params'] ?? null],
-                'raw' => base64_encode(json_encode($message['params'] ?? null, JSON_THROW_ON_ERROR)),
+        $answer = json_encode(
+            [
+                'jsonrpc' => '2.0',
+                'id' => $message['id'],
+                'result' => [
+                    'heard' => ['method' => $message['method'] ?? null, 'params' => $message['params'] ?? null],
+                    'raw' => base64_encode(json_encode($message['params'] ?? null, \JSON_THROW_ON_ERROR)),
+                ],
             ],
-        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
+        );
         fwrite(STDOUT, 'Content-Length: '.strlen($answer)."\r\n\r\n".$answer);
         fflush(STDOUT);
     }

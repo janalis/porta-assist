@@ -160,6 +160,7 @@ final class JoinCommand extends PluginCommand
             $synced = $this->sync($mirror, $output);
             $this->send(['t' => 'bye']);
 
+            // @noinspection ProperNullCoalescingOperatorUsageInspection -- a string is why syncing failed; the list is what joining gave
             return $synced ?? [$mirror, $welcome['ticket'], $welcome['languages']];
         } finally {
             \fclose($socket);
@@ -315,6 +316,7 @@ final class JoinCommand extends PluginCommand
     {
         $file = $root.'/.porta.json';
         // @mago-expect analysis:mixed-assignment -- narrowed below
+        // @noinspection JsonEncodingApiUsageInspection -- a file that is not JSON (hand-edited, half-written) reads as none, it does not throw
         $config = \is_file($file) ? \json_decode((string) \file_get_contents($file), associative: true) : null;
         $config = \is_array($config) ? $config : [];
         $enabled = \is_array($config['enabledPlugins'] ?? null) ? $config['enabledPlugins'] : IdeConfig::DEFAULT_ENABLED_PLUGINS;

@@ -92,8 +92,9 @@ final class RendezvousTest extends TestCase
 
     public function testARelayIsHostAndPort(): void
     {
-        $this->assertInstanceOf(Transit::class, Transit::at(Transit::PUBLIC, 1.0));
-        $this->assertInstanceOf(Transit::class, Transit::at(' [::1]:4001 ', 1.0));
+        // Taken without a word: an address that is not one throws, below.
+        Transit::at(Transit::PUBLIC, 1.0);
+        Transit::at(' [::1]:4001 ', 1.0);
         foreach (['nowhere', 'host:0', 'host:70000', ':4001'] as $bad) {
             try {
                 Transit::at($bad, 1.0);

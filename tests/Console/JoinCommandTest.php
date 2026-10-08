@@ -125,7 +125,7 @@ final class JoinCommandTest extends TestCase
         $this->assertSame(1, GuestSession::channel($root), 'this command took the first channel; the IDE takes the next');
         $this->assertSame(
             ['enabledPlugins' => ['git', 'assist'], 'theme' => 'light'],
-            \json_decode((string) \file_get_contents($root.'/.porta.json'), associative: true),
+            \json_decode((string) \file_get_contents($root.'/.porta.json'), associative: true, flags: \JSON_THROW_ON_ERROR),
             'the copy\'s own settings, with this plugin on',
         );
     }
@@ -137,7 +137,7 @@ final class JoinCommandTest extends TestCase
 
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('Porta exited with 3', $tester->getErrorOutput());
-        $config = \json_decode((string) \file_get_contents($this->launched[0].'/.porta.json'), associative: true);
+        $config = \json_decode((string) \file_get_contents($this->launched[0].'/.porta.json'), associative: true, flags: \JSON_THROW_ON_ERROR);
         $user = \getenv('USER');
         $this->assertSame(\is_string($user) && '' !== $user ? $user : 'guest', GuestSession::load($this->launched[0])['name'] ?? null, 'no name given: the login name');
         $this->assertSame([...IdeConfig::DEFAULT_ENABLED_PLUGINS, 'assist'], $config['enabledPlugins'] ?? null);

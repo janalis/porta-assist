@@ -328,7 +328,7 @@ trait TalksAssist
 
             return;
         }
-        $this->buffered .= (string) $bytes;
+        $this->buffered .= $bytes;
         while (false !== ($end = \strpos($this->buffered, needle: "\n"))) {
             $message = Wire::decode(\substr($this->buffered, offset: 0, length: $end));
             $this->buffered = \substr($this->buffered, $end + 1);

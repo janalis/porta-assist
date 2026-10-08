@@ -43,7 +43,7 @@ final class LanguageServerCommandTest extends TestCase
         $this->wormhole ??= new FakeWormhole();
         $this->host?->stop(0);
         $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode], env: ['PORTA_FAKE_TRANSIT' => $this->wormhole->transit, 'PORTA_FAKE_DOOR' => '1']);
-        $invite = Invite::fromArray((array) \json_decode(self::firstLine($this->host), associative: true));
+        $invite = Invite::fromArray((array) \json_decode(self::firstLine($this->host), associative: true, flags: \JSON_THROW_ON_ERROR));
         $this->assertInstanceOf(Invite::class, $invite);
 
         return $invite;

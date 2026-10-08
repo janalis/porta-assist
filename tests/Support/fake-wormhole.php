@@ -32,7 +32,7 @@ $sockets = [];
 $send = static function ($stream, array $message): void {
     if (is_resource($stream)) {
         // @mago-expect lint:no-error-control-operator -- a client that just went away warns; this server shrugs
-        @fwrite($stream, Frames::encode(Frames::TEXT, (string) json_encode($message)));
+        @fwrite($stream, Frames::encode(Frames::TEXT, (string) json_encode($message, \JSON_THROW_ON_ERROR)));
     }
 };
 $hangUp = static function (int $id) use (&$sockets): void {
@@ -187,7 +187,7 @@ $accept($mailbox, static function ($stream) use (&$sockets, $handle, $hangUp, $s
             if (Frames::PING === $opcode) {
                 fwrite($stream, Frames::encode(Frames::PONG, $payload));
             }
-            $message = Frames::TEXT === $opcode ? json_decode($payload, associative: true) : null;
+            $message = Frames::TEXT === $opcode ? json_decode($payload, associative: true, flags: \JSON_THROW_ON_ERROR) : null;
             if (is_array($message)) {
                 $handle($id, $message);
             }

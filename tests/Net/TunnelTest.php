@@ -78,7 +78,7 @@ final class TunnelTest extends TestCase
         \fwrite($app, data: 'too late');
         $received = '';
         $this->await(static function () use ($app, &$received): bool {
-            $received .= (string) \fread($app, length: 1_048_576);
+            $received .= \fread($app, length: 1_048_576);
 
             return \feof($app);
         }, what: 'everything, then the close');

@@ -180,7 +180,7 @@ final class TransportTest extends TestCase
         $this->assertSame(['removed'], $closed, 'the owner hears it at once');
         $this->assertIsResource(Probe::get($connection, 'stream'), 'the last message still has its chance');
         $this->pump(Connection::LINGER + 0.3);
-        $this->assertFalse(\is_resource(Probe::get($connection, 'stream')), 'then the socket goes regardless');
+        $this->assertIsClosedResource(Probe::get($connection, 'stream'), 'then the socket goes regardless');
         \fclose($client);
     }
 
@@ -207,7 +207,7 @@ final class TransportTest extends TestCase
         \stream_set_blocking($client, enable: false);
         $received = '';
         $reader = EventLoop::onReadable($client, static function () use (&$received, $client): void {
-            $received .= (string) \fread($client, length: 1_048_576);
+            $received .= \fread($client, length: 1_048_576);
         });
         try {
             // By value is right here: the handle never changes, only its state.
@@ -215,7 +215,7 @@ final class TransportTest extends TestCase
         } finally {
             EventLoop::cancel($reader);
         }
-        $this->assertSame(['t' => 'bye', 'pad' => $pad], \json_decode(\rtrim($received), associative: true));
+        $this->assertSame(['t' => 'bye', 'pad' => $pad], \json_decode(\rtrim($received), associative: true, flags: \JSON_THROW_ON_ERROR));
         \fclose($client);
     }
 
@@ -260,7 +260,7 @@ final class TransportTest extends TestCase
         $pings = '';
         \stream_set_blocking($client, enable: false);
         $this->await(static function () use (&$why, &$pings, $client): bool {
-            $pings .= (string) \fread($client, length: 4096);
+            $pings .= \fread($client, length: 4096);
 
             return null !== $why;
         }, what: 'the silence to be noticed');
@@ -332,7 +332,7 @@ final class TransportTest extends TestCase
                     $buffers[] = '';
                 }
                 foreach ($held as $i => $socket) {
-                    $buffers[$i] .= (string) \fread($socket, length: 8192);
+                    $buffers[$i] .= \fread($socket, length: 8192);
                     while (false !== ($end = \strpos($buffers[$i], needle: "\n"))) {
                         $asked[] = \trim(\substr($buffers[$i], offset: 0, length: $end));
                         $buffers[$i] = \substr($buffers[$i], $end + 1);

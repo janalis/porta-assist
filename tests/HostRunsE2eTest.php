@@ -81,7 +81,7 @@ final class HostRunsE2eTest extends TestCase
                         if ('terminal-out' !== $message['t']) {
                             continue;
                         }
-                        $printed .= (string) \base64_decode(Wire::string($message, 'data'), strict: true);
+                        $printed .= \base64_decode(Wire::string($message, 'data'), strict: true);
                         unset($this->inbox[$i]);
                     }
 
