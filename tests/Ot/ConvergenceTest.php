@@ -10,6 +10,8 @@ use Porta\AssistPlugin\Ot\ServerDocument;
 use Porta\AssistPlugin\Ot\TextDiff;
 use Porta\AssistPlugin\Ot\TextOperation;
 use Porta\AssistPlugin\Ot\UndoStack;
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 
 /**
  * A host and three guests typing, undoing and receiving in a random order,
@@ -29,6 +31,8 @@ final class ConvergenceTest extends TestCase
     private ServerDocument $host;
 
     private UndoStack $hostUndo;
+
+    private Randomizer $random;
 
     public function testEveryCopyEndsTheSame(): void
     {
@@ -63,7 +67,7 @@ final class ConvergenceTest extends TestCase
 
     private function run_(int $seed): void
     {
-        \mt_srand($seed);
+        $this->random = new Randomizer(new Mt19937($seed));
         $this->host = new ServerDocument("start\ntext\n");
         $this->hostUndo = new UndoStack();
         $this->guests = [];
@@ -72,11 +76,11 @@ final class ConvergenceTest extends TestCase
             $this->guests[] = ['text' => $this->host->text, 'doc' => new ClientDocument(0, $this->host->text), 'undo' => new UndoStack(), 'inbox' => []];
         }
         for ($step = 0; $step < 400; ++$step) {
-            $guest = \mt_rand(0, max: 2);
-            match (\mt_rand(0, max: 9)) {
-                0, 1, 2 => $this->guestTypes($guest, self::mutate($this->guests[$guest]['text'])),
+            $guest = $this->random->getInt(0, max: 2);
+            match ($this->random->getInt(0, max: 9)) {
+                0, 1, 2 => $this->guestTypes($guest, self::mutate($this->random, $this->guests[$guest]['text'])),
                 3 => $this->guestUndoes($guest),
-                4 => $this->hostTypes(self::mutate($this->host->text)),
+                4 => $this->hostTypes(self::mutate($this->random, $this->host->text)),
                 5, 6 => $this->deliverToHost(),
                 default => $this->deliverToGuest($guest),
             };
@@ -174,12 +178,12 @@ final class ConvergenceTest extends TestCase
         }
     }
 
-    private static function mutate(string $text): string
+    private static function mutate(Randomizer $random, string $text): string
     {
         $chars = \mb_str_split($text);
-        $at = \mt_rand(0, \count($chars));
-        $insert = \array_fill(0, \mt_rand(0, max: 3), self::ALPHABET[\mt_rand(0, max: 5)]);
-        \array_splice($chars, $at, \mt_rand(0, max: 2), $insert);
+        $at = $random->getInt(0, \count($chars));
+        $insert = \array_fill(0, $random->getInt(0, max: 3), self::ALPHABET[$random->getInt(0, max: 5)]);
+        \array_splice($chars, $at, $random->getInt(0, max: 2), $insert);
 
         return \implode('', $chars);
     }

@@ -61,7 +61,7 @@ final readonly class Paths
         }
         $real = \realpath($existing);
         $root = \realpath($this->root);
-        if (false === $real || false === $root || $real !== $root && !\str_starts_with($real, $root.'/')) {
+        if (false === $real || false === $root || ($real !== $root && !\str_starts_with($real, $root.'/'))) {
             return null;
         }
 

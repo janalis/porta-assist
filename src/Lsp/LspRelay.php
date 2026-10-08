@@ -98,7 +98,7 @@ final readonly class LspRelay
         }
         $lsp = $message['m'];
         $method = \is_string($lsp['method'] ?? null) ? $lsp['method'] : null;
-        $refused = \in_array($method, self::CONFIGURES, strict: true) || ($this->readOnly)() && \in_array($method, self::WRITES, strict: true);
+        $refused = \in_array($method, self::CONFIGURES, strict: true) || (($this->readOnly)() && \in_array($method, self::WRITES, strict: true));
         if ($refused) {
             if (\array_key_exists('id', $lsp)) {
                 $this->guest->send([

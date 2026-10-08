@@ -114,6 +114,7 @@ final class WorkspaceTest extends TestCase
         $this->assertTrue($mirror->write('stale.php', 'old'));
         $this->assertFalse($mirror->write('../escape.php', 'x'));
         $this->assertFalse($mirror->write('.porta.json', '{}'), 'the copy\'s own settings are not the host\'s to write');
+        $this->assertFalse($mirror->write('old.php/inside.php', 'x'), 'a file holds the folder\'s name: nothing to write into');
         \mkdir($mirror->root.'/.porta');
         \file_put_contents($mirror->root.'/.porta/assist-session.json', data: '{}');
 

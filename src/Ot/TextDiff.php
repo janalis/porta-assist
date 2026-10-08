@@ -97,7 +97,7 @@ final class TextDiff
         for ($d = 0; $d <= $max; ++$d) {
             $trace[] = $v;
             for ($k = -$d; $k <= $d; $k += 2) {
-                $down = $k === -$d || $k !== $d && $v[$k - 1] < $v[$k + 1];
+                $down = $k === -$d || ($k !== $d && $v[$k - 1] < $v[$k + 1]);
                 $x = $down ? $v[$k + 1] : $v[$k - 1] + 1;
                 $y = $x - $k;
                 while ($x < $n && $y < $m && $a[$x] === $b[$y]) {
@@ -130,7 +130,7 @@ final class TextDiff
         $script = [];
         for ($d = \count($trace) - 1; $d > 0; --$d) {
             $v = $trace[$d];
-            $down = $k === -$d || $k !== $d && $v[$k - 1] < $v[$k + 1];
+            $down = $k === -$d || ($k !== $d && $v[$k - 1] < $v[$k + 1]);
             $previousK = $down ? $k + 1 : $k - 1;
             $previousX = $v[$previousK];
             $previousY = $previousX - $previousK;

@@ -145,7 +145,7 @@ while (false !== ($line = fgets($client))) {
     }
     if ('lsp' === $mode) {
         $lsp = $message['m'] ?? [];
-        if ('exit' === ($lsp['method'] ?? null) || 'hello' === $type && 'php' !== ($message['language'] ?? null)) {
+        if ('exit' === ($lsp['method'] ?? null) || ('hello' === $type && 'php' !== ($message['language'] ?? null))) {
             if ('hello' === $type) {
                 $send(['t' => 'denied', 'reason' => 'language']);
             }
@@ -160,7 +160,7 @@ while (false !== ($line = fgets($client))) {
         continue;
     }
     // A denial, a cut, a goodbye: this host is done.
-    if ('bye' === $type || 'hello' === $type && str_starts_with($mode, 'deny:') || 'fetch' === $type && 'cut' === $mode) {
+    if ('bye' === $type || ('hello' === $type && str_starts_with($mode, 'deny:')) || ('fetch' === $type && 'cut' === $mode)) {
         if ('hello' === $type) {
             $welcome();
         }

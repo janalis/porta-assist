@@ -100,7 +100,7 @@ final class LanguageServerCommandTest extends TestCase
         foreach ($frames as $frame) {
             \fwrite($editor, JsonRpcFramer::encode($frame));
         }
-        $output = \fopen('php://memory', mode: 'w+');
+        $output = \fopen('php://memory', mode: 'wb+');
         $this->assertNotFalse($output);
         $application = new Application();
         $application->addCommand(new LanguageServerCommand($root, $input, $output, timeout: 2.0, ping: $ping, silence: $silence));

@@ -135,7 +135,7 @@ final class TextOperation
     /** Whether applying it changes nothing. */
     public function isNoop(): bool
     {
-        return [] === $this->ops || 1 === \count($this->ops) && \is_int($this->ops[0]) && $this->ops[0] > 0;
+        return [] === $this->ops || (1 === \count($this->ops) && \is_int($this->ops[0]) && $this->ops[0] > 0);
     }
 
     public function equals(self $other): bool

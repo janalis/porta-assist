@@ -86,7 +86,7 @@ final class Tunnel
             return;
         }
         $bytes = \fread($this->stream, length: self::CHUNK);
-        if (false === $bytes || '' === $bytes && \feof($this->stream)) {
+        if (false === $bytes || ('' === $bytes && \feof($this->stream))) {
             $this->hangUp();
 
             return;

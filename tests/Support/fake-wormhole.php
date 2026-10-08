@@ -154,7 +154,7 @@ $accept($mailbox, static function ($stream) use (&$sockets, $handle, $hangUp, $s
     $sockets[$id] = ['stream' => $stream, 'side' => '', 'open' => '', 'claimed' => '', 'watcher' => ''];
     $sockets[$id]['watcher'] = EventLoop::onReadable($stream, static function () use ($stream, $id, &$request, $frames, $handle, $hangUp, $send): void {
         $bytes = fread($stream, length: 65_536);
-        if (false === $bytes || '' === $bytes && feof($stream)) {
+        if (false === $bytes || ('' === $bytes && feof($stream))) {
             $hangUp($id);
 
             return;
@@ -215,7 +215,7 @@ $join = static function ($one, $other): void {
         fwrite($from, data: "ok\n");
         $pipes[] = EventLoop::onReadable($from, static function () use ($from, $to, $end): void {
             $bytes = fread($from, length: 65_536);
-            if (false === $bytes || '' === $bytes && feof($from)) {
+            if (false === $bytes || ('' === $bytes && feof($from))) {
                 $end();
 
                 return;
@@ -232,7 +232,7 @@ $accept($transit, static function ($stream) use (&$waiting, $join): void {
     $line = '';
     EventLoop::onReadable($stream, static function (string $watcher) use ($stream, &$line, &$waiting, $join): void {
         $byte = fread($stream, length: 1);
-        if (false === $byte || '' === $byte && feof($stream)) {
+        if (false === $byte || ('' === $byte && feof($stream))) {
             EventLoop::cancel($watcher);
             $waiting = array_filter($waiting, static fn (array $other): bool => $other['stream'] !== $stream);
             fclose($stream);

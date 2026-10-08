@@ -85,15 +85,17 @@ final readonly class Mirror
         return $pruned;
     }
 
-    /** Write a file the host sent; false when the path is not one this mirror may hold. */
+    /** Write a file the host sent; false when the path is not one this mirror may hold, or its folder cannot be made. */
     public function write(string $relative, string $content): bool
     {
         $path = $this->paths->absolute($relative);
         if (null === $path) {
             return false;
         }
-        if (!\is_dir(\dirname($path))) {
-            \mkdir(\dirname($path), permissions: 0o755, recursive: true);
+        $dir = \dirname($path);
+        // @mago-expect lint:no-error-control-operator -- a folder that cannot be made (a file holds its name) is answered false, not warned about
+        if (!\is_dir($dir) && !@\mkdir($dir, permissions: 0o755, recursive: true) && !\is_dir($dir)) {
+            return false;
         }
 
         return false !== \file_put_contents($path, $content);

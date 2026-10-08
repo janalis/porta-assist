@@ -6,6 +6,8 @@ namespace Porta\AssistPlugin\Tests\Ot;
 
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Ot\TextDiff;
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 
 final class TextDiffTest extends TestCase
 {
@@ -62,18 +64,18 @@ final class TextDiffTest extends TestCase
     /** Random edits at random places: the diff always rebuilds the new text. */
     public function testRandomEditsAlwaysRoundTrip(): void
     {
-        \mt_srand(7);
+        $random = new Randomizer(new Mt19937(7));
         $alphabet = ['a', 'b', "\n", 'é', ' '];
         for ($round = 0; $round < 300; ++$round) {
             $old = '';
-            for ($i = \mt_rand(0, max: 30); $i > 0; --$i) {
-                $old .= $alphabet[\mt_rand(0, max: 4)];
+            for ($i = $random->getInt(0, max: 30); $i > 0; --$i) {
+                $old .= $alphabet[$random->getInt(0, max: 4)];
             }
             $new = $old;
-            for ($edits = \mt_rand(1, max: 4); $edits > 0; --$edits) {
+            for ($edits = $random->getInt(1, max: 4); $edits > 0; --$edits) {
                 $chars = \mb_str_split($new);
-                $at = \mt_rand(0, \count($chars));
-                \array_splice($chars, $at, \mt_rand(0, max: 3), \array_fill(0, \mt_rand(0, max: 3), $alphabet[\mt_rand(0, max: 4)]));
+                $at = $random->getInt(0, \count($chars));
+                \array_splice($chars, $at, $random->getInt(0, max: 3), \array_fill(0, $random->getInt(0, max: 3), $alphabet[$random->getInt(0, max: 4)]));
                 $new = \implode('', $chars);
             }
             $this->assertSame($new, TextDiff::between($old, $new)->apply($old), \json_encode([$old, $new], \JSON_THROW_ON_ERROR));

@@ -81,7 +81,7 @@ final class Transit
             $watcher = EventLoop::unreference(EventLoop::onReadable($stream, static function () use ($stream, &$line, $done): void {
                 while (true) {
                     $byte = \fread($stream, length: 1);
-                    if (false === $byte || '' === $byte && \feof($stream)) {
+                    if (false === $byte || ('' === $byte && \feof($stream))) {
                         $done(false);
 
                         return;

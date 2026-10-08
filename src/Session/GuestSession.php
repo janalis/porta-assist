@@ -111,6 +111,8 @@ final class GuestSession
 
     /**
      * @param array{invite: Invite, ticket: string, name: string, languages: list<string>} $session
+     *
+     * @throws \RuntimeException when the folder it goes in cannot be made
      */
     public function __construct(
         private readonly PluginApi $api,
@@ -160,8 +162,10 @@ final class GuestSession
     public static function store(string $root, array $session, int $channel = 0): void
     {
         $file = $root.'/'.self::FILE;
-        if (!\is_dir(\dirname($file))) {
-            \mkdir(\dirname($file), permissions: 0o700, recursive: true);
+        $dir = \dirname($file);
+        // @mago-expect lint:no-error-control-operator -- a folder that cannot be made is reported by the exception, not a warning
+        if (!\is_dir($dir) && !@\mkdir($dir, permissions: 0o700, recursive: true) && !\is_dir($dir)) {
+            throw new \RuntimeException('cannot create '.$dir);
         }
         \touch($file);
         \chmod($file, permissions: 0o600);
@@ -173,7 +177,7 @@ final class GuestSession
     /** The next channel to the host, taken: no other process in this copy takes it too. */
     public static function channel(string $root): int
     {
-        $handle = \fopen($root.'/'.self::CHANNEL, mode: 'c+');
+        $handle = \fopen($root.'/'.self::CHANNEL, mode: 'cb+');
         \assert(false !== $handle, description: 'the copy\'s .porta/ is there: the session file is in it');
         \flock($handle, \LOCK_EX);
         $channel = (int) \stream_get_contents($handle);

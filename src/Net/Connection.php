@@ -76,7 +76,7 @@ final class Connection
         $framer = new LineFramer($this->close(...), $maxLine);
         $this->watcher = EventLoop::unreference(EventLoop::onReadable($stream, function () use ($framer): void {
             $bytes = \fread($this->stream, length: 262_144);
-            if (false === $bytes || '' === $bytes && \feof($this->stream)) {
+            if (false === $bytes || ('' === $bytes && \feof($this->stream))) {
                 $this->close('the connection was closed');
 
                 return;

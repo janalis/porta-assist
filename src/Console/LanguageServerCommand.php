@@ -166,7 +166,7 @@ final class LanguageServerCommand extends PluginCommand
                 // out the socket's timeout on it and take it for one.
                 \stream_set_blocking($stream, enable: $stream !== $socket);
                 $bytes = \fread($stream, length: 262_144);
-                if (false === $bytes || '' === $bytes && \feof($stream)) {
+                if (false === $bytes || ('' === $bytes && \feof($stream))) {
                     return false;
                 }
                 if ('' === $bytes) {

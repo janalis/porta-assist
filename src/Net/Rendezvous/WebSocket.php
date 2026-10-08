@@ -48,7 +48,7 @@ final class WebSocket
         $this->frames = new Frames($this->hangUp(...));
         $this->watcher = EventLoop::unreference(EventLoop::onReadable($stream, function (): void {
             $bytes = \fread($this->stream, length: 65_536);
-            if (false === $bytes || '' === $bytes && \feof($this->stream)) {
+            if (false === $bytes || ('' === $bytes && \feof($this->stream))) {
                 $this->hangUp('the server hung up');
 
                 return;
@@ -216,7 +216,7 @@ final class WebSocket
             static function (\Closure $done) use ($stream, &$response, &$watcher): void {
                 $watcher = EventLoop::unreference(EventLoop::onReadable($stream, static function () use ($stream, &$response, $done): void {
                     $bytes = \fread($stream, length: 8_192);
-                    if (false === $bytes || '' === $bytes && \feof($stream)) {
+                    if (false === $bytes || ('' === $bytes && \feof($stream))) {
                         $done(false);
 
                         return;

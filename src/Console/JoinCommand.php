@@ -131,9 +131,9 @@ final class JoinCommand extends PluginCommand
         // the host's, set up already.
         new OnboardingState($mirror->root)->markWelcomeSeen();
         $output->writeln(\sprintf('Opening <info>%s</info>…', OutputFormatter::escape($mirror->root)));
-        $code = ($this->launch ?? self::launch(...))($mirror->root);
+        $exit = ($this->launch ?? self::launch(...))($mirror->root);
 
-        return 0 === $code ? null : \sprintf('Porta exited with %d', $code);
+        return 0 === $exit ? null : \sprintf('Porta exited with %d', $exit);
     }
 
     /**
@@ -294,7 +294,7 @@ final class JoinCommand extends PluginCommand
             \stream_set_blocking($socket, enable: false);
             $bytes = \fread($socket, length: 262_144);
             \stream_set_blocking($socket, enable: true);
-            if (false === $bytes || '' === $bytes && \feof($socket)) {
+            if (false === $bytes || ('' === $bytes && \feof($socket))) {
                 $this->hungUp = true;
 
                 return null;

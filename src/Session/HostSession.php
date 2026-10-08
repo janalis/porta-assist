@@ -594,8 +594,8 @@ final class HostSession
         }
         // Its own are not among them: what hung on an old connection of its
         // went with it ({@see release()}).
-        foreach ($this->agents as $id => $agent) {
-            $guest->send(['t' => 'presence', 'peer' => $id, 'name' => $agent['name'], 'agent' => true, ...$agent['caret']]);
+        foreach ($this->agents as $agentId => $agent) {
+            $guest->send(['t' => 'presence', 'peer' => $agentId, 'name' => $agent['name'], 'agent' => true, ...$agent['caret']]);
         }
         // What it was let do before it dropped, it may do again — and is told.
         \array_map(static fn (string $right) => $guest->permit($right, allowed: true), \array_keys(\array_filter($this->rights[$peer] ?? [])));
