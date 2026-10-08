@@ -204,8 +204,8 @@ final class LanguageServerCommand extends PluginCommand
      */
     private function toHost($socket, array $messages): void
     {
+        \stream_set_blocking($socket, enable: true);
         foreach ($messages as $message) {
-            \stream_set_blocking($socket, enable: true);
             \fwrite($socket, Wire::encode(['t' => 'lsp', 'm' => $message]));
         }
     }
