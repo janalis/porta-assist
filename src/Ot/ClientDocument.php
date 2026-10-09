@@ -48,7 +48,7 @@ final class ClientDocument
 
             return $operation;
         }
-        $this->buffer = null === $this->buffer ? $operation : $this->buffer->compose($operation);
+        $this->buffer = $this->buffer?->compose($operation) ?? $operation;
 
         return null;
     }
@@ -99,7 +99,7 @@ final class ClientDocument
             $pending = null;
         }
         if (null !== $this->buffer) {
-            $pending = null === $pending ? $this->buffer : $pending->compose($this->buffer);
+            $pending = $pending?->compose($this->buffer) ?? $this->buffer;
         }
         if (null === $pending) {
             return null;
