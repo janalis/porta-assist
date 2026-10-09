@@ -95,19 +95,16 @@ final class JoinCommand extends PluginCommand
         try {
             $parsed = Code::parse($code);
         } catch (\InvalidArgumentException $e) {
-            $errors->writeln('<error>'.OutputFormatter::escape($e->getMessage()).'</error>');
-
-            return self::FAILURE;
+            $parsed = $e->getMessage();
         }
-        $who = '' !== \trim((string) $name) ? \trim((string) $name) : self::user();
-        $failure = $this->join($mailbox, $parsed, $who, $output);
+        $failure = \is_string($parsed)
+            ? $parsed
+            : $this->join($mailbox, $parsed, '' !== \trim((string) $name) ? \trim((string) $name) : self::user(), $output);
         if (null !== $failure) {
             $errors->writeln('<error>'.OutputFormatter::escape($failure).'</error>');
-
-            return self::FAILURE;
         }
 
-        return self::SUCCESS;
+        return null === $failure ? self::SUCCESS : self::FAILURE;
     }
 
     /** Ask in, sync the copy, open the IDE on it: null once done, else why not. */
@@ -119,6 +116,13 @@ final class JoinCommand extends PluginCommand
         } catch (RendezvousFailed $e) {
             return $e->getMessage();
         }
+
+        return $this->open($invite, $name, $output);
+    }
+
+    /** Be let in, then open the IDE on the copy: null once done, else why not. */
+    private function open(Invite $invite, string $name, OutputInterface $output): ?string
+    {
         $joined = $this->enter($invite, $name, $output);
         if (\is_string($joined)) {
             return $joined;
@@ -153,19 +157,29 @@ final class JoinCommand extends PluginCommand
         try {
             $this->send(['t' => 'hello', 'v' => Wire::VERSION, 'name' => $name, 'token' => $invite->token]);
             $welcome = $this->welcome($output);
-            if (\is_string($welcome)) {
-                return $welcome;
-            }
-            $mirror = Mirror::under($this->home ?? (string) PortaHome::base(), $welcome['project'], $welcome['name']);
-            $synced = $this->sync($mirror, $output);
-            $this->send(['t' => 'bye']);
 
-            // @noinspection ProperNullCoalescingOperatorUsageInspection -- a string is why syncing failed; the list is what joining gave
-            return $synced ?? [$mirror, $welcome['ticket'], $welcome['languages']];
+            return \is_string($welcome) ? $welcome : $this->copy($welcome, $output);
         } finally {
             \fclose($socket);
             $this->socket = null;
         }
+    }
+
+    /**
+     * Bring the copy of the project $welcome names in line, and say goodbye.
+     *
+     * @param array{project: string, name: string, ticket: string, languages: list<string>} $welcome
+     *
+     * @return array{Mirror, string, list<string>}|string the copy, the ticket and the host's languages, or why not
+     */
+    private function copy(array $welcome, OutputInterface $output): array|string
+    {
+        $mirror = Mirror::under($this->home ?? (string) PortaHome::base(), $welcome['project'], $welcome['name']);
+        $synced = $this->sync($mirror, $output);
+        $this->send(['t' => 'bye']);
+
+        // @noinspection ProperNullCoalescingOperatorUsageInspection -- a string is why syncing failed; the list is what joining gave
+        return $synced ?? [$mirror, $welcome['ticket'], $welcome['languages']];
     }
 
     /**
@@ -175,40 +189,49 @@ final class JoinCommand extends PluginCommand
      */
     private function welcome(OutputInterface $output): array|string
     {
-        while (true) {
+        do {
             $message = $this->next($this->answerTimeout);
             $kind = null === $message ? 'timeout' : Wire::string($message, 't');
             if ('pending' === $kind) {
                 $output->writeln('Waiting for the host to let you in…');
-
-                continue;
             }
-            if ('welcome' === $kind) {
-                $project = \is_array($message['project'] ?? null) ? $message['project'] : [];
-                $id = \is_string($project['id'] ?? null) && 1 === \preg_match('/^[0-9a-f]{16}$/', $project['id']) ? $project['id'] : null;
-                $ticket = Wire::string($message ?? [], 'ticket');
-                if (null === $id || '' === $ticket) {
-                    return 'The host sent a welcome this Porta does not understand';
-                }
-                $output->writeln(\sprintf('In, %s.', 'edit' === Wire::string($message ?? [], 'role') ? 'editing' : 'reading along'));
+        } while ('pending' === $kind);
 
-                return [
-                    'project' => $id,
-                    'name' => \is_string($project['name'] ?? null) ? Wire::clean($project['name']) : '',
-                    'ticket' => $ticket,
-                    'languages' => Wire::strings($message ?? [], 'languages'),
-                ];
-            }
-
-            return match (null === $message ? 'timeout' : Wire::string($message, 'reason')) {
-                'host' => 'The host turned you away',
-                'full' => 'The session is full',
-                'busy' => 'Too many are waiting to be let in — try again in a moment',
-                'unanswered', 'timeout' => $this->silence('The host did not answer'),
-                'version' => 'The host runs a Porta that speaks another version of assist',
-                default => 'The host does not know this guest any more — ask the host for a new code',
-            };
+        if ('welcome' === $kind) {
+            return $this->welcomed($message ?? [], $output);
         }
+
+        return match (null === $message ? 'timeout' : Wire::string($message, 'reason')) {
+            'host' => 'The host turned you away',
+            'full' => 'The session is full',
+            'busy' => 'Too many are waiting to be let in — try again in a moment',
+            'unanswered', 'timeout' => $this->silence('The host did not answer'),
+            'version' => 'The host runs a Porta that speaks another version of assist',
+            default => 'The host does not know this guest any more — ask the host for a new code',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $message the welcome
+     *
+     * @return array{project: string, name: string, ticket: string, languages: list<string>}|string the session, or why there is none
+     */
+    private function welcomed(array $message, OutputInterface $output): array|string
+    {
+        $project = \is_array($message['project'] ?? null) ? $message['project'] : [];
+        $id = \is_string($project['id'] ?? null) && 1 === \preg_match('/^[0-9a-f]{16}$/', $project['id']) ? $project['id'] : null;
+        $ticket = Wire::string($message, 'ticket');
+        if (null === $id || '' === $ticket) {
+            return 'The host sent a welcome this Porta does not understand';
+        }
+        $output->writeln(\sprintf('In, %s.', 'edit' === Wire::string($message, 'role') ? 'editing' : 'reading along'));
+
+        return [
+            'project' => $id,
+            'name' => \is_string($project['name'] ?? null) ? Wire::clean($project['name']) : '',
+            'ticket' => $ticket,
+            'languages' => Wire::strings($message, 'languages'),
+        ];
     }
 
     /** Bring $mirror in line with the host's project: null once it is, else why not. */
@@ -223,24 +246,34 @@ final class JoinCommand extends PluginCommand
         $pruned = $mirror->prune($host);
         $missing = $mirror->missing($host);
         $output->writeln(\sprintf('Files shared: %d — to fetch: %d, removed: %d.', \count($host), \count($missing), $pruned));
+        $failure = null;
         foreach (\array_chunk($missing, self::BATCH) as $batch) {
             $this->send(['t' => 'fetch', 'paths' => $batch]);
-            while (true) {
-                $message = $this->next($this->timeout * 6);
-                if (null === $message) {
-                    return $this->silence('The host stopped sending files');
-                }
-                if ('fetched' === $message['t']) {
-                    break;
-                }
-                $content = \base64_decode(Wire::string($message, 'data'), strict: true);
-                if ('file' === $message['t'] && false !== $content) {
-                    $mirror->write(Wire::string($message, 'path'), $content);
-                }
+            $failure = $this->receive($mirror);
+            if (null !== $failure) {
+                break;
             }
         }
 
-        return null;
+        return $failure;
+    }
+
+    /** Write the files of one fetch into $mirror as they come: null once all came, else why not. */
+    private function receive(Mirror $mirror): ?string
+    {
+        while (true) {
+            $message = $this->next($this->timeout * 6);
+            if (null === $message) {
+                return $this->silence('The host stopped sending files');
+            }
+            if ('fetched' === $message['t']) {
+                return null;
+            }
+            $content = \base64_decode(Wire::string($message, 'data'), strict: true);
+            if ('file' === $message['t'] && false !== $content) {
+                $mirror->write(Wire::string($message, 'path'), $content);
+            }
+        }
     }
 
     /** $why — or, when the host closed the connection, that. */
@@ -287,7 +320,7 @@ final class JoinCommand extends PluginCommand
             $write = null;
             $except = null;
             if ($left <= 0 || 1 !== \stream_select($read, $write, $except, (int) $left, (int) (($left - (int) $left) * 1e6))) {
-                return null;
+                break;
             }
             // Not blocking: readable can be a TLS record with nothing in it
             // for this side — a session ticket — and a blocking read would
@@ -298,7 +331,7 @@ final class JoinCommand extends PluginCommand
             if (false === $bytes || ('' === $bytes && \feof($socket))) {
                 $this->hungUp = true;
 
-                return null;
+                break;
             }
             foreach ($this->framer->feed($bytes) as $line) {
                 $message = Wire::decode($line);

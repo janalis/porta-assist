@@ -93,11 +93,8 @@ final readonly class Mirror
             return false;
         }
         $dir = \dirname($path);
-        // @mago-expect lint:no-error-control-operator -- a folder that cannot be made (a file holds its name) is answered false, not warned about
-        if (!\is_dir($dir) && !@\mkdir($dir, permissions: 0o755, recursive: true) && !\is_dir($dir)) {
-            return false;
-        }
 
-        return false !== \file_put_contents($path, $content);
+        // @mago-expect lint:no-error-control-operator -- a folder that cannot be made (a file holds its name) is answered false, not warned about
+        return (\is_dir($dir) || @\mkdir($dir, permissions: 0o755, recursive: true) || \is_dir($dir)) && false !== \file_put_contents($path, $content);
     }
 }

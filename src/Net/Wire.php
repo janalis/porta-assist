@@ -27,7 +27,7 @@ final class Wire
             // @mago-expect analysis:mixed-assignment -- narrowed below
             $message = \json_decode($line, associative: true, flags: \JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
-            return null;
+            $message = null;
         }
         if (!\is_array($message) || !\is_string($message['t'] ?? null)) {
             return null;

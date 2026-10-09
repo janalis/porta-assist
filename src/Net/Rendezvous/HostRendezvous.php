@@ -141,14 +141,13 @@ final class HostRendezvous
             $joined = false;
         }
         $mailbox->leave($joined ? 'happy' : 'scary');
-        if (!$joined) {
-            return 'wrong';
+        if ($joined) {
+            $door = new Door($invite->key, $this->transit, $this->certificate, $this->onStream, $this->timeout);
+            $this->doors[] = $door;
+            $door->open();
         }
-        $door = new Door($invite->key, $this->transit, $this->certificate, $this->onStream, $this->timeout);
-        $this->doors[] = $door;
-        $door->open();
 
-        return 'used';
+        return $joined ? 'used' : 'wrong';
     }
 
     /**

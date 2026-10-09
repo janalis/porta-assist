@@ -57,16 +57,25 @@ final class ProjectFiles
     /** @return list<string> */
     private function candidates(): array
     {
-        if (!\file_exists($this->root.'/.git')) {
+        $files = $this->tracked();
+        if (null === $files) {
             return new Paths($this->root)->walk('', self::SKIPPED_DIRECTORIES);
+        }
+
+        return \is_dir($this->root.'/vendor') ? [...$files, ...new Paths($this->root)->walk('vendor', self::SKIPPED_DIRECTORIES)] : $files;
+    }
+
+    /** @return list<string>|null what git lists, or null when the project is not a repository git can list */
+    private function tracked(): ?array
+    {
+        if (!\file_exists($this->root.'/.git')) {
+            return null;
         }
         $process = new Process(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], $this->root);
         $process->run();
-        if (!$process->isSuccessful()) {
-            return new Paths($this->root)->walk('', self::SKIPPED_DIRECTORIES);
-        }
-        $files = \array_values(\array_filter(\explode("\0", $process->getOutput()), static fn (string $file): bool => '' !== $file));
 
-        return \is_dir($this->root.'/vendor') ? [...$files, ...new Paths($this->root)->walk('vendor', self::SKIPPED_DIRECTORIES)] : $files;
+        return $process->isSuccessful()
+            ? \array_values(\array_filter(\explode("\0", $process->getOutput()), static fn (string $file): bool => '' !== $file))
+            : null;
     }
 }

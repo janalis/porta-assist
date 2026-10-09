@@ -107,14 +107,12 @@ final class HostFiles
             return;
         }
         $refused = $this->writeFile($path, $text);
-        if (null !== $refused) {
-            $guest->send(['t' => 'error', 'path' => $relative, 'message' => $refused]);
-
-            return;
+        $this->refused($guest, $relative, $refused);
+        if (null === $refused) {
+            // Told to the others as changed: theirs to fetch before a rescan lists it.
+            $this->written[$relative] = true;
+            ($this->broadcast)(['t' => 'changed', 'files' => [[$relative, \strlen($text), \hash('xxh128', $text)]], 'gone' => []], $guest->id);
         }
-        // Told to the others as changed: theirs to fetch before a rescan lists it.
-        $this->written[$relative] = true;
-        ($this->broadcast)(['t' => 'changed', 'files' => [[$relative, \strlen($text), \hash('xxh128', $text)]], 'gone' => []], $guest->id);
     }
 
     public function move(Guest $guest, string $from, string $to): void
@@ -205,14 +203,12 @@ final class HostFiles
     private function writeFile(string $path, string $text): ?string
     {
         $buffers = $this->api->openBuffers();
-        if (!\is_file($path)) {
-            return $buffers->create($path, $text);
-        }
-        if (null !== $buffers->text($path)) {
-            return 'the host has it open';
-        }
 
-        return false === \file_put_contents($path, $text) ? 'cannot write it' : null;
+        return match (true) {
+            !\is_file($path) => $buffers->create($path, $text),
+            null !== $buffers->text($path) => 'the host has it open',
+            default => false === \file_put_contents($path, $text) ? 'cannot write it' : null,
+        };
     }
 
     /** What the host could not do, told to the guest who asked — nothing when it was done. */

@@ -41,9 +41,14 @@ final readonly class Spake2
     /** The shared key, given the other side's message — null when it is no point on the curve. */
     public function key(string $theirs): ?string
     {
-        if (\SODIUM_CRYPTO_CORE_RISTRETTO255_BYTES !== \strlen($theirs) || !\sodium_crypto_core_ristretto255_is_valid_point($theirs)) {
-            return null;
-        }
+        return \SODIUM_CRYPTO_CORE_RISTRETTO255_BYTES === \strlen($theirs) && \sodium_crypto_core_ristretto255_is_valid_point($theirs)
+            ? $this->shared($theirs)
+            : null;
+    }
+
+    /** The shared key, given the other side's point — null when it is the identity. */
+    private function shared(string $theirs): ?string
+    {
         try {
             $shared = \sodium_crypto_scalarmult_ristretto255(
                 $this->scalar,

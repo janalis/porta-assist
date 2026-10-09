@@ -86,10 +86,22 @@ final class Frames
     /** @return array{bool, int, string}|null the next whole frame in the buffer, taken out of it */
     private function frame(): ?array
     {
+        $header = $this->header();
+        if (null !== $header && $header[1] > $this->maxMessage) {
+            ($this->onError)('a message too long');
+            $this->buffer = '';
+            $header = null;
+        }
+
+        return null === $header ? null : $this->payload($header[0], $header[1]);
+    }
+
+    /** @return array{int, int}|null where the next frame's mask or payload starts, and the payload's length — once the buffer has that much */
+    private function header(): ?array
+    {
         if (\strlen($this->buffer) < 2) {
             return null;
         }
-        $first = \ord($this->buffer[0]);
         $second = \ord($this->buffer[1]);
         // The length is in the second byte, or in the two or eight after it.
         $extended = match ($second & 0x7F) {
@@ -98,20 +110,22 @@ final class Frames
             default => 0,
         };
         $offset = 2 + $extended;
-        if (\strlen($this->buffer) < $offset) {
-            return null;
-        }
-        $length = match ($extended) {
-            2 => (int) \unpack('n', $this->buffer, offset: 2)[1],
-            8 => (int) \unpack('J', $this->buffer, offset: 2)[1],
+
+        $length = match (true) {
+            \strlen($this->buffer) < $offset => null,
+            2 === $extended => (int) \unpack('n', $this->buffer, offset: 2)[1],
+            8 === $extended => (int) \unpack('J', $this->buffer, offset: 2)[1],
             default => $second & 0x7F,
         };
-        if ($length > $this->maxMessage) {
-            ($this->onError)('a message too long');
-            $this->buffer = '';
 
-            return null;
-        }
+        return null === $length ? null : [$offset, $length];
+    }
+
+    /** @return array{bool, int, string}|null the frame whose header ends at $offset, taken out of the buffer once it is all in */
+    private function payload(int $offset, int $length): ?array
+    {
+        $first = \ord($this->buffer[0]);
+        $second = \ord($this->buffer[1]);
         $mask = 0 === ($second & 0x80) ? '' : \substr($this->buffer, $offset, length: 4);
         $offset += \strlen($mask);
         if (\strlen($this->buffer) < ($offset + $length)) {

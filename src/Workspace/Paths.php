@@ -61,11 +61,8 @@ final readonly class Paths
         }
         $real = \realpath($existing);
         $root = \realpath($this->root);
-        if (false === $real || false === $root || ($real !== $root && !\str_starts_with($real, $root.'/'))) {
-            return null;
-        }
 
-        return $path;
+        return false !== $real && false !== $root && ($real === $root || \str_starts_with($real, $root.'/')) ? $path : null;
     }
 
     /**
@@ -104,13 +101,8 @@ final readonly class Paths
             return false;
         }
         $segments = \explode('/', $relative);
-        foreach ($segments as $segment) {
-            if ('' === $segment || '.' === $segment || '..' === $segment) {
-                return false;
-            }
-        }
 
         // At any depth: a submodule's `.git`, a vendored project's `.porta`.
-        return [] === \array_intersect($segments, self::PRIVATE);
+        return !\array_any($segments, static fn (string $segment): bool => '' === $segment || '.' === $segment || '..' === $segment) && [] === \array_intersect($segments, self::PRIVATE);
     }
 }

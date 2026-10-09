@@ -25,9 +25,19 @@ final class Tcp
     {
         $where = \sprintf('%s:%d', $host, $port);
         $address = Resolver::resolve($host, $timeout);
-        if (null === $address) {
-            return \sprintf('cannot reach %s: its name could not be looked up', $where);
-        }
+
+        return null === $address
+            ? \sprintf('cannot reach %s: its name could not be looked up', $where)
+            : self::open($where, $address, $port, $timeout, $context);
+    }
+
+    /**
+     * @param array<array-key, mixed> $context
+     *
+     * @return resource|string
+     */
+    private static function open(string $where, string $address, int $port, float $timeout, array $context)
+    {
         $errno = 0;
         $error = '';
         // @mago-expect lint:no-error-control-operator -- a refused address warns as well as returning false; the message is carried in $error
@@ -47,6 +57,19 @@ final class Tcp
 
             // @codeCoverageIgnoreEnd
         }
+
+        return self::connected($where, $stream, $timeout);
+    }
+
+    /**
+     * $stream once its connection attempt is over and worked, or why it did not.
+     *
+     * @param resource $stream
+     *
+     * @return resource|string
+     */
+    private static function connected(string $where, $stream, float $timeout)
+    {
         $writable = '';
         $timer = '';
         /** @var bool|null $connected */

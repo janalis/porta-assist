@@ -436,19 +436,28 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $api = $this->api();
         $following = $this->follow?->target;
         $suffix = null === $following ? '' : ' → '.$following[1];
-        if (null !== $this->host) {
-            $count = \count($this->host->participants());
 
-            return new StatusCell(self::GLYPH.' '.$count.$suffix, StatusTone::Accent, $this->menu(...), $api->trans('Sharing this project — %count% in', ['%count%' => $count]));
-        }
-        if (null === $this->guest) {
-            return null;
-        }
-        $host = (string) $this->guest->hostName();
-        if (!$this->guest->isConnected()) {
+        return match (true) {
+            null !== $this->host => $this->hostStatus($api, $this->host, $suffix),
+            null !== $this->guest => $this->guestStatus($api, $this->guest, $suffix),
+            default => null,
+        };
+    }
+
+    private function hostStatus(PluginApi $api, HostSession $host, string $suffix): StatusCell
+    {
+        $count = \count($host->participants());
+
+        return new StatusCell(self::GLYPH.' '.$count.$suffix, StatusTone::Accent, $this->menu(...), $api->trans('Sharing this project — %count% in', ['%count%' => $count]));
+    }
+
+    private function guestStatus(PluginApi $api, GuestSession $guest, string $suffix): StatusCell
+    {
+        $host = (string) $guest->hostName();
+        if (!$guest->isConnected()) {
             return new StatusCell(self::GLYPH.' …', StatusTone::Subtle, $this->menu(...), $api->trans('Reconnecting to the host…'));
         }
-        $tooltip = Role::Edit === $this->guest->role()
+        $tooltip = Role::Edit === $guest->role()
             ? $api->trans('In %name%\'s session, editing', ['%name%' => $host])
             : $api->trans('In %name%\'s session, reading along', ['%name%' => $host]);
 

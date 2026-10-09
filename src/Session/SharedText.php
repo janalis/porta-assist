@@ -71,14 +71,14 @@ final class SharedText
         $this->version = $version;
         $text = (string) ($this->text)();
         $operation = TextDiff::between($this->shadow, $text);
-        if ($operation->isNoop()) {
-            return null;
+        $typed = !$operation->isNoop();
+        if ($typed) {
+            $this->undo->did($operation, $this->shadow);
+            $this->shadow = $text;
+            $this->moveCarets($operation);
         }
-        $this->undo->did($operation, $this->shadow);
-        $this->shadow = $text;
-        $this->moveCarets($operation);
 
-        return $operation;
+        return $typed ? $operation : null;
     }
 
     /**

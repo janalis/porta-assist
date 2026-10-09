@@ -61,45 +61,68 @@ final class TextOperation
 
     public function retain(int $length): self
     {
-        if ($length <= 0) {
-            return $this;
+        if ($length > 0) {
+            $this->baseLength += $length;
+            $this->targetLength += $length;
+            $this->grow($length);
         }
-        $this->baseLength += $length;
-        $this->targetLength += $length;
-        $last = \array_key_last($this->ops);
-        if (null !== $last && \is_int($this->ops[$last]) && $this->ops[$last] > 0) {
-            $this->ops[$last] += $length;
-
-            return $this;
-        }
-        $this->ops[] = $length;
 
         return $this;
     }
 
     public function insert(string $text): self
     {
-        if ('' === $text) {
-            return $this;
+        if ('' !== $text) {
+            $this->targetLength += \strlen($text);
+            $this->place($text);
         }
-        $this->targetLength += \strlen($text);
-        $last = \array_key_last($this->ops);
-        if (null === $last) {
-            $this->ops[] = $text;
 
-            return $this;
+        return $this;
+    }
+
+    public function delete(int $length): self
+    {
+        if ($length > 0) {
+            $this->baseLength += $length;
+            $this->grow(-$length);
         }
-        $op = $this->ops[$last];
+
+        return $this;
+    }
+
+    /** $length — a retain when above 0, a delete below — added to the last component when it is one of the same, else after it. */
+    private function grow(int $length): void
+    {
+        $last = \array_key_last($this->ops);
+        if (null !== $last && \is_int($this->ops[$last]) && ($length > 0 ? $this->ops[$last] > 0 : $this->ops[$last] < 0)) {
+            $this->ops[$last] += $length;
+
+            return;
+        }
+        $this->ops[] = $length;
+    }
+
+    /** $text inserted at the end. */
+    private function place(string $text): void
+    {
+        $last = \array_key_last($this->ops) ?? -1;
+        $op = $this->ops[$last] ?? 0;
         if (\is_string($op)) {
             $this->ops[$last] = $op.$text;
 
-            return $this;
+            return;
         }
-        if ($op > 0) {
-            $this->ops[] = $text;
+        if ($op < 0) {
+            $this->beforeDelete($last, $op, $text);
 
-            return $this;
+            return;
         }
+        $this->ops[] = $text;
+    }
+
+    /** $text inserted before the delete $op that ends the operation, at $last. */
+    private function beforeDelete(int $last, int $op, string $text): void
+    {
         // An insert goes BEFORE the delete it meets: "delete then insert"
         // and "insert then delete" are one change, and keeping one order
         // is what lets two equal operations compare equal.
@@ -107,29 +130,10 @@ final class TextOperation
         if ($before >= 0 && \is_string($this->ops[$before])) {
             $this->ops[$before] .= $text;
 
-            return $this;
+            return;
         }
         $this->ops[$last] = $text;
         $this->ops[] = $op;
-
-        return $this;
-    }
-
-    public function delete(int $length): self
-    {
-        if ($length <= 0) {
-            return $this;
-        }
-        $this->baseLength += $length;
-        $last = \array_key_last($this->ops);
-        if (null !== $last && \is_int($this->ops[$last]) && $this->ops[$last] < 0) {
-            $this->ops[$last] -= $length;
-
-            return $this;
-        }
-        $this->ops[] = -$length;
-
-        return $this;
     }
 
     /** Whether applying it changes nothing. */
@@ -393,13 +397,12 @@ final class TextOperation
      */
     private static function rest(array $ops, int $next, int|string $op, int $length): array
     {
-        if (\is_string($op)) {
-            return \strlen($op) > $length ? [\substr($op, $length), $next] : [$ops[$next] ?? null, $next + 1];
-        }
-        if (\abs($op) > $length) {
-            return [$op > 0 ? $op - $length : $op + $length, $next];
-        }
+        $remains = \is_string($op) ? \strlen($op) > $length : \abs($op) > $length;
 
-        return [$ops[$next] ?? null, $next + 1];
+        return match (true) {
+            !$remains => [$ops[$next] ?? null, $next + 1],
+            \is_string($op) => [\substr($op, $length), $next],
+            default => [$op > 0 ? $op - $length : $op + $length, $next],
+        };
     }
 }

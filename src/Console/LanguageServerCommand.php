@@ -6,6 +6,7 @@ namespace Porta\AssistPlugin\Console;
 
 use Porta\AssistPlugin\Net\Connection;
 use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
+use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\Plugin\Api\PluginCommand;
@@ -68,17 +69,37 @@ final class LanguageServerCommand extends PluginCommand
         $errors = self::errors($output);
         $root = $this->projectRoot();
         $session = GuestSession::load($root);
-        if (null === $session) {
-            $errors->writeln(\sprintf('<error>%s is not a copy of a shared project.</error>', $root));
-
-            return self::FAILURE;
+        $failure = null === $session
+            ? \sprintf('<error>%s is not a copy of a shared project.</error>', $root)
+            : $this->serve($session, $root, $language);
+        if (null !== $failure) {
+            $errors->writeln($failure);
         }
+
+        return null === $failure ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Reach the host and relay to its $language server: null when a side
+     * hung up, else the error to show.
+     *
+     * @param array{invite: Invite, ticket: string, name: string, languages: list<string>} $session
+     */
+    private function serve(array $session, string $root, string $language): ?string
+    {
         $socket = GuestRendezvous::blocking(fn (): mixed => GuestRendezvous::connect($session['invite'], GuestSession::channel($root), $this->timeout));
-        if (\is_string($socket)) {
-            $errors->writeln('<error>'.OutputFormatter::escape($socket).'</error>');
 
-            return self::FAILURE;
-        }
+        return \is_string($socket)
+            ? '<error>'.OutputFormatter::escape($socket).'</error>'
+            : $this->talk($socket, $session, $root, $language);
+    }
+
+    /**
+     * @param resource $socket
+     * @param array{invite: Invite, ticket: string, name: string, languages: list<string>} $session
+     */
+    private function talk($socket, array $session, string $root, string $language): ?string
+    {
         \stream_set_blocking($socket, enable: true);
         \fwrite($socket, Wire::encode([
             't' => 'hello',
@@ -93,21 +114,12 @@ final class LanguageServerCommand extends PluginCommand
         // A host that never answers is no server: the wait for it ends.
         \stream_set_timeout($socket, (int) \ceil($this->timeout));
         $answer = $this->first($socket, $lines);
-        if ('ready' !== ($answer['t'] ?? null)) {
-            $errors->writeln(\sprintf('<error>The host runs no %s language server for this session (%s).</error>', $language, Wire::string($answer ?? [], 'reason')));
-            \fclose($socket);
-
-            return self::FAILURE;
-        }
-        $gone = $this->relay($socket, $lines);
+        $ready = 'ready' === ($answer['t'] ?? null);
+        $failure = $ready ? null : \sprintf('<error>The host runs no %s language server for this session (%s).</error>', $language, Wire::string($answer ?? [], 'reason'));
+        $gone = $ready && $this->relay($socket, $lines);
         \fclose($socket);
-        if ($gone) {
-            $errors->writeln('<error>The host stopped answering.</error>');
 
-            return self::FAILURE;
-        }
-
-        return self::SUCCESS;
+        return $gone ? '<error>The host stopped answering.</error>' : $failure;
     }
 
     /**
@@ -155,7 +167,7 @@ final class LanguageServerCommand extends PluginCommand
             if (false === \stream_select($read, $write, $except, (int) $wait, (int) (($wait - (int) $wait) * 1e6))) {
                 // A select interrupted by a signal: not reproducible on demand.
                 // @codeCoverageIgnoreStart
-                return false;
+                break;
 
                 // @codeCoverageIgnoreEnd
             }
@@ -167,7 +179,7 @@ final class LanguageServerCommand extends PluginCommand
                 \stream_set_blocking($stream, enable: $stream !== $socket);
                 $bytes = \fread($stream, length: 262_144);
                 if (false === $bytes || ('' === $bytes && \feof($stream))) {
-                    return false;
+                    break 2;
                 }
                 if ('' === $bytes) {
                     // A TLS record with nothing in it for this side: when the
@@ -184,6 +196,8 @@ final class LanguageServerCommand extends PluginCommand
                 $stream === $socket ? $this->toEditor($lines->feed($bytes)) : $this->toHost($socket, $frames->feed($bytes));
             }
         }
+
+        return false;
     }
 
     /** @param list<string> $lines */

@@ -95,12 +95,10 @@ final class Presence
             $anchorColumn = $atStart ? $selection['endColumn'] : $selection['column'];
         }
         $mine = ['path' => $relative, 'line' => $caret['line'], 'column' => $caret['column'], 'anchorLine' => $anchorLine, 'anchorColumn' => $anchorColumn, 'top' => $caret['top']];
-        if ($mine === $this->mine) {
-            return null;
-        }
+        $moved = $mine !== $this->mine;
         $this->mine = $mine;
 
-        return $mine;
+        return $moved ? $mine : null;
     }
 
     /**

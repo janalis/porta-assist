@@ -34,9 +34,13 @@ final class Resolver
         }
         $now = \hrtime(true) / 1e9;
         $known = self::$known[$host] ?? null;
-        if (null !== $known && $known['until'] > $now) {
-            return $known['address'];
-        }
+
+        return null !== $known && $known['until'] > $now ? $known['address'] : self::lookup($host, $timeout, $now);
+    }
+
+    /** What the system resolver makes of $host, kept for a while once found: null when nothing, in $timeout seconds. */
+    private static function lookup(string $host, float $timeout, float $now): ?string
+    {
         $lookup = new AsyncProcess([\PHP_BINARY, '-r', 'echo gethostbyname($argv[1]);', $host], \sys_get_temp_dir(), timeout: $timeout);
         /** @var string|null $address */
         $address = FiberWait::for(static function (\Closure $done) use ($lookup): void {
@@ -49,10 +53,10 @@ final class Resolver
             }
         });
         // gethostbyname answers the name itself when it finds nothing.
-        if (null === $address || false === \filter_var($address, \FILTER_VALIDATE_IP)) {
-            return null;
+        $address = null !== $address && false !== \filter_var($address, \FILTER_VALIDATE_IP) ? $address : null;
+        if (null !== $address) {
+            self::$known[$host] = ['address' => $address, 'until' => $now + self::KEEP];
         }
-        self::$known[$host] = ['address' => $address, 'until' => $now + self::KEEP];
 
         return $address;
     }

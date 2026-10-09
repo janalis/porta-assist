@@ -60,16 +60,26 @@ final class Transit
      */
     public function pair(string $channel, string $side, ?float $wait, array $context = [])
     {
-        $where = \sprintf('the relay at %s:%d', $this->host, $this->port);
         $stream = Tcp::connect($this->host, $this->port, $this->timeout, $context);
-        if (\is_string($stream)) {
-            return $stream;
-        }
-        if ($this->calledOff()) {
+        if (!\is_string($stream) && $this->calledOff()) {
             \fclose($stream);
-
-            return 'called off';
+            $stream = 'called off';
         }
+
+        return \is_string($stream) ? $stream : $this->join($stream, $channel, $side, $wait);
+    }
+
+    /**
+     * Ask the relay $stream reaches to join it on $channel as $side, and wait
+     * for the other side: $stream once joined, or why it is not.
+     *
+     * @param resource $stream
+     *
+     * @return resource|string
+     */
+    private function join($stream, string $channel, string $side, ?float $wait)
+    {
+        $where = \sprintf('the relay at %s:%d', $this->host, $this->port);
         // Unbuffered, and read a byte at a time: what follows the relay's
         // "ok" is the session's TLS, and a byte read here would be lost to it.
         \stream_set_read_buffer($stream, size: 0);

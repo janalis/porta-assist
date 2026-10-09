@@ -6,6 +6,7 @@ namespace Porta\AssistPlugin\Session;
 
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Workspace\Paths;
+use Porta\Plugin\Api\Debugger;
 use Porta\Plugin\Api\PluginApi;
 
 /**
@@ -41,18 +42,26 @@ final readonly class HostDebug
     public function receive(Guest $guest, array $message): void
     {
         $debugger = $this->api->runs()->debugger();
-        if ('debug-vars' === $message['t']) {
-            $frame = Wire::int($message, 'frame');
-            $debugger->variables($frame, static fn (array $scopes) => $guest->send(['t' => 'debug-vars', 'frame' => $frame, 'scopes' => $scopes]));
+        match ($message['t']) {
+            'debug-vars' => self::variables($debugger, $guest, Wire::int($message, 'frame')),
+            'debug-children' => self::children($debugger, $guest, Wire::int($message, 'reference')),
+            default => self::step($debugger, $guest, $message),
+        };
+    }
 
-            return;
-        }
-        if ('debug-children' === $message['t']) {
-            $reference = Wire::int($message, 'reference');
-            $debugger->children($reference, static fn (array $variables) => $guest->send(['t' => 'debug-children', 'reference' => $reference, 'variables' => $variables]));
+    private static function variables(Debugger $debugger, Guest $guest, int $frame): void
+    {
+        $debugger->variables($frame, static fn (array $scopes) => $guest->send(['t' => 'debug-vars', 'frame' => $frame, 'scopes' => $scopes]));
+    }
 
-            return;
-        }
+    private static function children(Debugger $debugger, Guest $guest, int $reference): void
+    {
+        $debugger->children($reference, static fn (array $variables) => $guest->send(['t' => 'debug-children', 'reference' => $reference, 'variables' => $variables]));
+    }
+
+    /** @param array<string, mixed> $message */
+    private static function step(Debugger $debugger, Guest $guest, array $message): void
+    {
         if (!$guest->debugging) {
             $guest->send(['t' => 'debug-refused']);
 

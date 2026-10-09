@@ -371,22 +371,21 @@ final class GuestSession
         $this->presence->show($doc['text'], $this->peers);
     }
 
-    // @mago-expect lint:no-boolean-flag-parameter -- undo or redo is the one fact the call carries; both are the same replay
     private function replay(string $relative, bool $undo): bool
     {
         // Only a shared file's history is handed here, and taken back when it
         // stops being one.
         $doc = $this->docs[$relative];
-        if (Role::Edit !== $this->role || !$this->isConnected()) {
-            return false;
+        $operation = match (true) {
+            Role::Edit !== $this->role || !$this->isConnected() => null,
+            $undo => $doc['text']->undo(),
+            default => $doc['text']->redo(),
+        };
+        if (null !== $operation) {
+            $this->local($relative, $operation);
         }
-        $operation = $undo ? $doc['text']->undo() : $doc['text']->redo();
-        if (null === $operation) {
-            return false;
-        }
-        $this->local($relative, $operation);
 
-        return true;
+        return null !== $operation;
     }
 
     private function caret(): void

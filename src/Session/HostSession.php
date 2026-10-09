@@ -17,6 +17,7 @@ use Porta\AssistPlugin\Ot\TextOperation;
 use Porta\AssistPlugin\Workspace\Paths;
 use Porta\Event\AgentActivity;
 use Porta\Overlay\State\ToastSeverity;
+use Porta\Plugin\Api\OpenBuffers;
 use Porta\Plugin\Api\PluginApi;
 use Revolt\EventLoop;
 
@@ -145,9 +146,18 @@ final class HostSession
 
             return;
         }
-        if (null !== $this->certificate) {
-            return;
+        if (null === $this->certificate) {
+            $this->meet($mailbox, $transit, $done);
         }
+    }
+
+    /**
+     * Make the first code — {@see start()}, with none being made yet.
+     *
+     * @param \Closure(Code|string): void $done
+     */
+    private function meet(string $mailbox, string $transit, \Closure $done): void
+    {
         try {
             Transit::at($transit, timeout: 0.0);
         } catch (\InvalidArgumentException $e) {
@@ -460,16 +470,16 @@ final class HostSession
 
             return;
         }
-        if ('lsp' === Wire::string($message, 'channel')) {
-            $this->languageServer($id, $connection, $message, $ticket);
+        match (true) {
+            'lsp' === Wire::string($message, 'channel') => $this->languageServer($id, $connection, $message, $ticket),
+            null !== $ticket => $this->admit($id, $connection, $ticket['id'], $ticket['name'], $ticket['role'], Wire::string($message, 'ticket')),
+            default => $this->ask($id, $connection, $name),
+        };
+    }
 
-            return;
-        }
-        if (null !== $ticket) {
-            $this->admit($id, $connection, $ticket['id'], $ticket['name'], $ticket['role'], Wire::string($message, 'ticket'));
-
-            return;
-        }
+    /** A newcomer with no ticket: the host is asked whether to let them in. */
+    private function ask(int $id, Connection $connection, string $name): void
+    {
         $connection->send(['t' => 'pending']);
         // Unanswered in time: turned away — and, closed, the question withdrawn below.
         $timeout = EventLoop::unreference(EventLoop::delay($this->answerTimeout, static function () use ($connection): void {
@@ -716,14 +726,21 @@ final class HostSession
         }
         $buffers = $this->api->openBuffers();
         $doc = $this->docs[$relative] ?? null;
-        if (null !== $doc) {
-            if (!$doc['text']->isOpen() && null === $buffers->open($path)) {
-                $doc['text']->restore();
-                $this->delegate($relative, $path);
-            }
-
-            return $doc;
+        if (null !== $doc && !$doc['text']->isOpen() && null === $buffers->open($path)) {
+            $doc['text']->restore();
+            $this->delegate($relative, $path);
         }
+
+        return $doc ?? $this->share($relative, $path, $buffers);
+    }
+
+    /**
+     * The shared state of a file no guest has had yet, opened on the host if it is not.
+     *
+     * @return array{text: SharedText, server: ServerDocument}|null
+     */
+    private function share(string $relative, string $path, OpenBuffers $buffers): ?array
+    {
         $opened = null === $buffers->open($path) ? $buffers->text($path) : null;
         if (null === $opened) {
             return null;

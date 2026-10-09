@@ -71,15 +71,23 @@ final class WebSocket
         $host = \trim($parts['host'], characters: '[]');
         $port = $parts['port'] ?? 80;
         $stream = Tcp::connect($host, $port, $timeout);
-        if (\is_string($stream)) {
-            return $stream;
-        }
-        $key = \base64_encode(\random_bytes(16));
         $path = ($parts['path'] ?? '/').(\is_string($parts['query'] ?? null) ? '?'.$parts['query'] : '');
+
+        return \is_string($stream) ? $stream : self::handshake($url, $stream, $parts['host'], $port, $path, $timeout);
+    }
+
+    /**
+     * Shake hands on $stream, connected to $url: the socket, or why there is none.
+     *
+     * @param resource $stream
+     */
+    private static function handshake(string $url, $stream, string $host, int $port, string $path, float $timeout): self|string
+    {
+        $key = \base64_encode(\random_bytes(16));
         \fwrite($stream, \sprintf(
             "GET %s HTTP/1.1\r\nHost: %s:%d\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n",
             $path,
-            $parts['host'],
+            $host,
             $port,
             $key,
         ));
@@ -103,12 +111,16 @@ final class WebSocket
     /** The next message, waited for at most $timeout seconds (null: as long as it takes) — null when the socket closed or none came. */
     public function receive(?float $timeout = null): ?string
     {
-        if ([] !== $this->inbox) {
-            return \array_shift($this->inbox);
-        }
-        if (null !== $this->closed) {
-            return null;
-        }
+        return match (true) {
+            [] !== $this->inbox => \array_shift($this->inbox),
+            null !== $this->closed => null,
+            default => $this->wait($timeout),
+        };
+    }
+
+    /** The next message, once it comes — null when the socket closed or none came in $timeout seconds. */
+    private function wait(?float $timeout): ?string
+    {
         $wait = function (\Closure $done): void {
             $this->waiting = $done;
         };
