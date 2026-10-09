@@ -69,7 +69,7 @@ final class HostSessionE2eTest extends TestCase
                 $welcome = $this->expect('welcome');
                 $this->assertSame('edit', $welcome['role']);
                 $user = \getenv('USER');
-                $this->assertSame([['id' => 'host', 'name' => \is_string($user) && '' !== $user ? $user : 'host', 'role' => 'host']], $welcome['peers'], 'the host, by login name');
+                $this->assertSame([['id' => 'host', 'name' => \is_string($user) && '' !== $user ? $user : 'anonymous', 'role' => 'host']], $welcome['peers'], 'the host, by login name');
 
                 $this->say(['t' => 'manifest']);
                 $this->assertSame(['2024', 'README.md', 'src/A.php'], \array_column(Wire::list($this->expect('manifest'), 'files'), 0), 'the project, not its settings');
