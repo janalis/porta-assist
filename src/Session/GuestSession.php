@@ -179,7 +179,9 @@ final class GuestSession
     public static function channel(string $root): int
     {
         $handle = \fopen($root.'/'.self::CHANNEL, mode: 'cb+');
-        \assert(false !== $handle, description: 'the copy\'s .porta/ is there: the session file is in it');
+        if (false === $handle) {
+            throw new \RuntimeException('Cannot open the channel counter in '.$root);
+        }
         \flock($handle, \LOCK_EX);
         $channel = (int) \stream_get_contents($handle);
         \ftruncate($handle, size: 0);

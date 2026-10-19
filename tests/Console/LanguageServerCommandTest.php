@@ -101,7 +101,9 @@ final class LanguageServerCommandTest extends TestCase
             \fwrite($editor, JsonRpcFramer::encode($frame));
         }
         $output = \fopen('php://memory', mode: 'wb+');
-        $this->assertNotFalse($output);
+        if (false === $output) {
+            $this->fail('php://memory did not open');
+        }
         $application = new Application();
         $application->addCommand(new LanguageServerCommand($root, $input, $output, timeout: 2.0, ping: $ping, silence: $silence));
         $tester = new CommandTester($application->find('assist-lsp'));

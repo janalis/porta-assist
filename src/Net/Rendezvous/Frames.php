@@ -111,6 +111,7 @@ final class Frames
         };
         $offset = 2 + $extended;
 
+        // @custos-ignore UnpackBufferTooShort -- the first arm returns null until the buffer holds the extended length
         $length = match (true) {
             \strlen($this->buffer) < $offset => null,
             2 === $extended => (int) \unpack('n', $this->buffer, offset: 2)[1],
