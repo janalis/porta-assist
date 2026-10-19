@@ -24,4 +24,13 @@ final class GuestSessionTest extends TestCase
         $this->expectExceptionObject(new \RuntimeException('cannot create '.$project->dir.'/.porta'));
         GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => \str_repeat('ab', times: 16), 'name' => 'Bo', 'languages' => []]);
     }
+
+    public function testAChannelCounterThatCannotBeOpenedIsReportedNotWarnedAbout(): void
+    {
+        // The counter lives in .porta/, and a file holds that name.
+        $project = new TempProject(['.porta' => 'not a folder']);
+
+        $this->expectExceptionObject(new \RuntimeException('cannot open the channel counter in '.$project->dir));
+        GuestSession::channel($project->dir);
+    }
 }

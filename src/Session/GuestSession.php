@@ -178,9 +178,10 @@ final class GuestSession
     /** The next channel to the host, taken: no other process in this copy takes it too. */
     public static function channel(string $root): int
     {
-        $handle = \fopen($root.'/'.self::CHANNEL, mode: 'cb+');
+        // @mago-expect lint:no-error-control-operator -- a counter that cannot be opened is reported by the exception, not a warning
+        $handle = @\fopen($root.'/'.self::CHANNEL, mode: 'cb+');
         if (false === $handle) {
-            throw new \RuntimeException('Cannot open the channel counter in '.$root);
+            throw new \RuntimeException('cannot open the channel counter in '.$root);
         }
         \flock($handle, \LOCK_EX);
         $channel = (int) \stream_get_contents($handle);
