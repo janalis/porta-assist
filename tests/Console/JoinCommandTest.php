@@ -99,7 +99,7 @@ final class JoinCommandTest extends TestCase
         \file_put_contents($copy.'/same.txt', data: 'same');
         \file_put_contents($copy.'/changed.txt', data: 'old');
         \file_put_contents($copy.'/gone.txt', data: 'the host no longer has it');
-        \file_put_contents($copy.'/.porta.json', data: '{"enabledPlugins": ["git"], "theme": "light"}');
+        \file_put_contents($copy.'/.porta.json', data: '{"enabledPlugins": ["diff","git"], "theme": "light"}');
 
         $tester = $this->join($this->host('pending', $project));
 
@@ -124,7 +124,7 @@ final class JoinCommandTest extends TestCase
         $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $session['invite']->fingerprint);
         $this->assertSame(1, GuestSession::channel($root), 'this command took the first channel; the IDE takes the next');
         $this->assertSame(
-            ['enabledPlugins' => ['git', 'assist'], 'theme' => 'light'],
+            ['enabledPlugins' => ['diff', 'git', 'assist'], 'theme' => 'light'],
             \json_decode((string) \file_get_contents($root.'/.porta.json'), associative: true, flags: \JSON_THROW_ON_ERROR),
             'the copy\'s own settings, with this plugin on',
         );
