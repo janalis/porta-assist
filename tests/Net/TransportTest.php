@@ -428,7 +428,9 @@ final class TransportTest extends TestCase
         // Port 1 on loopback: nothing listens there, and nothing unprivileged can
         // start to — a port closed by this test could be taken by a parallel one.
         $this->assertSame('127.0.0.1:1 refused the connection', self::blocking(static fn (): mixed => Tcp::connect('127.0.0.1', 1, 2.0)));
-        $this->assertStringStartsWith('cannot reach no-such-host.invalid:1', (string) self::blocking(static fn (): mixed => Tcp::connect('no-such-host.invalid', 1, 2.0)));
+        // Over DNS's 63-character label: no resolver is asked, so none can answer it (see ResolverTest).
+        $nobody = \str_repeat('x', times: 64).'.invalid';
+        $this->assertStringStartsWith("cannot reach {$nobody}:1", (string) self::blocking(static fn (): mixed => Tcp::connect($nobody, 1, 2.0)));
         $this->assertSame('10.255.255.1:9 did not answer', self::blocking(static fn (): mixed => Tcp::connect('10.255.255.1', 9, 0.2)));
         $this->assertStringStartsWith('::1:1 ', (string) self::blocking(static fn (): mixed => Tcp::connect('::1', 1, 2.0)), 'IPv6, spelled in brackets to connect');
     }

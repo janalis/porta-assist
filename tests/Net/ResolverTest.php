@@ -42,6 +42,12 @@ final class ResolverTest extends TestCase
 
     public function testANameNobodyKnowsHasNoAddress(): void
     {
-        $this->assertNull(GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('no-such-host.invalid', 5.0)));
+        // A 64-character label is over DNS's 63: the system refuses it before
+        // asking a server. A plain `.invalid` name is not enough — a network
+        // whose resolver answers every name (a hotel's, a captive portal's)
+        // gives it an address.
+        $nobody = \str_repeat('x', times: 64).'.invalid';
+
+        $this->assertNull(GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve($nobody, 5.0)));
     }
 }
