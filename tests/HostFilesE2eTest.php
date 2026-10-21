@@ -171,7 +171,7 @@ final class HostFilesE2eTest extends TestCase
                 $this->await(static fn (): bool => self::toasted($ide, 'Following Ana'), what: 'following');
                 $this->say(['t' => 'presence', 'path' => 'README.md', 'line' => 1, 'column' => 3, 'top' => 1]);
                 $this->await(fn (): bool => $root.'/README.md' === $this->api($ide)->activeFile(), what: 'the file Ana is in, opened');
-                $this->assertSame(['line' => 1, 'column' => 3, 'top' => 1, 'sticky' => []], $this->api($ide)->caretPosition(), 'at her caret, scrolled as she is');
+                $this->assertSame(['line' => 1, 'column' => 3, 'top' => 1, 'segment' => 0, 'sticky' => []], $this->api($ide)->caretPosition(), 'at her caret, scrolled as she is');
                 $terminal->simulateInput(self::DOWN);
                 $this->await(static fn (): bool => self::toasted($ide, 'Stopped following Ana'), what: 'the user moved on');
 
