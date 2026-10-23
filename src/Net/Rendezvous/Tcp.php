@@ -40,7 +40,7 @@ final class Tcp
     {
         $errno = 0;
         $error = '';
-        // @mago-expect lint:no-error-control-operator -- a refused address warns as well as returning false; the message is carried in $error
+        // @mago-expect lint:no-error-control-operator -- an async connect fails here only when the system is out of sockets (a refusal comes later); it warns as well, and the message is carried in $error
         $stream = @\stream_socket_client(
             \sprintf('tcp://%s', \str_contains($address, ':') ? '['.\trim($address, characters: '[]').']:'.$port : $address.':'.$port),
             $errno,
