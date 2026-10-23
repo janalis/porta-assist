@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests\Support;
 
 use Porta\AssistPlugin\Net\Rendezvous\Frames;
+use Porta\Tests\Support\Budget;
 use Symfony\Component\Process\Process;
 
 /**
@@ -28,7 +29,7 @@ final readonly class FakeWormhole
         $this->process = new Process([\PHP_BINARY, __DIR__.'/fake-wormhole.php'], env: $env);
         $this->process->start();
         $line = '';
-        $deadline = \microtime(true) + 10;
+        $deadline = \microtime(true) + Budget::seconds(10.0);
         while (!\str_contains($line, "\n") && \microtime(true) < $deadline && $this->process->isRunning()) {
             \usleep(5_000);
             $line .= $this->process->getIncrementalOutput();
