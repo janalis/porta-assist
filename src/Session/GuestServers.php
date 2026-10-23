@@ -140,13 +140,13 @@ final class GuestServers
         $this->api->notify($this->api->trans('%name% stopped sharing localhost:%port%', ['%name%' => ($this->hostName)(), '%port%' => $port]), slot: 'assist');
     }
 
-    /** End $port's forward quietly — the session ending says so once itself. */
+    /**
+     * End $port's forward quietly — the session ending says so once itself.
+     * Both callers hand it a port it is forwarding.
+     */
     private function end(int $port): void
     {
-        $server = $this->servers[$port] ?? null;
-        if (null === $server) {
-            return;
-        }
+        $server = $this->servers[$port];
         unset($this->servers[$port]);
         EventLoop::cancel($server['watcher']);
         \fclose($server['server']);
