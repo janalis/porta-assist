@@ -755,16 +755,21 @@ final class HostSession
     /** The host's Ctrl+Z in a shared file takes back the host's own changes only. */
     private function delegate(string $relative, string $path): void
     {
-        $this->api->openBuffers()->delegateHistory($path, fn (): bool => $this->replay($relative, undo: true), fn (): bool => $this->replay($relative, undo: false));
+        $this->api->openBuffers()->delegateHistory(
+            $path,
+            fn (): bool => $this->replay($relative, $this->docs[$relative]['text']->undo()),
+            fn (): bool => $this->replay($relative, $this->docs[$relative]['text']->redo()),
+        );
     }
 
-    // @mago-expect lint:no-boolean-flag-parameter -- undo or redo is the one fact the call carries; both are the same replay
-    private function replay(string $relative, bool $undo): bool
+    /**
+     * Publish what an undo or a redo of $relative's shared history gave back;
+     * false when there was nothing to step over. Only a shared file's history
+     * is handed to the editor, and taken back when it stops being one.
+     */
+    private function replay(string $relative, ?TextOperation $operation): bool
     {
-        // Only a shared file's history is handed here, and taken back when it
-        // stops being one.
         $doc = $this->docs[$relative];
-        $operation = $undo ? $doc['text']->undo() : $doc['text']->redo();
         if (null === $operation) {
             return false;
         }

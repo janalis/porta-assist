@@ -47,7 +47,7 @@ final class GuestServers
     {
         match ($message['t']) {
             'server' => $this->listen(Wire::int($message, 'port')),
-            'server-end' => $this->end(Wire::int($message, 'port')),
+            'server-end' => $this->endAnnounced(Wire::int($message, 'port')),
             'tunnel-data' => ($this->tunnels[Wire::int($message, 'conn', -1)] ?? null)?->write((string) \base64_decode(Wire::string($message, 'data'), strict: true)),
             default => $this->closed(Wire::int($message, 'conn', -1)),
         };
@@ -57,7 +57,7 @@ final class GuestServers
     public function stop(): void
     {
         foreach (\array_keys($this->servers) as $port) {
-            $this->end($port, quietly: true);
+            $this->end($port);
         }
     }
 
@@ -130,8 +130,18 @@ final class GuestServers
         unset($this->tunnels[$conn], $this->ports[$conn]);
     }
 
-    // @mago-expect lint:no-boolean-flag-parameter -- the session ending says so once itself; a server the host stopped sharing is said here
-    private function end(int $port, bool $quietly = false): void
+    /** The host stopped sharing $port: end it, and say so. */
+    private function endAnnounced(int $port): void
+    {
+        if (!\array_key_exists($port, $this->servers)) {
+            return;
+        }
+        $this->end($port);
+        $this->api->notify($this->api->trans('%name% stopped sharing localhost:%port%', ['%name%' => ($this->hostName)(), '%port%' => $port]), slot: 'assist');
+    }
+
+    /** End $port's forward quietly — the session ending says so once itself. */
+    private function end(int $port): void
     {
         $server = $this->servers[$port] ?? null;
         if (null === $server) {
@@ -143,9 +153,6 @@ final class GuestServers
         foreach (\array_keys(\array_filter($this->ports, static fn (int $of): bool => $of === $port)) as $conn) {
             $this->tunnels[$conn]->close();
             unset($this->tunnels[$conn], $this->ports[$conn]);
-        }
-        if (!$quietly) {
-            $this->api->notify($this->api->trans('%name% stopped sharing localhost:%port%', ['%name%' => ($this->hostName)(), '%port%' => $port]), slot: 'assist');
         }
     }
 }
