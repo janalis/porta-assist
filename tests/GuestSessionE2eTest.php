@@ -122,7 +122,7 @@ final class GuestSessionE2eTest extends TestCase
             'peer' => 'g1',
             'role' => $role,
             'ticket' => self::TICKET,
-            'peers' => [['id' => 'host', 'name' => 'Hal', 'role' => 'host'], ['id' => 'g2', 'name' => 'Cy', 'role' => 'read'], 'junk'],
+            'peers' => [['id' => 'host', 'name' => 'Hal', 'role' => 'host'], ['id' => 'g2', 'name' => 'Cy', 'role' => 'read'], 'junk', ['name' => 'no id']],
             'terminals' => $terminals,
         ]);
     }

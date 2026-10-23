@@ -84,6 +84,7 @@ final class GuestDebugE2eTest extends TestCase
                         ['id' => 1, 'name' => '{main}', 'path' => 'src/A.php', 'line' => 2],
                         ['id' => 2, 'name' => 'lib', 'path' => '', 'line' => 0],
                         'junk',
+                        ['name' => 'no id'],
                     ],
                 ]);
                 $this->await(static fn (): bool => $said('The host\'s debugger paused at src/A.php:3'), what: 'paused, said');
