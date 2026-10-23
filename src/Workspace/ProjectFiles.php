@@ -28,7 +28,7 @@ final class ProjectFiles
         private readonly int $maxFileSize,
     ) {}
 
-    /** @return array<string, array{size: int, hash: string}> relative path => size and digest, sorted */
+    /** @return array<array-key, array{size: int, hash: string}> relative path (an int when it is digits) => size and digest, sorted */
     public function scan(): array
     {
         $paths = new Paths($this->root);

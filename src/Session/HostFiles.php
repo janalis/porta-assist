@@ -27,7 +27,7 @@ final class HostFiles
     /** The largest file whose encoding fits the queue a connection keeps, with room to spare. */
     private const int LARGEST = ((NonBlockingWriter::DEFAULT_LIMIT - self::HIGH_WATER) / 4) * 3;
 
-    /** @var array<string, array{size: int, hash: string}>|null the project as last listed, null before anyone asked */
+    /** @var array<array-key, array{size: int, hash: string}>|null the project as last listed, null before anyone asked */
     private ?array $listed = null;
 
     private ?string $rescan = null;
@@ -55,7 +55,6 @@ final class HostFiles
         $files = [];
         foreach ($this->listed as $path => $file) {
             // A path in digits keys as an int: sent as one, the guest drops it.
-            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
             $files[] = [(string) $path, $file['size'], $file['hash']];
         }
         $guest->send(['t' => 'manifest', 'files' => $files]);
@@ -177,7 +176,6 @@ final class HostFiles
             if (($before[$path] ?? null) === $file) {
                 continue;
             }
-            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
             $changed[] = [(string) $path, $file['size'], $file['hash']];
         }
         $gone = \array_map(\strval(...), \array_values(\array_diff(\array_keys($before), \array_keys($now))));

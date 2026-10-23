@@ -52,7 +52,7 @@ final class GuestSession
      */
     public const string CHANNEL = '.porta/assist-channel';
 
-    /** @var array<string, array{text: SharedText, client: ClientDocument}> by relative path */
+    /** @var array<array-key, array{text: SharedText, client: ClientDocument}> by relative path — an int when it is digits */
     private array $docs = [];
 
     /** @var array<string, true> files asked for, not answered yet */
@@ -345,7 +345,6 @@ final class GuestSession
     public function readAll(): void
     {
         foreach (\array_keys($this->docs) as $relative) {
-            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
             $this->read((string) $relative); // a path in digits keys as an int
         }
     }
@@ -554,7 +553,6 @@ final class GuestSession
         // What was typed and not read yet is read now — it is carried over
         // with what was sent and never acknowledged.
         foreach ($this->docs as $relative => $doc) {
-            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
             $this->keep((string) $relative, $doc); // a path in digits keys as an int
         }
         $this->connection = null;
@@ -911,7 +909,10 @@ final class GuestSession
         if ([] !== $missing) {
             $this->send(['t' => 'fetch', 'paths' => $missing]);
         }
-        foreach (\array_diff($gone, \array_keys($this->docs)) as $relative) {
+        foreach ($gone as $relative) {
+            if (\array_key_exists($relative, $this->docs)) {
+                continue;
+            }
             $this->hostDeleted($relative);
         }
     }

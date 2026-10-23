@@ -100,7 +100,7 @@ final class HostSession
      */
     private array $rights = [];
 
-    /** @var array<string, array{text: SharedText, server: ServerDocument}> by relative path */
+    /** @var array<array-key, array{text: SharedText, server: ServerDocument}> by relative path — an int when it is digits */
     private array $docs = [];
 
     /** @var array<string, array{name: string, owner: string, caret: array{path: string, line: int, column: int, anchorLine: int|null, anchorColumn: int|null, top: int|null}}> agents at work, by peer id: the host's own and each guest's */
@@ -383,7 +383,6 @@ final class HostSession
     public function readAll(): void
     {
         foreach (\array_keys($this->docs) as $relative) {
-            // @mago-expect analysis:redundant-cast -- a key in digits is an int at runtime, whatever its docblock says
             $this->read((string) $relative); // a path in digits keys as an int
         }
     }
