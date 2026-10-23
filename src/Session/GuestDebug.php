@@ -7,6 +7,7 @@ namespace Porta\AssistPlugin\Session;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Workspace\Paths;
 use Porta\Plugin\Api\PluginApi;
+use Porta\Support\Decoded;
 use Porta\Ui\Glyphs;
 
 /**
@@ -104,9 +105,8 @@ final class GuestDebug
         $was = $this->status;
         $this->status = Wire::string($message, 'status');
         $this->frames = [];
-        // @mago-expect analysis:mixed-assignment -- narrowed below
-        foreach (Wire::list($message, 'frames') as $frame) {
-            if (!\is_array($frame) || !\is_int($frame['id'] ?? null)) {
+        foreach (Decoded::objects(Wire::list($message, 'frames')) as $frame) {
+            if (!\is_int($frame['id'] ?? null)) {
                 continue;
             }
             $this->frames[] = ['id' => $frame['id'], 'name' => Wire::text($frame, 'name'), 'path' => Wire::string($frame, 'path'), 'line' => Wire::int($frame, 'line')];
@@ -124,12 +124,8 @@ final class GuestDebug
     private function variables(array $message): void
     {
         $entries = [];
-        // @mago-expect analysis:mixed-assignment -- narrowed in entries()
-        foreach (Wire::list($message, 'scopes') as $scope) {
-            if (!\is_array($scope)) {
-                continue;
-            }
-            $entries = [...$entries, ...self::entries(Wire::list($scope, 'variables'), Wire::text($scope, 'scope'))];
+        foreach (Decoded::objects(Wire::list($message, 'scopes')) as $scope) {
+            $entries = [...$entries, ...self::entries(Decoded::objects(Wire::list($scope, 'variables')), Wire::text($scope, 'scope'))];
         }
         $this->list($this->api->trans('Variables'), $entries);
     }
@@ -140,7 +136,7 @@ final class GuestDebug
         $reference = Wire::int($message, 'reference');
         $name = $this->opening[$reference] ?? '';
         unset($this->opening[$reference]);
-        $this->list($name, self::entries(Wire::list($message, 'variables'), $name));
+        $this->list($name, self::entries(Decoded::objects(Wire::list($message, 'variables')), $name));
     }
 
     /**
@@ -173,18 +169,14 @@ final class GuestDebug
     }
 
     /**
-     * @param list<mixed> $variables as the host sent them
+     * @param list<array<array-key, mixed>> $variables as the host sent them
      *
      * @return list<array{name: string, value: string, reference: int, hint: string}>
      */
     private static function entries(array $variables, string $hint): array
     {
         $entries = [];
-        // @mago-expect analysis:mixed-assignment -- narrowed below
         foreach ($variables as $variable) {
-            if (!\is_array($variable)) {
-                continue;
-            }
             $entries[] = ['name' => Wire::text($variable, 'name'), 'value' => Wire::text($variable, 'value', max: 500), 'reference' => Wire::int($variable, 'reference'), 'hint' => $hint];
         }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Net;
 
+use Porta\Support\Decoded;
+
 /**
  * The session's messages on the wire: one JSON object per line, each with a
  * type under `t`. Reading one hands back the object or nothing — a line that
@@ -125,9 +127,8 @@ final class Wire
     public static function files(array $message, string $key): array
     {
         $files = [];
-        // @mago-expect analysis:mixed-assignment -- narrowed below
-        foreach (self::list($message, $key) as $file) {
-            if (!\is_array($file) || !\is_string($file[0] ?? null) || !\is_int($file[1] ?? null) || !\is_string($file[2] ?? null)) {
+        foreach (Decoded::objects(self::list($message, $key)) as $file) {
+            if (!\is_string($file[0] ?? null) || !\is_int($file[1] ?? null) || !\is_string($file[2] ?? null)) {
                 continue;
             }
             $files[$file[0]] = ['size' => $file[1], 'hash' => $file[2]];

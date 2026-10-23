@@ -18,6 +18,7 @@ use Porta\Config\PortaHome;
 use Porta\Install\PortaBinary;
 use Porta\Onboarding\OnboardingState;
 use Porta\Plugin\Api\PluginCommand;
+use Porta\Support\JsonFile;
 use Porta\Support\LineFramer;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -348,10 +349,8 @@ final class JoinCommand extends PluginCommand
     private static function enable(string $root): void
     {
         $file = $root.'/.porta.json';
-        // @mago-expect analysis:mixed-assignment -- narrowed below
-        // @noinspection JsonEncodingApiUsageInspection -- a file that is not JSON (hand-edited, half-written) reads as none, it does not throw
-        $config = \is_file($file) ? \json_decode((string) \file_get_contents($file), associative: true) : null;
-        $config = \is_array($config) ? $config : [];
+        // A file that is not JSON (hand-edited, half-written) reads as none.
+        $config = JsonFile::read($file) ?? [];
         $enabled = \is_array($config['enabledPlugins'] ?? null) ? $config['enabledPlugins'] : IdeConfig::DEFAULT_ENABLED_PLUGINS;
         if (!\in_array('assist', $enabled, strict: true)) {
             $enabled[] = 'assist';

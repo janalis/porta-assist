@@ -17,6 +17,8 @@ use Porta\Event\AgentActivity;
 use Porta\Overlay\State\ToastSeverity;
 use Porta\Plugin\Api\PluginApi;
 use Porta\Support\Backoff;
+use Porta\Support\Decoded;
+use Porta\Support\JsonFile;
 use Revolt\EventLoop;
 
 /**
@@ -136,10 +138,9 @@ final class GuestSession
     public static function load(string $root): ?array
     {
         $file = $root.'/'.self::FILE;
-        // @mago-expect analysis:mixed-assignment -- narrowed below
-        // @noinspection JsonEncodingApiUsageInspection -- a file that is not JSON (hand-edited, half-written) reads as none, it does not throw
-        $json = \is_file($file) ? \json_decode((string) \file_get_contents($file), associative: true) : null;
-        $invite = \is_array($json) ? Invite::fromArray($json) : null;
+        // A file that is not JSON (hand-edited, half-written) reads as none.
+        $json = JsonFile::read($file);
+        $invite = null === $json ? null : Invite::fromArray($json);
         if (null === $invite || !\is_string($json['ticket'] ?? null) || !\is_string($json['name'] ?? null)) {
             return null;
         }
@@ -491,9 +492,8 @@ final class GuestSession
         $before = $this->peers;
         $this->peers = [];
         $this->kinds = [];
-        // @mago-expect analysis:mixed-assignment -- narrowed below
-        foreach (Wire::list($message, 'peers') as $peer) {
-            if (!\is_array($peer) || !\is_string($peer['id'] ?? null) || !\is_string($peer['name'] ?? null)) {
+        foreach (Decoded::objects(Wire::list($message, 'peers')) as $peer) {
+            if (!\is_string($peer['id'] ?? null) || !\is_string($peer['name'] ?? null)) {
                 continue;
             }
             $this->peers[$peer['id']] = Wire::clean($peer['name']);
