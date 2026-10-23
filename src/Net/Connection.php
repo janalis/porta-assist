@@ -75,7 +75,8 @@ final class Connection
         $this->writer = new NonBlockingWriter($stream, $this->close(...));
         $framer = new LineFramer($this->close(...), $maxLine);
         $this->watcher = EventLoop::unreference(EventLoop::onReadable($stream, function () use ($framer): void {
-            $bytes = \fread($this->stream, length: 262_144);
+            // @mago-expect lint:no-error-control-operator -- a peer that resets the connection makes TLS's read warn as well as return false; false is read as the close just below.
+            $bytes = @\fread($this->stream, length: 262_144);
             if (false === $bytes || ('' === $bytes && \feof($this->stream))) {
                 $this->close('the connection was closed');
 

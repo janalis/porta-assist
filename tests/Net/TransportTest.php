@@ -13,6 +13,7 @@ use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
 use Porta\AssistPlugin\Net\Rendezvous\Tcp;
 use Porta\AssistPlugin\Net\Rendezvous\Transit;
+use Porta\AssistPlugin\Net\Tls;
 use Porta\AssistPlugin\Tests\Support\FakeWormhole;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\PumpsLoop;
@@ -124,6 +125,61 @@ final class TransportTest extends TestCase
         $this->assertSame([['t' => 'hello'], ['t' => 'bye']], $heard, 'the last message before the close, nothing after');
         $this->assertSame(['host: bye now', 'guest: the connection was closed'], $closed, 'each said once');
         $this->assertTrue($host->isClosed());
+    }
+
+    /**
+     * A peer that resets the connection — gone with no TLS goodbye — is a
+     * closed connection like any other, said once.
+     *
+     * The lost-host E2e once failed on the warning TLS's read can raise for a
+     * reset (`SSL: Connection reset by peer`), now suppressed at the read.
+     * This reset does not raise it — that takes a timing window in OpenSSL
+     * this test cannot force — so it pins the close, not the silence.
+     */
+    public function testAPeerThatResetsTheConnectionIsAClosedOne(): void
+    {
+        // The host end is accepted through the sockets extension so the test
+        // keeps a Socket it can reset: PHP will not hand one back out of a
+        // stream that TLS has wrapped.
+        $listener = \socket_create_listen(0);
+        $this->assertInstanceOf(\Socket::class, $listener);
+        \socket_getsockname($listener, $address, $port);
+        $guestStream = \stream_socket_client('tcp://127.0.0.1:'.$port, context: \stream_context_create(Certificate::clientContext()));
+        $this->assertIsResource($guestStream);
+        $hostSocket = \socket_accept($listener);
+        $this->assertInstanceOf(\Socket::class, $hostSocket);
+        $hostStream = \socket_export_stream($hostSocket);
+        $this->assertIsResource($hostStream);
+        \stream_context_set_options($hostStream, $this->certificate->serverContext());
+        \stream_set_blocking($guestStream, enable: false);
+        \stream_set_blocking($hostStream, enable: false);
+        $shaken = [];
+        Tls::handshake($hostStream, \STREAM_CRYPTO_METHOD_TLS_SERVER, static function (?string $why) use (&$shaken): void {
+            $shaken[] = $why;
+        });
+        Tls::handshake($guestStream, \STREAM_CRYPTO_METHOD_TLS_CLIENT, static function (?string $why) use (&$shaken): void {
+            $shaken[] = $why;
+        });
+        $this->await(static function () use (&$shaken): bool {
+            return 2 === \count($shaken);
+        }, what: 'both ends encrypted');
+        $this->assertSame([null, null], $shaken);
+
+        $guest = new Connection($guestStream);
+        $closed = [];
+        $guest->listen(static function (array $message): void {}, static function (string $why) use (&$closed): void {
+            $closed[] = $why;
+        });
+        $guest->send(['t' => 'unanswered']);
+        // Linger zero: the close is a reset, with no TLS goodbye before it.
+        \socket_set_option($hostSocket, \SOL_SOCKET, \SO_LINGER, ['l_onoff' => 1, 'l_linger' => 0]);
+        \socket_close($hostSocket);
+        \socket_close($listener);
+
+        $this->await(static function () use (&$closed): bool {
+            return [] !== $closed;
+        }, what: 'the guest to see the connection go');
+        $this->assertSame(['the connection was closed'], $closed);
     }
 
     public function testWhatIsNotAMessageIsSkippedAndNothingIsReadPastAClose(): void
