@@ -69,6 +69,13 @@ final class TunnelTest extends TestCase
         $tunnel->close();
         $this->assertSame([true], (array) $ended, 'closing again changes nothing');
 
+        // Its last words, written as it hangs up, still go out first.
+        [$app, , $out, $ended] = $this->tunnel($connection);
+        \fwrite($app, data: 'last words');
+        \fclose($app);
+        $this->await(static fn (): bool => [true] === (array) $ended, what: 'the end told');
+        $this->assertSame('last words', \implode('', (array) $out));
+
         // The other end hangs up: what it sent arrives first — all of it,
         // past what the socket takes at once — and only then the close.
         [$app, $tunnel, $out, $ended] = $this->tunnel($connection);

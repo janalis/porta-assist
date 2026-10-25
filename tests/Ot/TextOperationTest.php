@@ -94,6 +94,19 @@ final class TextOperationTest extends TestCase
         $operation->apply('short');
     }
 
+    /** Each deleted piece is put back from where it was in the text, not from the last one's place. */
+    public function testAnInverseRestoresEachDeletedPieceFromItsOwnPlace(): void
+    {
+        $operation = new TextOperation()
+            ->retain(1)
+            ->delete(1)
+            ->retain(1)
+            ->delete(1);
+
+        $this->assertSame('ac', $operation->apply('abcd'));
+        $this->assertSame('abcd', $operation->invert('abcd')->apply('ac'));
+    }
+
     public function testComposeIsTheTwoInTurn(): void
     {
         $text = 'hello world';
@@ -212,6 +225,16 @@ final class TextOperationTest extends TestCase
         $this->assertSame(6, $operation->transformOffset(6), 'inside the delete: pulled to it');
         $this->assertSame(6, $operation->transformOffset(7), 'right after it: back by its length');
         $this->assertSame(8, $operation->transformOffset(9));
+        $this->assertSame(
+            2,
+            new TextOperation()
+                ->retain(2)
+                ->delete(1)
+                ->retain(2)
+                ->insert('x')
+                ->transformOffset(3),
+            'text inserted past the offset, once a delete is behind it, does not push it',
+        );
     }
 
     public function testItIsReadAsEditorRangesOfTheOldText(): void
@@ -243,6 +266,15 @@ final class TextOperationTest extends TestCase
                 ->insert('?')
                 ->toEdits($text),
             'at the very end',
+        );
+        $this->assertSame(
+            [['line' => 1, 'column' => 0, 'endLine' => 1, 'endColumn' => 1, 'text' => '']],
+            new TextOperation()
+                ->retain(2)
+                ->delete(1)
+                ->retain(4)
+                ->toEdits("a\nb\nc\nd"),
+            'the line found between others, four lines down',
         );
         $this->assertSame(
             [['line' => 0, 'column' => 0, 'endLine' => 1, 'endColumn' => 0, 'text' => '']],

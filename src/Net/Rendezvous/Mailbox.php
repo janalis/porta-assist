@@ -61,7 +61,14 @@ final class Mailbox
             throw new RendezvousFailed($socket);
         }
         $mailbox = new self($socket, $side, $timeout);
-        $welcome = $mailbox->expect('welcome');
+        try {
+            $welcome = $mailbox->expect('welcome');
+        } catch (RendezvousFailed $e) {
+            // No welcome, or a hang-up: the socket and its pings go too.
+            $mailbox->hangUp();
+
+            throw $e;
+        }
         $refusal = \is_array($welcome['welcome'] ?? null) ? Wire::text($welcome['welcome'], 'error') : '';
         if ('' !== $refusal) {
             $mailbox->hangUp();

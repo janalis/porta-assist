@@ -82,20 +82,42 @@ final class WorkspaceTest extends TestCase
         \file_put_contents($project->path('src/A.php'), data: '<?php // changed');
         \touch($project->path('src/A.php'), \time() + 5);
         $this->assertSame(\hash('xxh128', data: '<?php // changed'), $files->scan()['src/A.php']['hash'], 'a changed file is read again');
+
+        $at = (int) \filemtime($project->path('src/A.php'));
+        \file_put_contents($project->path('src/A.php'), data: '<?php // changed again');
+        \touch($project->path('src/A.php'), $at);
+        $this->assertSame(\hash('xxh128', data: '<?php // changed again'), $files->scan()['src/A.php']['hash'], 'a new size, at the same time: read again');
+        \file_put_contents($project->path('src/A.php'), data: '<?php // CHANGED again');
+        \touch($project->path('src/A.php'), $at + 5);
+        $this->assertSame(\hash('xxh128', data: '<?php // CHANGED again'), $files->scan()['src/A.php']['hash'], 'the same size, at a new time: read again');
+
+        $bare = new TempProject(['a.php' => '<?php']);
+        new Process(['git', 'init', '-q'], $bare->dir)->mustRun();
+        $this->assertSame(['a.php'], \array_keys(new ProjectFiles($bare->dir, 100)->scan()), 'no vendor folder: none walked');
     }
 
     public function testOutsideARepositoryEveryFileButThePrivateOnesAndNodeModules(): void
     {
         $outside = new TempProject(['x.php' => '']);
-        $project = new TempProject(['a.php' => '1', 'node_modules/x.js' => 'x', '.porta/state' => 's', 'sub/b.php' => '2']);
+        $project = new TempProject(['a.php' => '1', 'node_modules/x.js' => 'x', '.porta/state' => 's', 'sub/b.php' => '2', 'z.php' => \str_repeat('z', times: 100)]);
         \symlink($outside->path('x.php'), $project->path('linked.php'));
+        \symlink($project->path('a.php'), $project->path('alias.php'));
         \symlink($outside->dir, $project->path('linked-dir'));
 
-        $this->assertSame(['a.php', 'sub/b.php'], \array_keys(new ProjectFiles($project->dir, 100)->scan()), 'no links followed or shared');
+        $this->assertSame(
+            ['a.php', 'sub/b.php', 'z.php'],
+            \array_keys(new ProjectFiles($project->dir, 100)->scan()),
+            'no links followed or shared — not even one to a file of its own; a file as big as allowed is; a folder walked, the rest after it too',
+        );
+        $this->assertSame(
+            ['a.php', 'alias.php', 'linked-dir', 'linked.php', 'sub/b.php', 'z.php'],
+            new Paths($project->dir)->walk('', ['.porta', 'node_modules']),
+            'a symlinked folder is listed, not walked into',
+        );
 
         // A `.git` that git does not read as a repository: listed by walking.
         \file_put_contents($project->path('.git'), data: 'gitdir: /nowhere');
-        $this->assertSame(['a.php', 'sub/b.php'], \array_keys(new ProjectFiles($project->dir, 100)->scan()));
+        $this->assertSame(['a.php', 'sub/b.php', 'z.php'], \array_keys(new ProjectFiles($project->dir, 100)->scan()));
     }
 
     public function testTheMirrorFollowsTheHostsListAndWritesOnlyInsideItself(): void
@@ -110,6 +132,7 @@ final class WorkspaceTest extends TestCase
         }
 
         $this->assertTrue($mirror->write('src/A.php', 'same'));
+        $this->assertSame(0o755 & ~\umask(), \fileperms($mirror->root.'/src') & 0o777, 'a folder made for it is an ordinary one');
         $this->assertTrue($mirror->write('old.php', 'gone soon'));
         $this->assertTrue($mirror->write('stale.php', 'old'));
         $this->assertFalse($mirror->write('../escape.php', 'x'));
@@ -119,11 +142,11 @@ final class WorkspaceTest extends TestCase
         \file_put_contents($mirror->root.'/.porta/assist-session.json', data: '{}');
 
         $host = [
+            '../escape.php' => ['size' => 1, 'hash' => 'h'],
             'src/A.php' => ['size' => 4, 'hash' => \hash('xxh128', data: 'same')],
             'stale.php' => ['size' => 3, 'hash' => \hash('xxh128', data: 'new')],
             'resized.php' => ['size' => 9, 'hash' => 'h'],
             'new/B.php' => ['size' => 1, 'hash' => 'h'],
-            '../escape.php' => ['size' => 1, 'hash' => 'h'],
         ];
         $this->assertSame(['stale.php', 'resized.php', 'new/B.php'], $mirror->missing($host), 'what differs or is not here, nothing outside');
         $this->assertSame(1, $mirror->prune($host), 'old.php went');

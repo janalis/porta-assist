@@ -92,7 +92,10 @@ final class HostRendezvousE2eTest extends TestCase
                 $this->say(['t' => 'hello', 'v' => 2, 'name' => 'Ana', 'token' => $ana->token]);
                 $this->expect('pending');
                 $this->hangUp();
+
+                // Stopped: nobody gets in with the session's invites — not even on a channel Ana's door waited on.
                 $this->command($ide, 'assist:stop');
+                $this->assertIsString(GuestRendezvous::connect($ana, $this->nextChannel($ana), 0.5), 'the session\'s way in went with it');
             },
         ]);
     }
@@ -119,9 +122,7 @@ final class HostRendezvousE2eTest extends TestCase
                 $this->await(static fn (): bool => self::toasted($ide, 'The code was taken at the mailbox server — the code is now'), what: 'the new code said');
                 $this->assertNotSame($next->text(), $this->code($ide, not: $next)->text());
 
-                // Stopped: every door closes with the session.
                 $this->command($ide, 'assist:stop');
-                $this->assertIsString(GuestRendezvous::connect($invite, 9, 0.5), 'the doors closed with the session');
             },
         ]);
     }

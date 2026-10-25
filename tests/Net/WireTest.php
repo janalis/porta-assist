@@ -48,6 +48,11 @@ final class WireTest extends TestCase
             Wire::caret(['t' => 'presence', 'path' => 'a.php', 'line' => 2, 'column' => 3, 'anchorLine' => 1, 'anchorColumn' => 0, 'top' => 1]),
         );
         $this->assertSame(['path' => '', 'line' => 0, 'column' => 0, 'anchorLine' => null, 'anchorColumn' => null, 'top' => null], Wire::caret(['t' => 'presence', 'anchorLine' => -1, 'top' => 'x']));
+        $this->assertSame(
+            [0, 4],
+            [Wire::caret(['anchorLine' => 0, 'anchorColumn' => 4])['anchorLine'], Wire::caret(['anchorLine' => 0, 'anchorColumn' => 4])['anchorColumn']],
+            'the first line is a line',
+        );
     }
 
     public function testWhatTheOtherEndSendsToBeShownCannotReachTheTerminal(): void
@@ -57,6 +62,9 @@ final class WireTest extends TestCase
         $this->assertSame('Ev]52;c;aGFja2Vkil[2J31mgnp.exe', Wire::text(['name' => $name], 'name'));
         $this->assertSame('Ev]52', Wire::text(['name' => $name], 'name', max: 5));
         $this->assertSame('', Wire::text([], 'name'));
+        $this->assertSame(200, \mb_strlen(Wire::text(['name' => \str_repeat('é', times: 201)], 'name')), 'two hundred characters at most');
+        $this->assertSame(200, \mb_strlen(Wire::clean(\str_repeat('é', times: 201))));
+        $this->assertSame(200, \mb_strlen(Wire::clean(\str_repeat('é', times: 200))));
         $this->assertSame('Ana Ünal — שלום', Wire::clean("Ana Ünal — שלום\n"), 'letters of every script stay; a line break does not');
     }
 }

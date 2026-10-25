@@ -267,11 +267,74 @@ final class TransportTest extends TestCase
         });
         try {
             // By value is right here: the handle never changes, only its state.
-            $this->await(static fn (): bool => \feof($client), what: 'the whole message, then the close');
+            $this->await(static fn (): bool => \feof($client), timeout: Connection::LINGER * 0.75, what: 'the whole message, then the close — once it has gone, not when the linger is up');
         } finally {
             EventLoop::cancel($reader);
         }
         $this->assertSame(['t' => 'bye', 'pad' => $pad], \json_decode(\rtrim($received), associative: true, flags: \JSON_THROW_ON_ERROR));
+        \fclose($client);
+    }
+
+    /**
+     * A ping is the connection's own: stepped over, not the lines after it.
+     * It arms the heartbeat, which pings back once — and once armed, arming
+     * again sends nothing more.
+     */
+    public function testAPingIsSteppedOverAndArmsTheHeartbeatOnce(): void
+    {
+        [$connection, $client] = $this->loopback();
+        $heard = [];
+        $connection->listen(static function (array $message) use (&$heard): void {
+            $heard[] = $message['t'];
+        }, static function (): void {});
+
+        \fwrite($client, data: "{\"t\":\"ping\"}\n{\"t\":\"after\"}\n");
+        $this->await(static function () use (&$heard): bool {
+            return [] !== $heard;
+        }, what: 'the message after the ping');
+        $connection->keepAlive();
+        $connection->send(['t' => 'mark']);
+
+        $this->assertSame(['after'], $heard);
+        $said = '';
+        $this->await(static function () use ($client, &$said): bool {
+            $said .= \fread($client, length: 8_192);
+
+            return \str_contains($said, 'mark');
+        }, what: 'what the connection said');
+        $this->assertSame("{\"t\":\"ping\"}\n{\"t\":\"mark\"}\n", $said, 'one ping back, however often it is armed');
+
+        $connection->close('done');
+        $this->assertIsClosedResource(Probe::get($connection, 'stream'), 'nothing queued: the socket goes at once');
+        \fclose($client);
+    }
+
+    /** Waiting for a drain with nothing queued is no wait — and no second call when something drains later. */
+    public function testAfterADrainIsCalledOnce(): void
+    {
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertNotFalse($pair);
+        [$ours, $client] = $pair;
+        $connection = new Connection($ours);
+        $connection->listen(static function (array $message): void {}, static function (): void {});
+        $calls = 0;
+
+        $connection->afterDrain(static function () use (&$calls): void {
+            ++$calls;
+        });
+        $this->assertSame(1, $calls, 'at once');
+
+        $connection->send(['t' => 'big', 'pad' => \str_repeat('x', times: 200_000)]);
+        $this->assertGreaterThan(0, $connection->backlog());
+        \stream_set_blocking($client, enable: false);
+        $this->await(static function () use ($client, $connection): bool {
+            \fread($client, length: 1_048_576);
+
+            return 0 === $connection->backlog();
+        }, what: 'the drain');
+        $this->pump(0.05);
+        $this->assertSame(1, $calls, 'not again when something else drained');
+        $connection->close('done');
         \fclose($client);
     }
 
@@ -425,6 +488,7 @@ final class TransportTest extends TestCase
         [$door, $invite] = $this->door();
         // Channels 0 and 1 taken by guest processes that died: 2 still gets through.
         $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2, 5.0)));
+        $this->assertIsString(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2, 1.5)), 'a channel joined is spent: not waited on again');
         // Past the window from there, nothing waits; within it, the host does.
         $this->assertSame('nobody came to the relay at '.$this->wormhole->transit, self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 20, 0.3)));
         $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2 + Door::WINDOW, 5.0)));
@@ -562,6 +626,16 @@ final class TransportTest extends TestCase
         $certificate = Certificate::create();
         $this->assertSame(0o600, \fileperms($certificate->file) & 0o777, 'the key is this user\'s only');
         $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $certificate->fingerprint);
+        $pem = (string) \file_get_contents($certificate->file);
+        $parsed = \openssl_x509_parse($pem);
+        $this->assertIsArray($parsed);
+        $this->assertSame('porta-assist', $parsed['subject']['CN'] ?? null);
+        $this->assertSame(30 * 86_400, $parsed['validTo_time_t'] - $parsed['validFrom_time_t'], 'good for a month');
+        $this->assertSame('ecdsa-with-SHA256', $parsed['signatureTypeSN']);
+        $key = \openssl_pkey_get_private($pem);
+        $this->assertNotFalse($key);
+        $details = \openssl_pkey_get_details($key);
+        $this->assertSame([\OPENSSL_KEYTYPE_EC, 'prime256v1'], [$details['type'] ?? null, $details['ec']['curve_name'] ?? null], 'a P-256 key: quick to make, quick to shake hands with');
         $certificate->forget();
         $certificate->forget();
         $this->assertFileDoesNotExist($certificate->file);

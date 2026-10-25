@@ -132,7 +132,7 @@ final class HostLanguageServerE2eTest extends TestCase
                 // with nothing, so it keeps the host's options — never by the guest.
                 $this->assertSame(7, $this->ask(['jsonrpc' => '2.0', 'id' => 7, 'method' => 'test/askConfiguration'])['id']);
                 $told = $this->expect('lsp')['m'];
-                $this->assertSame(['test/configured', [null, null]], [$told['method'] ?? null, $told['params']['result'] ?? null]);
+                $this->assertSame(['test/configured', [null, null], '2.0'], [$told['method'] ?? null, $told['params']['result'] ?? null, $told['params']['jsonrpc'] ?? null]);
 
                 // A question about the copy's file reaches the server about the host's — and the answer comes back about the copy's.
                 $definition = $this->ask([
@@ -151,8 +151,11 @@ final class HostLanguageServerE2eTest extends TestCase
                 $host->setRole(Wire::string($welcome, 'peer'), Role::ReadOnly);
                 $this->say(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]]);
                 $refused = $this->ask(['jsonrpc' => '2.0', 'id' => 3, 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]);
-                $this->assertSame(3, $refused['id']);
-                $this->assertStringContainsString('not yours to change', $refused['error']['message'] ?? '');
+                $this->assertSame(
+                    ['jsonrpc' => '2.0', 'id' => 3, 'error' => ['code' => -32_600, 'message' => 'the host\'s server, and the host\'s files, are not yours to change']],
+                    $refused,
+                    'an Invalid Request, said as JSON-RPC says it',
+                );
                 $host->setRole(Wire::string($welcome, 'peer'), Role::Edit);
                 $this->assertSame(
                     'workspace/executeCommand',

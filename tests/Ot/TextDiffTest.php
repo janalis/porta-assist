@@ -51,6 +51,25 @@ final class TextDiffTest extends TestCase
         $this->assertSame([1, 'ة', -2], TextDiff::between('aé', 'aة')->toWire(), 'nor inside one at the end');
     }
 
+    /** The lines kept are as many as can be: two lines deleted, one inserted, the rest kept — not a costlier script that also reaches it. */
+    public function testTheLineScriptIsTheShortest(): void
+    {
+        $this->assertSame([-4, 2, "c\n", 3, "\nc", 1], TextDiff::between("b\nb\na\nb\na\n", "a\nc\nb\na\nc\n")->toWire());
+    }
+
+    /** At exactly the edit distance the middle is still diffed line by line: the one line both keep is kept. */
+    public function testAtTheEditDistanceTheMiddleIsStillLineByLine(): void
+    {
+        $side = static fn (string $mark): string => \implode('', \array_map(static fn (int $n): string => $mark.$n.$mark."\n", \range(1, end: 500)));
+        $old = $side('o')."keep\n".$side('o');
+        $new = $side('n')."keep\n".$side('n'); // 1000 lines out, 1000 in
+
+        $operation = TextDiff::between($old, $new);
+        $this->assertSame($new, $operation->apply($old));
+        $this->assertCount(6, $operation->toWire(), 'each side of the kept line its own change');
+        $this->assertSame(6, $operation->toWire()[2], 'the newline before it, and it');
+    }
+
     public function testPastTheEditDistanceTheMiddleIsOneReplacement(): void
     {
         $old = \implode("\n", \range(1, end: 2_100))."\n";
