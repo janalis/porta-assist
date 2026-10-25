@@ -7,6 +7,7 @@ namespace Porta\AssistPlugin\Tests;
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
+use Porta\AssistPlugin\Session\Role;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Event\AgentActivity;
 use Porta\Event\FileDeleted;
@@ -103,6 +104,89 @@ final class HostEdgesE2eTest extends TestCase
         ]);
     }
 
+    /** Each guest hears of the others as they come, move, change role, put agents to work and go. */
+    public function testEachGuestHearsOfTheOthers(): void
+    {
+        $project = self::project();
+        $root = (string) \realpath($project->dir);
+
+        $this->runIde($project, $root.'/src/A.php', [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root): void {
+                $invite = $this->invited($ide);
+                $ana = $this->guest($tui, $terminal, $invite, 'Ana');
+                $anaSide = $this->side();
+                $boName = \str_repeat('B', times: 40);
+                $this->askIn($invite, $boName.'BBBBB');
+                $this->awaitPainted($tui, $terminal, $boName.' asks to join'); // cut to forty, here as everywhere
+                $terminal->simulateInput("\r");
+                $bo = $this->expect('welcome');
+                $this->assertSame(
+                    [['host', 'host'], ['id' => $ana['peer'], 'name' => 'Ana', 'role' => 'edit']],
+                    [[$bo['peers'][0]['id'] ?? null, $bo['peers'][0]['role'] ?? null], $bo['peers'][1] ?? null],
+                    'who is here already: the host, and Ana',
+                );
+                $this->assertCount(2, $bo['peers'], 'not himself');
+                $this->assertSame(
+                    ['id' => \substr(\hash('xxh128', \gethostname().$root), offset: 0, length: 16), 'name' => \basename($root)],
+                    $bo['project'],
+                    'the project, named the same for every guest of this host',
+                );
+
+                // Bo says where he is, and puts an agent to work.
+                $this->say(['t' => 'open', 'path' => 'src/A.php']);
+                $this->expect('opened');
+                $this->say(['t' => 'presence', 'path' => 'src/A.php', 'line' => 1, 'column' => 2]);
+                $this->say(['t' => 'agent', 'id' => 'codex', 'name' => 'Codex', 'path' => 'src/A.php', 'line' => 0, 'column' => 1]);
+                $boSide = $this->become($anaSide);
+                $this->assertSame(['t' => 'peer', 'id' => $bo['peer'], 'name' => $boName, 'role' => 'edit'], $this->expect('peer'), 'Ana is told who came — his name cut to forty');
+                $this->assertSame(
+                    ['t' => 'presence', 'peer' => $bo['peer'], 'name' => $boName, 'path' => 'src/A.php', 'line' => 1, 'column' => 2, 'anchorLine' => null, 'anchorColumn' => null, 'top' => null],
+                    $this->presenceOf($bo['peer']),
+                );
+                $this->assertSame(
+                    [
+                        't' => 'presence',
+                        'peer' => $bo['peer'].'~codex',
+                        'name' => 'Codex',
+                        'agent' => true,
+                        'path' => 'src/A.php',
+                        'line' => 0,
+                        'column' => 1,
+                        'anchorLine' => null,
+                        'anchorColumn' => null,
+                        'top' => null,
+                    ],
+                    $this->presenceOf($bo['peer'].'~codex'),
+                );
+
+                // A file Bo writes: Ana is told it changed, to fetch.
+                $anaSide = $this->become($boSide);
+                $this->say(['t' => 'write', 'path' => 'src/Bo.php', 'data' => \base64_encode('<?php // Bo')]);
+                $boSide = $this->become($anaSide);
+                $this->assertSame(['t' => 'changed', 'files' => [['src/Bo.php', 11, \hash('xxh128', data: '<?php // Bo')]], 'gone' => []], $this->expect('changed'));
+
+                // The host lets him only read along: Ana is told.
+                $host = Probe::get($this->plugin($ide), 'host');
+                $this->assertIsObject($host);
+                $host->setRole($bo['peer'], Role::ReadOnly);
+                $this->assertSame(['t' => 'peer', 'id' => $bo['peer'], 'name' => $boName, 'role' => 'read'], $this->expect('peer'));
+
+                // His agent stops, then he goes: Ana is told of each.
+                $anaSide = $this->become($boSide);
+                $this->say(['t' => 'agentLeft', 'id' => 'codex']);
+                $this->say(['t' => 'open', 'path' => 'barrier.php']);
+                $this->expect('error');
+                $boSide = $this->become($anaSide);
+                $this->assertSame(['t' => 'left', 'peer' => $bo['peer'].'~codex'], $this->expect('left'));
+                $anaSide = $this->become($boSide);
+                $this->hangUp();
+                $this->become($anaSide);
+                $this->assertSame(['t' => 'left', 'peer' => $bo['peer']], $this->expect('left'));
+                $this->hangUp();
+            },
+        ]);
+    }
+
     public function testTheEdgesOfWhatTheHostShares(): void
     {
         $project = self::project();
@@ -167,6 +251,42 @@ final class HostEdgesE2eTest extends TestCase
                 $this->hangUp();
             },
         ]);
+    }
+
+    /**
+     * The guest this test plays now — its connection and what it has read
+     * of it — to {@see become()} again later.
+     *
+     * @return array{mixed, string, list<array<string, mixed>>}
+     */
+    private function side(): array
+    {
+        return [$this->peer, $this->buffered, $this->inbox];
+    }
+
+    /**
+     * Play the guest $side was: the one played until now, returned.
+     *
+     * @param array{mixed, string, list<array<string, mixed>>} $side
+     *
+     * @return array{mixed, string, list<array<string, mixed>>}
+     */
+    private function become(array $side): array
+    {
+        $was = $this->side();
+        [$this->peer, $this->buffered, $this->inbox] = $side;
+
+        return $was;
+    }
+
+    /** @return array<string, mixed> the next presence of $peer's, those of others passed over */
+    private function presenceOf(string $peer): array
+    {
+        do {
+            $presence = $this->expect('presence');
+        } while ($peer !== $presence['peer']);
+
+        return $presence;
     }
 
     /**

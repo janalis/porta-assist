@@ -43,6 +43,7 @@ final class HostFilesE2eTest extends TestCase
             'src/A.php' => "<?php\necho 'a';\n",
             'README.md' => "# demo\nsecond line\n",
             'notes.txt' => "notes\n",
+            'grows.txt' => "g\n",
             'node_modules/.env' => "SECRET=1\n", // under the root, never listed
             '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
         ]);
@@ -83,6 +84,10 @@ final class HostFilesE2eTest extends TestCase
                 $this->assertSame('<?php // new', \file_get_contents($root.'/src/New.php'));
                 $this->assertSame('rewritten', \file_get_contents($root.'/notes.txt'));
                 $this->assertFileDoesNotExist($root.'/src/Bad.php', 'not base64: nothing written');
+                $this->say(['t' => 'write', 'path' => 'src/deep/er/New.php', 'data' => \base64_encode('<?php // deep')]);
+                $this->say(['t' => 'fetch', 'paths' => ['src/deep/er/New.php']]);
+                $this->assertSame('<?php // deep', \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true), 'its folders made for it');
+                $this->expect('fetched');
                 // Where no listing looks, what a guest wrote is still the others' to fetch.
                 $this->say(['t' => 'write', 'path' => 'node_modules/w.js', 'data' => \base64_encode('mine')]);
                 $this->say(['t' => 'fetch', 'paths' => ['node_modules/w.js']]);
@@ -99,10 +104,14 @@ final class HostFilesE2eTest extends TestCase
                 $this->assertSame('not a file the host shares', $this->expect('error')['message']);
                 $this->assertSame("SECRET=1\n", \file_get_contents($root.'/node_modules/.env'));
                 $this->assertFileDoesNotExist($root.'/leak.txt');
+                $this->say(['t' => 'move', 'from' => 'notes.txt', 'to' => '../escaped.txt']);
+                $this->say(['t' => 'move', 'from' => '../README.md', 'to' => 'stolen.md']);
 
                 // Moved and deleted, the host's editor doing it: everyone told.
                 $this->say(['t' => 'move', 'from' => 'src/New.php', 'to' => 'src/Moved.php']);
                 $this->assertSame(['src/New.php', 'src/Moved.php'], [($moved = $this->expect('moved'))['from'], $moved['to']]);
+                $this->assertFileExists($root.'/notes.txt', 'a move out of the project is no move');
+                $this->assertFileDoesNotExist(\dirname($root).'/escaped.txt');
                 $this->say(['t' => 'move', 'from' => 'src/Gone.php', 'to' => 'src/Else.php']);
                 $this->assertSame('src/Gone.php', $this->expect('error')['path']);
                 $this->say(['t' => 'delete', 'path' => 'src/Moved.php']);
@@ -118,12 +127,25 @@ final class HostFilesE2eTest extends TestCase
                 $this->emit($ide, new WorkingTreeChanged());
                 $this->emit($ide, new WorkingTreeChanged());
                 $changed = $this->expect('changed');
-                $this->assertSame([['notes.txt', 15, \hash('xxh128', data: 'changed on disk')]], $changed['files']);
+                $this->assertSame(
+                    [['notes.txt', 15, \hash('xxh128', data: 'changed on disk')], ['src/deep/er/New.php', 13, \hash('xxh128', data: '<?php // deep')]],
+                    $changed['files'],
+                    'and what a guest wrote, now listed',
+                );
                 $this->assertSame(['README.md'], $changed['gone']);
                 $this->emit($ide, new WorkingTreeChanged());
                 $this->say(['t' => 'open', 'path' => 'nope.php']);
                 $this->expect('error');
                 $this->assertSame([], \array_filter($this->inbox, static fn (array $m): bool => 'changed' === $m['t']), 'nothing changed, nothing said');
+                // A change alone — listed after files that did not change — is said; so is a file gone alone.
+                \file_put_contents($root.'/zz.txt', data: 'new on disk');
+                $this->emit($ide, new WorkingTreeChanged());
+                $changed = $this->expect('changed');
+                $this->assertSame([[['zz.txt', 11, \hash('xxh128', data: 'new on disk')]], []], [$changed['files'], $changed['gone']]);
+                \unlink($root.'/zz.txt');
+                $this->emit($ide, new WorkingTreeChanged());
+                $changed = $this->expect('changed');
+                $this->assertSame([[], ['zz.txt']], [$changed['files'], $changed['gone']]);
 
                 // The file moves outside the project (a shell's `mv`; the plugin
                 // API's own move stays inside it): to the others, it is gone.
@@ -131,6 +153,22 @@ final class HostFilesE2eTest extends TestCase
                 \rename($root.'/notes.txt', $outside->path('notes.txt'));
                 $this->emit($ide, new FileRenamed($root.'/notes.txt', $outside->path('notes.txt')));
                 $this->assertSame('notes.txt', $this->expect('deleted')['path']);
+
+                // Grown since it was listed: past the largest shared, it stays on the host; as large as that, it goes.
+                $largest = 4 * 1_048_576;
+                \file_put_contents($root.'/grows.txt', \str_repeat('g', $largest + 1));
+                $this->say(['t' => 'fetch', 'paths' => ['grows.txt']]);
+                $this->assertTrue($this->expect('file')['missing'] ?? null);
+                $this->expect('fetched');
+                \file_put_contents($root.'/grows.txt', \str_repeat('g', $largest));
+                $this->say(['t' => 'fetch', 'paths' => ['grows.txt']]);
+                $this->assertSame($largest, \strlen((string) \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true)));
+                $this->expect('fetched');
+
+                // Stopped while a change under the editor settles: the rescan goes with the session.
+                $this->emit($ide, new WorkingTreeChanged());
+                $this->command($ide, 'assist:stop');
+                $this->assertSame(['t' => 'bye', 'reason' => 'ended'], $this->expect('bye'));
                 $this->hangUp();
             },
         ]);

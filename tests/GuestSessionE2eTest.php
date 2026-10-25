@@ -191,15 +191,17 @@ final class GuestSessionE2eTest extends TestCase
                 $terminal->simulateInput('x');
                 $this->assertSame(['x', 4], $this->expect('op')['ops'], 'sent — and never acknowledged');
 
+                // Typed as the host goes, before anything read it: read as the drop is.
+                $terminal->simulateInput('y');
                 $this->dropPeer();
                 $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
 
-                // The host never applied it, and someone else wrote meanwhile.
+                // The host never applied either, and someone else wrote meanwhile.
                 $this->welcomeGuest();
                 $this->shareFile('src/A.php', "one\ntheirs\n");
 
-                $this->await(fn (): bool => "xone\ntheirs\n" === $this->bufferText($ide, $path), what: 'theirs, and mine on top');
-                $this->assertSame(['x', 11], $this->expect('op')['ops'], 'sent again, onto the host\'s text');
+                $this->await(fn (): bool => "xyone\ntheirs\n" === $this->bufferText($ide, $path), what: 'theirs, and mine on top');
+                $this->assertSame(['xy', 11], $this->expect('op')['ops'], 'sent again, onto the host\'s text');
                 $this->hangUp();
             },
         ]);
