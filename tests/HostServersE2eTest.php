@@ -232,11 +232,17 @@ final class HostServersE2eTest extends TestCase
                 $this->sayTogether(
                     ['t' => 'tunnel-open', 'port' => $port, 'conn' => 1],
                     ['t' => 'tunnel-data', 'conn' => 1, 'data' => \base64_encode('early')],
+                    ['t' => 'tunnel-data', 'conn' => 1, 'data' => \base64_encode(' bird')],
                     ['t' => 'tunnel-open', 'port' => $port, 'conn' => 1],
                 );
                 $this->assertSame(1, $this->expect('tunnel-close')['conn'], 'one connection id, once — even while it is made');
                 $served = $this->devAccepts($port);
-                $this->await(static fn (): bool => 'early' === \fread($served, length: 100), what: 'what was sent early');
+                $got = '';
+                $this->await(static function () use ($served, &$got): bool {
+                    $got .= \fread($served, length: 100);
+
+                    return 'early bird' === $got;
+                }, what: 'all that was sent early, in order');
 
                 // Closed at her end before the host got through: not kept.
                 $this->sayTogether(

@@ -93,53 +93,61 @@ final class JoinCommandTest extends TestCase
 
     public function testTheCopyIsBroughtInLineAndTheIdeOpenedOnIt(): void
     {
-        $project = new TempProject(['src/A.php' => "<?php\n", 'same.txt' => 'same', 'changed.txt' => 'new']);
+        $project = new TempProject(['src/A.php' => "<?php\n", 'same.txt' => 'same', 'changed.txt' => 'new', 'vanished.txt' => 'gone by the fetch']);
         $copy = $this->home->path('.porta/assist/0123456789abcdef/demo');
         \mkdir($copy.'/src', recursive: true);
         \file_put_contents($copy.'/same.txt', data: 'same');
         \file_put_contents($copy.'/changed.txt', data: 'old');
         \file_put_contents($copy.'/gone.txt', data: 'the host no longer has it');
-        \file_put_contents($copy.'/.porta.json', data: '{"enabledPlugins": ["diff","git"], "theme": "light"}');
+        \file_put_contents($copy.'/.porta.json', data: '{"enabledPlugins": {"0": "diff", "2": "git"}, "theme": "light"}'); // hand-edited: a map
 
-        $tester = $this->join($this->host('pending', $project));
+        $tester = $this->join($this->host('pending', $project), name: "  Bo \t");
 
         $this->assertSame(0, $tester->getStatusCode(), $tester->getErrorOutput());
         $this->assertStringContainsString('Meeting the host…', $tester->getDisplay());
         $this->assertStringContainsString('Waiting for the host to let you in', $tester->getDisplay());
         $this->assertStringContainsString('In, reading along.', $tester->getDisplay());
-        $this->assertStringContainsString('Files shared: 3 — to fetch: 2, removed: 1.', $tester->getDisplay());
+        $this->assertStringContainsString('Files shared: 4 — to fetch: 3, removed: 1.', $tester->getDisplay());
         $root = (string) \realpath($copy);
         $this->assertSame([$root], $this->launched);
         $this->assertTrue(new OnboardingState($root)->hasSeenWelcome(), 'no first-run card on someone else\'s project');
         $this->assertSame("<?php\n", \file_get_contents($root.'/src/A.php'));
         $this->assertSame('new', \file_get_contents($root.'/changed.txt'));
         $this->assertFileDoesNotExist($root.'/gone.txt');
+        $this->assertFileDoesNotExist($root.'/vanished.txt', 'gone by the time it was fetched: not written as nothing');
         $session = GuestSession::load($root);
         $this->assertNotNull($session);
         $this->assertSame(
-            [$this->wormhole->transit, self::KEY, \str_repeat('feedface', times: 4), 'Bo', ['php', 'twig']],
+            [$this->wormhole->transit, self::KEY, \str_repeat('feedface', times: 4), 'Bo', ['php', 'twig']], // the name trimmed
             [$session['invite']->transit, $session['invite']->token, $session['ticket'], $session['name'], $session['languages']],
             'the relay, and the certificate pinned, for the IDE\'s reconnects too',
         );
         $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $session['invite']->fingerprint);
         $this->assertSame(1, GuestSession::channel($root), 'this command took the first channel; the IDE takes the next');
         $this->assertSame(
-            ['enabledPlugins' => ['diff', 'git', 'assist'], 'theme' => 'light'],
-            \json_decode((string) \file_get_contents($root.'/.porta.json'), associative: true, flags: \JSON_THROW_ON_ERROR),
-            'the copy\'s own settings, with this plugin on',
+            "{\n    \"enabledPlugins\": [\n        \"diff\",\n        \"git\",\n        \"assist\"\n    ],\n    \"theme\": \"light\"\n}\n",
+            \file_get_contents($root.'/.porta.json'),
+            'the copy\'s own settings, with this plugin on — a list, as a person would write it',
         );
     }
 
     public function testAFirstJoinEnablesThePluginOnTopOfTheDefaults(): void
     {
         $project = new TempProject(['a.txt' => 'a']);
-        $tester = $this->join($this->host('chatty', $project), exit: 3, name: null);
+        $user = \getenv('USER');
+        \putenv('USER=');
+        try {
+            $tester = $this->join($this->host('chatty', $project), exit: 3, name: null);
+        } finally {
+            \putenv(false === $user ? 'USER' : 'USER='.$user);
+        }
 
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('Porta exited with 3', $tester->getErrorOutput());
+        $this->assertStringContainsString('Files shared: 1 — to fetch: 1, removed: 0.', $tester->getDisplay(), 'the list, not the session\'s talk before it');
+        $this->assertStringNotContainsString('Waiting for the host', $tester->getDisplay(), 'let in at once: nobody kept waiting');
         $config = \json_decode((string) \file_get_contents($this->launched[0].'/.porta.json'), associative: true, flags: \JSON_THROW_ON_ERROR);
-        $user = \getenv('USER');
-        $this->assertSame(\is_string($user) && '' !== $user ? $user : 'guest', GuestSession::load($this->launched[0])['name'] ?? null, 'no name given: the login name');
+        $this->assertSame('guest', GuestSession::load($this->launched[0])['name'] ?? null, 'no name given, and no login name: a guest');
         $this->assertSame([...IdeConfig::DEFAULT_ENABLED_PLUGINS, 'assist'], $config['enabledPlugins'] ?? null);
     }
 
@@ -160,6 +168,9 @@ final class JoinCommandTest extends TestCase
         yield 'a guest forgotten' => ['deny:expired', 'The host does not know this guest any more'];
         yield 'a silent host' => ['silent', 'The host did not answer'];
         yield 'a garbled welcome' => ['garbled', 'a welcome this Porta does not understand'];
+        yield 'a project id with more after it' => ['garbled:0123456789abcdef/../../x', 'a welcome this Porta does not understand'];
+        yield 'a project id with more before it' => ['garbled:../0123456789abcdef', 'a welcome this Porta does not understand'];
+        yield 'a welcome without a ticket' => ['no-ticket', 'a welcome this Porta does not understand'];
         yield 'no file list' => ['no-list', 'The host did not list its files'];
         yield 'a cut connection' => ['cut', 'The host closed the connection'];
     }

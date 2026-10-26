@@ -24,6 +24,8 @@ use Revolt\EventLoop;
  *   deny:<why>   turn away with that reason
  *   silent       never answer
  *   garbled      a welcome without a ticket
+ *   garbled:<id> a welcome with a ticket, for the project <id>
+ *   no-ticket    a welcome for a project, without a ticket
  *   no-list      let in, then never list the files
  *   cut          let in, list, and hang up on the first fetch
  *   chatty       as welcome, with the session talking in between
@@ -31,6 +33,9 @@ use Revolt\EventLoop;
  *                answered with its own method, hung up on `exit`
  *   lsp-mute     ready, then never another word — a connection dead with
  *                the network — printing the type of each message it gets
+ *
+ * A file named vanished.txt is listed, and answered as missing when fetched:
+ * gone between the two.
  *
  * With PORTA_FAKE_DOOR set, it skips the mailbox: it prints the invite a
  * guest holds already, as JSON, and waits at the relay for that guest.
@@ -113,9 +118,11 @@ $welcome = static function () use ($mode, $send): void {
         $send(['t' => 'pending']);
     }
     $send(
-        'garbled' === $mode
-            ? ['t' => 'welcome', 'project' => ['id' => 'not-hex']]
-            : [
+        match (true) {
+            'garbled' === $mode => ['t' => 'welcome', 'project' => ['id' => 'not-hex']],
+            str_starts_with($mode, 'garbled:') => ['t' => 'welcome', 'ticket' => 'feedfacefeedfacefeedfacefeedface', 'project' => ['id' => substr($mode, offset: 8), 'name' => 'demo']],
+            'no-ticket' === $mode => ['t' => 'welcome', 'project' => ['id' => '0123456789abcdef', 'name' => 'demo']],
+            default => [
                 't' => 'welcome',
                 'peer' => 'g0',
                 'role' => 'pending' === $mode ? 'read' : 'edit',
@@ -123,6 +130,7 @@ $welcome = static function () use ($mode, $send): void {
                 'project' => ['id' => '0123456789abcdef', 'name' => 'demo'],
                 'languages' => ['php', 'twig'],
             ],
+        },
     );
     if ('chatty' === $mode) {
         // What a real host says right away: where its caret is.
@@ -131,7 +139,7 @@ $welcome = static function () use ($mode, $send): void {
 };
 $fetch = static function (array $paths) use ($send, $files): void {
     foreach ($paths as $path) {
-        $send(['t' => 'file', 'path' => $path, 'data' => base64_encode($files[$path])]);
+        $send(str_ends_with($path, 'vanished.txt') ? ['t' => 'file', 'path' => $path, 'missing' => true] : ['t' => 'file', 'path' => $path, 'data' => base64_encode($files[$path])]);
     }
     $send(['t' => 'fetched']);
 };
@@ -153,11 +161,17 @@ while (false !== ($line = fgets($client))) {
         }
         match (true) {
             'hello' === $type => $send(['t' => 'ready']),
-            \array_key_exists('id', $lsp) => $send(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'id' => $lsp['id'], 'result' => $lsp['method']]]),
+            'lsp' === $type && \array_key_exists('id', $lsp) => $send(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'id' => $lsp['id'], 'result' => $lsp['method']]]),
             default => null,
         };
 
         continue;
+    }
+    // A first hello without the invite's token is a stranger's — one back on a ticket is not: turned away, as a real host does.
+    if ('hello' === $type && !array_key_exists('ticket', $message) && !hash_equals($token, (string) ($message['token'] ?? ''))) {
+        $send(['t' => 'denied', 'reason' => 'host']);
+
+        break;
     }
     // A denial, a cut, a goodbye: this host is done.
     if (('fetch' === $type && 'cut' === $mode) || 'bye' === $type || ('hello' === $type && str_starts_with($mode, 'deny:'))) {

@@ -270,7 +270,9 @@ final class JoinCommand extends PluginCommand
             if ('fetched' === $message['t']) {
                 return null;
             }
-            $content = \base64_decode(Wire::string($message, 'data'), strict: true);
+            // A file gone on the host by the fetch comes as missing, with no
+            // data — which decodes to an empty file, not to none.
+            $content = true === ($message['missing'] ?? null) ? false : \base64_decode(Wire::string($message, 'data'), strict: true);
             if ('file' === $message['t'] && false !== $content) {
                 $mirror->write(Wire::string($message, 'path'), $content);
             }

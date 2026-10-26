@@ -920,7 +920,8 @@ final class GuestSession
     /** @param array<string, mixed> $message */
     private function file(string $relative, array $message): void
     {
-        $content = \base64_decode(Wire::string($message, 'data'), strict: true);
+        // Missing on the host by the fetch: no data — which decodes to an empty file, not to none.
+        $content = true === ($message['missing'] ?? null) ? false : \base64_decode(Wire::string($message, 'data'), strict: true);
         if (false !== $content && !\array_key_exists($relative, $this->docs)) {
             $this->mirror->write($relative, $content);
         }

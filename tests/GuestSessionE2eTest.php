@@ -339,8 +339,25 @@ final class GuestSessionE2eTest extends TestCase
         $this->say(['t' => 'presence', 'peer' => 'host', 'name' => 'Hal', 'path' => 'notes.txt', 'line' => 1, 'column' => 2, 'anchorLine' => 1, 'anchorColumn' => 0]);
         $this->await(fn (): bool => $root.'/notes.txt' === $this->api($ide)->activeFile(), what: 'the host\'s file');
         $this->assertSame('notes.txt', $this->expect('open')['path'], 'asked of the host, as any file opened');
+        $guest = Probe::get($this->plugin($ide), 'guest');
+        $this->assertIsObject($guest);
+        $following = static fn (): bool => null !== Probe::get($guest->follow, 'target');
+
+        // Followed to the start of notes.txt; then this side goes to the start of another file — the same line and column: that was the user, and following stops.
+        $this->say(['t' => 'presence', 'peer' => 'host', 'name' => 'Hal', 'path' => 'notes.txt', 'line' => 0, 'column' => 0]);
+        do {
+            $mine = $this->expect('presence'); // this side's caret, as it says it: seen there by now
+        } while (['notes.txt', 0, 0] !== [$mine['path'], $mine['line'], $mine['column']]);
+        $this->api($ide)->openFile($root.'/src/A.php');
+        $this->api($ide)->jumpTo(0, 0);
+        $this->await(static fn (): bool => !$following(), what: 'following stopped by a move to another file');
+
+        // Followed again, until the host leaves.
+        $this->command($ide, 'assist:participants');
+        $terminal->simulateInput("\r"); // Hal, the first row
+        $this->await($following, what: 'following again');
         $this->say(['t' => 'left', 'peer' => 'host']);
-        $this->await(static fn (): bool => self::toasted($ide, 'Stopped following Hal'), what: 'gone, not followed');
+        $this->await(static fn (): bool => !$following() && self::toasted($ide, 'Stopped following Hal'), what: 'gone, not followed');
     }
 
     private function filesFromTheHost(string $root): void
@@ -360,9 +377,11 @@ final class GuestSessionE2eTest extends TestCase
             'gone' => ['notes.txt', 'src/A.php'],
         ]);
         $this->assertSame(['new.txt', '2024'], $this->expect('fetch')['paths'], 'only what differs, and nothing shared');
+        $this->say(['t' => 'file', 'path' => 'new.txt', 'missing' => true]); // gone again on the host by the fetch
         $this->say(['t' => 'changed', 'files' => [['old.txt', 13, \hash('xxh128', data: 'from the host')]], 'gone' => []]);
         $this->say(['t' => 'moved', 'from' => 'old.txt', 'to' => 'docs/old.txt']);
         $this->await(static fn (): bool => \is_file($root.'/docs/old.txt'), what: 'moved');
+        $this->assertFileDoesNotExist($root.'/new.txt', 'missing on the host: not written here as nothing');
         $this->say(['t' => 'moved', 'from' => '../x', 'to' => 'y']);
         $this->say(['t' => 'deleted', 'path' => 'docs/old.txt']);
         $this->say(['t' => 'deleted', 'path' => '../x']);
