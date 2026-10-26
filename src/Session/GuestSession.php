@@ -342,7 +342,7 @@ final class GuestSession
     }
 
     /** Read every shared buffer for what the guest typed, and send it on. */
-    public function readAll(): void
+    private function readAll(): void
     {
         foreach (\array_keys($this->docs) as $relative) {
             $this->read((string) $relative); // a path in digits keys as an int
