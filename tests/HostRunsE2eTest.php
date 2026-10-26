@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Tests;
 
+use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Net\Wire;
+use Porta\AssistPlugin\Session\Guest;
+use Porta\AssistPlugin\Session\HostSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
+use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\UsesBundledPlugins;
@@ -122,6 +126,20 @@ final class HostRunsE2eTest extends TestCase
                 $welcome = $this->expect('welcome');
                 $this->permit($tui, $terminal, $ide, 'Ana', 'Let them run the run configurations', downs: 5);
                 $this->assertTrue($this->expect('running')['allowed']);
+                // Let type too; let debug, then not.
+                $host = Probe::get($this->plugin($ide), 'host');
+                $this->assertInstanceOf(HostSession::class, $host);
+                $host->permit(Wire::string($welcome, 'peer'), 'typing', true);
+                $host->permit(Wire::string($welcome, 'peer'), 'debugging', true);
+                $host->permit(Wire::string($welcome, 'peer'), 'debugging', false);
+                $this->assertTrue($this->expect('typing')['allowed']);
+                $this->assertSame([true, false], [$this->expect('debugging')['allowed'], $this->expect('debugging')['allowed']]);
+                $debugging = static function () use ($host, $welcome): bool {
+                    $guest = Probe::get($host, 'guests')[Wire::string($welcome, 'peer')] ?? null;
+                    Assert::assertInstanceOf(Guest::class, $guest, 'she is in');
+
+                    return $guest->debugging;
+                };
 
                 // Back before the host saw the old connection go.
                 $old = $this->peer;
@@ -129,6 +147,7 @@ final class HostRunsE2eTest extends TestCase
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
                 $this->expect('welcome');
                 $this->assertTrue($this->expect('running')['allowed'], 'still hers');
+                $this->assertFalse($debugging(), 'and only what was');
                 $this->assertIsResource($old);
                 \fclose($old);
 
@@ -139,6 +158,12 @@ final class HostRunsE2eTest extends TestCase
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
                 $this->expect('welcome');
                 $this->assertTrue($this->expect('running')['allowed'], 'kept while she was away');
+                $this->assertTrue($this->expect('typing')['allowed'], 'each right she had');
+                $this->await(static fn (): bool => self::toasted($ide, 'Ana joined and can edit'), what: 'her welcome back seen through to its end');
+                $this->say(['t' => 'open', 'path' => 'nope.php']);
+                $this->expect('error'); // answered in order: the welcome's rights came before it
+                $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'debugging' === $m['t'])), 'and only those: one taken back is not given again');
+                $this->assertFalse($debugging(), 'not even quietly');
                 $this->command($ide, 'assist:stop');
                 $this->hangUp();
             },

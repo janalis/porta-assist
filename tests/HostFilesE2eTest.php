@@ -6,13 +6,16 @@ namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Porta\AssistPlugin\Net\Wire;
+use Porta\AssistPlugin\Session\HostSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
+use Porta\Editor\BufferManager;
 use Porta\Event\AgentActivity;
 use Porta\Event\AgentLeft;
 use Porta\Event\FileRenamed;
 use Porta\Event\WorkingTreeChanged;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
+use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\Services;
 use Porta\Tests\Support\TempProject;
@@ -207,8 +210,16 @@ final class HostFilesE2eTest extends TestCase
                 $this->awaitPainted($tui, $terminal, 'Follow Ana');
                 $terminal->simulateInput("\r");
                 $this->await(static fn (): bool => self::toasted($ide, 'Following Ana'), what: 'following');
+                // In a file with no caret in it: the host goes to its top, and a
+                // look at its own caret there is no move of the user's.
+                $this->say(['t' => 'presence', 'path' => 'README.md', 'line' => -1, 'column' => 0]);
+                $this->await(fn (): bool => $root.'/README.md' === $this->api($ide)->activeFile(), what: 'the file Ana is in');
+                $this->assertSame(0, $this->api($ide)->caretPosition()['line'] ?? null);
+                $host = Probe::get($this->plugin($ide), 'host');
+                $this->assertInstanceOf(HostSession::class, $host);
+                Probe::invoke($host, 'caret');
                 $this->say(['t' => 'presence', 'path' => 'README.md', 'line' => 1, 'column' => 3, 'top' => 1]);
-                $this->await(fn (): bool => $root.'/README.md' === $this->api($ide)->activeFile(), what: 'the file Ana is in, opened');
+                $this->await(fn (): bool => 1 === ($this->api($ide)->caretPosition()['line'] ?? null), what: 'her caret, still followed');
                 $this->assertSame(['line' => 1, 'column' => 3, 'top' => 1, 'segment' => 0, 'sticky' => []], $this->api($ide)->caretPosition(), 'at her caret, scrolled as she is');
                 $terminal->simulateInput(self::DOWN);
                 $this->await(static fn (): bool => self::toasted($ide, 'Stopped following Ana'), what: 'the user moved on');
@@ -218,20 +229,32 @@ final class HostFilesE2eTest extends TestCase
                 $this->awaitPainted($tui, $terminal, 'Codex');
                 $terminal->simulateInput(self::DOWN."\r");
                 $this->await(static fn (): bool => self::toasted($ide, 'Following Claude'), what: 'following the agent');
-                $this->emit($ide, new AgentActivity('claude', 'Claude', $root.'/src/A.php', AgentActivityKind::Editing, 1, 4, 10.0));
+                $this->emit($ide, new AgentActivity('claude', 'Claude', $root.'/src/A.php', AgentActivityKind::Editing, 0, 4, 10.0));
                 $this->await(fn (): bool => $root.'/src/A.php' === $this->api($ide)->activeFile(), what: 'the agent\'s file');
+                $this->await(
+                    fn (): bool => [0, 4] === [$this->api($ide)->caretPosition()['line'] ?? null, $this->api($ide)->caretPosition()['column'] ?? null],
+                    what: 'its caret, on the first line too',
+                );
                 $this->emit($ide, new AgentLeft('claude'));
                 $this->await(static fn (): bool => self::toasted($ide, 'Stopped following Claude'), what: 'gone, not followed');
                 $this->assertSame('host~claude', $this->expect('left')['peer']);
                 $this->emit($ide, new AgentLeft('claude'));
 
                 // The guest's agent leaves, then the guest — and with it, anything of its own.
+                $this->say(['t' => 'presence', 'path' => 'src/A.php', 'line' => 0, 'column' => 2]);
+                $carets = static fn (): array => \array_keys(Probe::get($host, 'docs')['src/A.php']['text']->carets());
+                $this->say(['t' => 'open', 'path' => 'nope.php']);
+                $this->expect('error'); // answered in order
+                $this->assertSame([$ana.'~codex', $ana], $carets());
                 $this->say(['t' => 'agentLeft', 'id' => 'codex']);
                 $this->say(['t' => 'agent', 'id' => 'other', 'name' => 'Other', 'path' => 'notes.txt', 'line' => -1, 'column' => 0]);
                 $this->say(['t' => 'presence', 'path' => 'notes.txt', 'line' => -1, 'column' => 0]);
                 $this->say(['t' => 'close', 'path' => 'src/A.php']);
+                $host->follow->start($ana, 'Ana');
                 $this->say(['t' => 'bye']);
                 $this->await(static fn (): bool => self::toasted($ide, 'Ana left'), what: 'Ana gone');
+                $this->assertSame([], $carets(), 'no caret of hers, nor of her agent\'s, left in the text');
+                $this->assertNull($host->follow->target, 'not followed, gone');
                 $this->hangUp();
             },
         ]);
@@ -257,8 +280,11 @@ final class HostFilesE2eTest extends TestCase
                 $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => 1, 'ops' => [22, '!']]);
                 $this->expect('ack');
                 $this->assertSame("<?php\necho 'a';\n// one!", $this->bufferText($ide, $path), 'opened again with everything the session agreed on');
+                $this->assertNotNull(Services::resolve($ide, BufferManager::class)->get($path)?->document->historyDelegate, 'its undo the session\'s again');
 
-                // Out of step: a revision the host never had, ops that are not ops, a file never opened.
+                // Out of step: no revision at all, a revision the host never had, ops that are not ops, a file never opened.
+                $this->say(['t' => 'op', 'path' => 'src/A.php', 'ops' => [16, '?']]);
+                $this->assertSame('src/A.php', $this->expect('reopen')['path'], 'not taken as the first');
                 $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => 9, 'ops' => [1]]);
                 $this->assertSame('src/A.php', $this->expect('reopen')['path']);
                 $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => 2, 'ops' => 'garbage']);

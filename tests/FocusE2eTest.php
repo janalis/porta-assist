@@ -66,7 +66,8 @@ final class FocusE2eTest extends TestCase
                 // sent again, though it has not moved since each saw it.
                 foreach ([$ana, $bo] as $guest) {
                     $this->peer = $guest;
-                    $this->expect('presence');
+                    $caret = $this->expect('presence');
+                    $this->assertSame(['host', 'Hal', 'src/A.php'], [$caret['peer'], $caret['name'] ?? null, $caret['path'] ?? null], 'the host\'s caret, by name');
                 }
                 $this->pump(0.3);
                 foreach ([$ana, $bo] as $guest) {
@@ -78,7 +79,8 @@ final class FocusE2eTest extends TestCase
                 foreach ([$ana, $bo] as $guest) {
                     $this->peer = $guest;
                     $this->assertSame(['t' => 'focus', 'peer' => 'host', 'name' => 'Hal'], $this->expect('focus'));
-                    $this->assertSame('src/A.php', $this->expect('presence')['path']);
+                    $caret = $this->expect('presence');
+                    $this->assertSame(['host', 'Hal', 'src/A.php'], [$caret['peer'], $caret['name'] ?? null, $caret['path'] ?? null]);
                 }
 
                 // Ana asks: the host follows her to where she is; Bo is asked too, she is not.
@@ -89,7 +91,9 @@ final class FocusE2eTest extends TestCase
                 $this->await(fn (): bool => $b === $this->api($ide)->activeFile(), what: 'the host taken to her file');
                 $this->peer = $bo;
                 $asked = $this->expect('focus');
-                $this->assertSame('Ana', $asked['name']);
+                $this->assertSame(['t', 'peer', 'name'], \array_keys($asked));
+                $this->assertSame(['focus', 'Ana'], [$asked['t'], $asked['name']]);
+                $this->assertNotSame('host', $asked['peer'], 'her, to follow');
                 $this->peer = $ana;
                 $this->say(['t' => 'open', 'path' => 'nope.php']);
                 $this->expect('error'); // answered in order: anything for her came before it

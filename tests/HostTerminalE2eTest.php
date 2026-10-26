@@ -9,9 +9,11 @@ use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Wire;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
+use Porta\Run\RunController;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
+use Porta\Tests\Support\Services;
 use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\UsesBundledPlugins;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
@@ -102,7 +104,7 @@ final class HostTerminalE2eTest extends TestCase
 
                 // A newcomer sees it too.
                 $anaSocket = $this->peer;
-                $this->letIn($tui, $terminal, $invite, 'Bo');
+                $this->assertSame(['run:cat'], $this->letIn($tui, $terminal, $invite, 'Bo')['terminals'], 'which are shared, by id');
                 $this->assertStringContainsString('got yes', self::bytes($this->expect('terminal')));
                 $this->peer = $anaSocket;
 
@@ -130,8 +132,11 @@ final class HostTerminalE2eTest extends TestCase
                 $this->awaitPainted($tui, $terminal, 'Share which terminal?');
                 $terminal->simulateInput("\r");
                 $this->expect('terminal');
+                $watchers = static fn (): mixed => Probe::get(Services::resolve($ide, RunController::class), 'watchers');
+                $this->assertArrayHasKey('run:cat', $watchers());
                 $this->command($ide, 'assist:stop');
                 $this->expect('bye');
+                $this->assertArrayNotHasKey('run:cat', $watchers(), 'its output no longer read for anyone');
                 $this->assertNotSame('', Wire::string($ana, 'peer'));
                 $this->hangUp();
             },

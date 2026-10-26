@@ -109,6 +109,7 @@ final class HostRendezvousE2eTest extends TestCase
                 // Hung up on: back at the same nameplate, the same code.
                 $this->wormhole()->drop();
                 $this->await(static fn (): bool => self::toasted($ide, 'Lost the mailbox server'), what: 'the host told');
+                $this->assertFalse(self::toasted($ide, '%why%'), 'told why');
                 $this->assertSame($code->text(), $this->code($ide)->text());
                 $invite = $this->redeem($code);
                 $this->askIn($invite, 'Ana');
@@ -119,8 +120,8 @@ final class HostRendezvousE2eTest extends TestCase
                 // Taken by strangers: a new code, said.
                 $next = $this->code($ide, not: $code);
                 $this->wormhole()->crowd();
-                $this->await(static fn (): bool => self::toasted($ide, 'The code was taken at the mailbox server — the code is now'), what: 'the new code said');
-                $this->assertNotSame($next->text(), $this->code($ide, not: $next)->text());
+                $taken = $this->code($ide, not: $next);
+                $this->await(static fn (): bool => self::toasted($ide, 'The code was taken at the mailbox server — the code is now '.$taken->text()), what: 'the new code said');
 
                 $this->command($ide, 'assist:stop');
             },

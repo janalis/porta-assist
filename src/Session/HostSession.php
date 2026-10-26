@@ -380,7 +380,7 @@ final class HostSession
     }
 
     /** Read every shared buffer for what the host typed, and send it on. */
-    public function readAll(): void
+    private function readAll(): void
     {
         foreach (\array_keys($this->docs) as $relative) {
             $this->read((string) $relative); // a path in digits keys as an int

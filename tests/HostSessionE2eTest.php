@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Wire;
+use Porta\AssistPlugin\Session\HostSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Editor\BufferManager;
 use Porta\Ide;
@@ -16,6 +18,8 @@ use Porta\Tests\Support\Services;
 use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\UsesBundledPlugins;
 use Porta\Ui\Glyphs;
+use Revolt\EventLoop;
+use Revolt\EventLoop\InvalidCallbackError;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
 use Symfony\Component\Tui\Tui;
 
@@ -68,6 +72,8 @@ final class HostSessionE2eTest extends TestCase
                 $terminal->simulateInput("\r"); // the first answer: let them edit
                 $welcome = $this->expect('welcome');
                 $this->assertSame('edit', $welcome['role']);
+                $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', Wire::string($welcome, 'ticket'), 'a ticket as hard to guess as the token');
+                $this->await(static fn (): bool => self::toasted($ide, 'Ana joined and can edit'), what: 'the host told who came, and what she may do');
                 $user = \getenv('USER');
                 $this->assertSame([['id' => 'host', 'name' => \is_string($user) && '' !== $user ? $user : 'anonymous', 'role' => 'host']], $welcome['peers'], 'the host, by login name');
 
@@ -125,6 +131,64 @@ final class HostSessionE2eTest extends TestCase
                 $this->assertIsObject($host);
                 $this->assertSame([], Probe::get($host, 'tickets'), 'the ticket lets nobody in now');
                 $this->assertSame([], Probe::get($host, 'doors'), 'and its door no longer waits at the relay');
+                $this->hangUp();
+            },
+        ]);
+    }
+
+    /**
+     * Stopped, the session lets go of what it held: a connection still to
+     * say who it is, its timers, its certificate, each shared file's history.
+     */
+    public function testStoppingLetsGoOfWhatTheSessionHeld(): void
+    {
+        $project = self::project();
+        $path = (string) \realpath($project->path('src/A.php'));
+
+        $this->runIde($project, $path, [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
+                $invite = $this->invited($ide);
+                $this->askIn($invite, 'Ana');
+                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $terminal->simulateInput("\r");
+                $this->expect('welcome');
+                $this->say(['t' => 'open', 'path' => 'src/A.php']);
+                $this->expect('opened');
+                $ana = [$this->peer, $this->buffered, $this->inbox];
+                $host = Probe::get($this->plugin($ide), 'host');
+                $this->assertInstanceOf(HostSession::class, $host);
+                $this->dial($invite); // and say nothing yet
+                $this->await(static fn (): bool => [] !== Probe::get($host, 'pending'), what: 'a connection waiting to say who it is');
+
+                // Held until the session stops.
+                $timers = Probe::get($host, 'timers');
+                $alive = static function (string $timer): bool {
+                    try {
+                        return EventLoop::isEnabled($timer);
+                    } catch (InvalidCallbackError) {
+                        return false; // cancelled
+                    }
+                };
+                $this->assertIsArray($timers);
+                $this->assertNotSame([], $timers);
+                foreach ($timers as $timer) {
+                    $this->assertTrue($alive((string) $timer));
+                }
+                $certificate = Probe::get($host, 'certificate');
+                $this->assertInstanceOf(Certificate::class, $certificate);
+                $this->assertFileExists($certificate->file);
+                $document = Services::resolve($ide, BufferManager::class)->get($path)?->document;
+                $this->assertNotNull($document?->historyDelegate, 'the host\'s undo, the session\'s while it shares the file');
+
+                $this->command($ide, 'assist:stop');
+                $this->await($this->hungUp(...), timeout: 5.0, what: 'the waiting connection let go, not left to time out');
+                foreach ($timers as $timer) {
+                    $this->assertFalse($alive((string) $timer));
+                }
+                $this->assertFileDoesNotExist($certificate->file, 'the private key does not outlive the session');
+                $this->assertNull($document->historyDelegate, 'the host\'s undo is its own again');
+                [$this->peer, $this->buffered, $this->inbox] = $ana;
+                $this->assertSame('ended', $this->expect('bye')['reason']);
                 $this->hangUp();
             },
         ]);

@@ -96,6 +96,13 @@ final class HostLanguageServerE2eTest extends TestCase
                 ]) {
                     $this->assertSame(['t' => 'denied', 'reason' => $reason], $this->channel($invite, $with, $language, $copy), $reason);
                 }
+                // The session's token is no ticket: a language server is for a guest let in.
+                $this->dial($invite);
+                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'channel' => 'lsp', 'name' => 'Ana', 'token' => $invite->token, 'language' => 'php', 'root' => self::COPY]);
+                $this->assertSame(['t' => 'denied', 'reason' => 'token'], $this->expect('denied'));
+                $host = Probe::get($this->plugin($ide), 'host');
+                $this->assertIsObject($host);
+                $this->assertSame([], Probe::get($host, 'relays'), 'nothing kept of a server that did not start');
 
                 $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, 'php'));
                 $this->inbox = [];
@@ -146,8 +153,6 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->say(['t' => 'nonsense']);
 
                 // Reading along: the server's commands are not hers to run.
-                $host = Probe::get($this->plugin($ide), 'host');
-                $this->assertIsObject($host);
                 $host->setRole(Wire::string($welcome, 'peer'), Role::ReadOnly);
                 $this->say(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]]);
                 $refused = $this->ask(['jsonrpc' => '2.0', 'id' => 3, 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]);
@@ -165,6 +170,18 @@ final class HostLanguageServerE2eTest extends TestCase
                 // The server exits: the channel closes.
                 $this->say(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'method' => 'exit']]);
                 $this->await($this->hungUp(...), what: 'the channel closed with the server');
+
+                // Her connection dropped: her language servers go with her.
+                $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, 'php'));
+                $channel = $this->peer;
+                $this->peer = $main;
+                $this->dropPeer();
+                $this->peer = $channel;
+                $this->await($this->hungUp(...), what: 'her server stopped as she went');
+                $this->dial($invite);
+                $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $ticket]);
+                $this->expect('welcome');
+                $main = $this->peer;
 
                 // Removed from the session: her language servers go with her.
                 $this->dial($invite);

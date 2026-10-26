@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
@@ -118,7 +119,12 @@ final class AssistUiE2eTest extends TestCase
                 $api->changeSetting('transit', $this->wormhole()->transit);
                 $api->changeSetting('mailbox', 'ws://127.0.0.1:1/v1');
                 $this->command($ide, 'assist:share');
+                $host = Probe::get($this->plugin($ide), 'host');
+                $this->assertIsObject($host);
+                $certificate = Probe::get($host, 'certificate');
+                $this->assertInstanceOf(Certificate::class, $certificate);
                 $this->await(static fn (): bool => self::toasted($ide, 'Cannot share: 127.0.0.1:1 refused the connection'), what: 'the mailbox server unreachable');
+                $this->assertFileDoesNotExist($certificate->file, 'its key gone with the share that failed');
                 $this->assertNull(Probe::get($this->plugin($ide), 'host'));
                 Services::resolve($ide, Identity::class)->rename('Hal');
 
