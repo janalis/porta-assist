@@ -11,6 +11,7 @@ use Porta\AssistPlugin\Session\HostSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Editor\BufferManager;
 use Porta\Ide;
+use Porta\Plugin\Api\AbstractPlugin;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
@@ -180,7 +181,9 @@ final class HostSessionE2eTest extends TestCase
                 $document = Services::resolve($ide, BufferManager::class)->get($path)?->document;
                 $this->assertNotNull($document?->historyDelegate, 'the host\'s undo, the session\'s while it shares the file');
 
-                $this->command($ide, 'assist:stop');
+                $plugin = $this->plugin($ide);
+                $this->assertInstanceOf(AbstractPlugin::class, $plugin);
+                $plugin->deactivate(); // the IDE closing: the session stops as assist:stop stops it
                 $this->await($this->hungUp(...), timeout: 5.0, what: 'the waiting connection let go, not left to time out');
                 foreach ($timers as $timer) {
                     $this->assertFalse($alive((string) $timer));

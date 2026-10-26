@@ -128,8 +128,15 @@ final class GuestServersE2eTest extends TestCase
                 // Listed, its address copied.
                 $this->command($ide, 'assist:servers');
                 $this->awaitPainted($tui, $terminal, 'Shared servers');
+                // A row of the list — not the toast that said so — by the host's number, reached here at another.
+                $this->assertNotNull(\array_find(
+                    $this->screenGrid($tui, $terminal),
+                    static fn (string $row): bool => 1 === \preg_match('/localhost:'.$takenPort.'\b.*http:\/\/127\.0\.0\.1:'.$elsewhere.'\b/', $row) && !\str_contains($row, 'open'),
+                ));
+                $terminal->clearOutput();
                 $terminal->simulateInput("\r");
                 $this->await(static fn (): bool => self::toasted($ide, 'Address copied: http://127.0.0.1:'.$local), what: 'the address copied');
+                $this->assertStringContainsString("\x1b]52;c;".\base64_encode('http://127.0.0.1:'.$local)."\x07", $terminal->getOutput());
 
                 // No longer shared: what is open closes, and the port is let go.
                 $client = $this->connect($local);

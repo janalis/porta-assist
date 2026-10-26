@@ -18,6 +18,7 @@ use Porta\Event\AgentLeft;
 use Porta\Event\FileDeleted;
 use Porta\Event\FileRenamed;
 use Porta\Ide;
+use Porta\Plugin\Api\AbstractPlugin;
 use Porta\Presence\Participant;
 use Porta\Presence\Participants;
 use Porta\Run\RunController;
@@ -701,7 +702,9 @@ final class GuestSessionE2eTest extends TestCase
                 $document = Services::resolve($ide, BufferManager::class)->get($path)?->document;
                 $this->assertTrue($document?->readOnly);
 
-                $guest->disconnect();
+                $plugin = $this->plugin($ide);
+                $this->assertInstanceOf(AbstractPlugin::class, $plugin);
+                $plugin->deactivate(); // the IDE closing
 
                 $this->assertSame(['t' => 'bye'], $this->expect('bye'), 'goodbye for now: the host keeps the way back');
                 $this->assertNull(Probe::get($guest, 'lostFor'), 'not taken for a host lost');

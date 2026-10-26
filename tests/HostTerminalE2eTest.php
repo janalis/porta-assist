@@ -70,6 +70,7 @@ final class HostTerminalE2eTest extends TestCase
                 // Shared: what it shows now, then what it prints.
                 $this->command($ide, 'assist:share_terminal');
                 $this->awaitPainted($tui, $terminal, 'Share which terminal?');
+                $this->assertStringNotContainsString('shared — pick to stop', \implode("\n", $this->screenGrid($tui, $terminal)), 'not shared yet, not said to be');
                 $terminal->simulateInput("\r");
                 $shown = $this->expect('terminal');
                 $this->assertSame(['run:cat', 'cat'], [$shown['id'], $shown['title']]);

@@ -119,9 +119,15 @@ final class HostServersE2eTest extends TestCase
                 $this->awaitPainted($tui, $terminal, 'Share which local port?');
                 $terminal->simulateInput("http\r");
                 $this->await(static fn (): bool => self::toasted($ide, 'Not a port: http'), what: 'the refusal');
+                foreach (['0', '65536'] as $notOne) {
+                    $this->command($ide, 'assist:share_server');
+                    $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                    $terminal->simulateInput($notOne."\r");
+                    $this->await(static fn (): bool => self::toasted($ide, 'Not a port: '.$notOne), what: 'out of range: '.$notOne);
+                }
                 $this->command($ide, 'assist:share_server');
                 $this->awaitPainted($tui, $terminal, 'Share which local port?');
-                $terminal->simulateInput($port."\r");
+                $terminal->simulateInput(' '.$port." \r"); // as pasted, spaces and all
                 $this->assertSame($port, $this->expect('server')['port']);
 
                 // A connection at her end reaches the dev server, both ways.

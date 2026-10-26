@@ -19,6 +19,7 @@ use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\Services;
 use Porta\Tests\Support\TempProject;
+use Porta\Tests\Support\Toasts;
 use Porta\Tests\Support\UsesBundledPlugins;
 use Porta\Workbench\Menu\MenuItem;
 use Porta\Workbench\StatusCell;
@@ -108,7 +109,10 @@ final class AssistUiE2eTest extends TestCase
                 );
                 $this->command($ide, 'assist:follow');
                 $this->await(static fn (): bool => self::toasted($ide, 'Nobody else is in the session'), what: 'nobody to follow');
+                $nobody = static fn (): int => \count(\array_filter(Toasts::all($ide), static fn (string $toast): bool => 'Nobody else is in the session' === $toast));
+                $before = $nobody();
                 $this->command($ide, 'assist:participants');
+                $this->assertGreaterThan($before, $nobody(), 'nobody to list either');
 
                 // A relay or a mailbox server that is not one: said, and nothing shared.
                 $api = $this->api($ide);
@@ -130,10 +134,14 @@ final class AssistUiE2eTest extends TestCase
 
                 // Shared — twice is the same session, its code copied again.
                 $code = $this->share($ide);
+                $copied = "\x1b]52;c;".\base64_encode('porta assist '.$code->text())."\x07";
+                $this->assertStringContainsString($copied, $terminal->getOutput(), 'the command to run, copied');
                 $this->assertSame($code->text(), $this->share($ide)->text());
                 $this->assertSame('⇄ 0', $this->cell($ide)?->text);
                 $this->assertSame(['', 'Copy the code: '.$code->text(), 'Participants', 'Stop sharing'], \array_keys($this->menu($ide)));
+                $terminal->clearOutput();
                 ($this->menu($ide)['Copy the code: '.$code->text()]->run)();
+                $this->assertStringContainsString($copied, $terminal->getOutput(), 'copied again from the menu');
                 $invite = $this->redeem($code);
 
                 $this->askIn($invite, 'Ana');
@@ -141,7 +149,7 @@ final class AssistUiE2eTest extends TestCase
                 $terminal->simulateInput("\r");
                 $welcome = $this->expect('welcome');
                 $this->assertSame([['id' => 'host', 'name' => 'Hal', 'role' => 'host']], $welcome['peers'], 'the name the host chose');
-                $this->assertSame('⇄ 1', $this->cell($ide)?->text);
+                $this->assertSame(['⇄ 1', 'Sharing this project — 1 in'], [$this->cell($ide)?->text, $this->cell($ide)?->tooltip]);
                 // A code lets one guest in: the next is ready to hand out.
                 $this->await(
                     fn (): bool => (
@@ -179,7 +187,7 @@ final class AssistUiE2eTest extends TestCase
                 $this->command($ide, 'assist:follow');
                 $this->awaitPainted($tui, $terminal, 'Follow');
                 $terminal->simulateInput("\r");
-                $this->await(static fn (): bool => self::toasted($ide, 'Following Ana'), what: 'following from the command');
+                $this->await(fn (): bool => '⇄ 1 → Ana' === $this->cell($ide)?->text, what: 'following from the command');
 
                 ($this->menu($ide)['Participants']->run)();
                 $this->awaitPainted($tui, $terminal, 'Participants');
@@ -192,8 +200,10 @@ final class AssistUiE2eTest extends TestCase
                 // Joining from inside the IDE hands over the command to run.
                 $this->command($ide, 'assist:join');
                 $this->awaitPainted($tui, $terminal, 'Code from the host');
+                $terminal->clearOutput();
                 $terminal->simulateInput('porta assist '.\strtolower($code->text())."\r");
                 $this->await(static fn (): bool => self::toasted($ide, 'run it in a terminal: porta assist '.$code->text()), what: 'the command handed over');
+                $this->assertStringContainsString($copied, $terminal->getOutput(), 'and copied, as the host wrote it');
                 $this->command($ide, 'assist:join');
                 $this->awaitPainted($tui, $terminal, 'Code from the host');
                 $terminal->simulateInput("nonsense\r");
@@ -245,6 +255,24 @@ final class AssistUiE2eTest extends TestCase
                 $this->command($ide, 'assist:share');
                 $this->await(static fn (): bool => self::toasted($ide, 'it is theirs to share'), what: 'not ours to share');
                 $this->assertSame(['Follow Hal', 'Ask everyone to follow me', '', 'Participants', 'Leave the session'], \array_keys($this->menu($ide)));
+
+                // Cy reads along, the host's agent is at work: each listed by what they are, each to follow.
+                $this->say(['t' => 'peer', 'id' => 'g2', 'name' => 'Cy', 'role' => 'read']);
+                $this->say(['t' => 'presence', 'peer' => 'host~claude', 'name' => 'Claude', 'agent' => true, 'path' => 'src/A.php', 'line' => 0, 'column' => 0]);
+                $this->await(fn (): bool => \array_key_exists('Follow Claude', $this->menu($ide)), what: 'the agent among them');
+                $this->assertSame(['Follow Hal', 'Follow Cy', 'Follow Claude'], \array_slice(\array_keys($this->menu($ide)), offset: 0, length: 3));
+                $this->command($ide, 'assist:participants');
+                $this->awaitPainted($tui, $terminal, 'reading along');
+                $row = fn (string $name): string => (
+                    \array_find($this->screenGrid($tui, $terminal), static fn (string $line): bool => 1 === \preg_match('/\b'.$name.'\b.*\S\s*$/u', $line) && !\str_contains($line, 'shared')) ?? ''
+                );
+                $this->assertStringContainsString('reading along', $row('Cy'));
+                $this->assertStringContainsString('agent', $row('Claude'));
+                $this->assertMatchesRegularExpression('/\bHal\b.*\bhost\b/u', $row('Hal'));
+                $terminal->simulateInput("\x1b");
+                ($this->menu($ide)['Follow Hal']->run)();
+                $this->assertSame('⇄ Hal → Hal', $this->cell($ide)?->text, 'who this side follows, beside whose session it is');
+                ($this->menu($ide)['Stop following']->run)();
                 $this->expect('presence');
                 $this->pump(0.3);
                 $this->drain();
