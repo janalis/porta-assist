@@ -14,6 +14,8 @@ use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Event\AgentActivity;
 use Porta\Event\AgentLeft;
+use Porta\Event\FileDeleted;
+use Porta\Event\FileRenamed;
 use Porta\Ide;
 use Porta\Presence\Participant;
 use Porta\Presence\Participants;
@@ -236,6 +238,52 @@ final class GuestSessionE2eTest extends TestCase
                 $this->await(static fn (): bool => \str_contains((string) $runs->scrollback('assist:run:x'), 'again'), what: 'the terminal sent again');
                 $this->assertStringNotContainsString('first', (string) $runs->scrollback('assist:run:x'), 'from the top, not on top of what was there');
                 $this->assertStringContainsString('[no longer shared]', (string) $runs->scrollback('assist:run:y'), 'the one that stopped meanwhile says so');
+                $this->hangUp();
+            },
+        ]);
+    }
+
+    /**
+     * Reading along, what gets into a shared buffer without the keyboard is
+     * put back and sent nowhere; and what happens to files outside this copy
+     * is nobody's business — not asked of the host, not told it.
+     */
+    public function testWhatIsNotTheSessionsIsLeftAlone(): void
+    {
+        $invite = $this->listen();
+        $project = $this->copy($invite);
+        $path = (string) \realpath($project->path('src/A.php'));
+        $root = \dirname($path, levels: 2);
+        $outside = new TempProject(['far.txt' => 'far']);
+        $far = (string) \realpath($outside->path('far.txt'));
+
+        $this->runIde($project, $path, [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path, $root, $outside, $far): void {
+                $this->welcomeGuest('read');
+                $this->shareFile('src/A.php', "one\n");
+                $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
+
+                $buffers = $this->api($ide)->openBuffers();
+                $this->assertNull($buffers->edit($path, 0, 0, 0, 0, 'formatted '));
+                $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'put back');
+
+                $this->api($ide)->openFile($far);
+                $buffers->edit($far, 0, 0, 0, 0, '!');
+                $buffers->save($far);
+                $events = Services::resolve($ide, EventDispatcherInterface::class);
+                \rename($far, $root.'/came.txt');
+                $events->dispatch(new FileRenamed($far, $root.'/came.txt'));
+                \file_put_contents($outside->path('gone.txt'), data: 'g');
+                \unlink($outside->path('gone.txt'));
+                $events->dispatch(new FileDeleted($outside->path('gone.txt')));
+
+                $this->api($ide)->openFile($root.'/came.txt'); // in the copy: asked of the host, after all the rest
+                $this->assertSame('came.txt', $this->expect('open')['path']);
+                $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => \in_array(
+                    $m['t'],
+                    ['open', 'op', 'save', 'write', 'move', 'delete'],
+                    strict: true,
+                ))), 'nothing else said of any of it');
                 $this->hangUp();
             },
         ]);

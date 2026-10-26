@@ -159,6 +159,21 @@ final class HostEdgesE2eTest extends TestCase
                     $this->presenceOf($bo['peer'].'~codex'),
                 );
 
+                // Ana, the first in, edits the file Bo has open: he gets it — not only those before her.
+                $this->say(['t' => 'open', 'path' => 'src/A.php']);
+                $rev = Wire::int($this->expect('opened'), 'rev');
+                $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => $rev, 'ops' => ['// Ana', 16]]);
+                $this->expect('ack');
+                $anaSide = $this->become($boSide);
+                $this->assertSame(['t' => 'op', 'path' => 'src/A.php', 'ops' => ['// Ana', 16]], $this->expect('op'));
+                $boSide = $this->become($anaSide);
+
+                // The host types and saves at once: what it typed comes first, then the save, of that text.
+                $terminal->simulateInput("Z\x13"); // Z, ctrl+s
+                $saved = $this->expect('saved');
+                $this->assertNotSame([], \array_filter($this->inbox, static fn (array $m): bool => 'op' === $m['t']), 'the typing, before the save');
+                $this->assertSame(\hash('xxh128', (string) \file_get_contents($root.'/src/A.php')), $saved['hash']);
+
                 // A file Bo writes: Ana is told it changed, to fetch.
                 $anaSide = $this->become($boSide);
                 $this->say(['t' => 'write', 'path' => 'src/Bo.php', 'data' => \base64_encode('<?php // Bo')]);
@@ -237,6 +252,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->say(['t' => 'open', 'path' => 'barrier.php']);
                 $this->expect('error');
                 Probe::invoke($host, 'caret'); // the poll, now: nothing to tell
+                $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'saved' === $m['t'])), 'its save of a file of its own, outside: told to no one');
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'presence' === $m['t'] && \str_contains(Wire::string($m, 'path'), 'x.txt'))));
 
                 $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => 0, 'ops' => [16, '// guest']]);

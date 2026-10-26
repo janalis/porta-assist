@@ -253,6 +253,7 @@ final class HostFilesE2eTest extends TestCase
                 $this->api($ide)->openBuffers()->save($path);
                 $terminal->simulateInput("\x1bw"); // alt+w: close the tab
                 $this->await(fn (): bool => '' === $this->bufferText($ide, $path), what: 'the tab closed');
+                \file_put_contents($path, data: "<?php\necho 'a';\n"); // on disk, without what the session agreed on
                 $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => 1, 'ops' => [22, '!']]);
                 $this->expect('ack');
                 $this->assertSame("<?php\necho 'a';\n// one!", $this->bufferText($ide, $path), 'opened again with everything the session agreed on');
