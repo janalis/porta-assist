@@ -253,6 +253,36 @@ final class GuestSessionE2eTest extends TestCase
         ]);
     }
 
+    /**
+     * Where this guest is reaches the host each time it is let in, moved or
+     * not: a caret said while nobody heard — before the welcome, or across a
+     * drop — counted as said, and the host never saw this guest until it moved.
+     */
+    public function testWhereTheGuestIsIsSaidEachTimeItIsLetIn(): void
+    {
+        $invite = $this->listen();
+        $project = $this->copy($invite);
+        $path = (string) \realpath($project->path('src/A.php'));
+
+        $this->runIde($project, $path, [
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
+                $this->acceptGuest();
+                $this->expect('hello');
+                $this->pump(0.3); // ticks of the caret's timer with nobody to tell yet
+                $this->drain();
+                $this->assertSame([], \array_filter($this->inbox, static fn (array $m): bool => 'presence' === $m['t']), 'nothing said before the welcome');
+                $this->say(['t' => 'welcome', 'peer' => 'g1', 'role' => 'edit', 'ticket' => self::TICKET, 'peers' => [['id' => 'host', 'name' => 'Hal', 'role' => 'host']]]);
+                $this->assertSame('src/A.php', $this->expect('presence')['path'], 'said once let in');
+
+                $this->dropPeer();
+                $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
+                $this->welcomeGuest();
+                $this->assertSame('src/A.php', $this->expect('presence')['path'], 'said again once back: the host has forgotten it');
+                $this->hangUp();
+            },
+        ]);
+    }
+
     public function testBackReadingAlongWhatWasTypedIsSaidAndATerminalIsShownOnce(): void
     {
         $invite = $this->listen();

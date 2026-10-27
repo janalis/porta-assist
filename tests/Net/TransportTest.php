@@ -324,8 +324,10 @@ final class TransportTest extends TestCase
         });
         $this->assertSame(1, $calls, 'at once');
 
-        $connection->send(['t' => 'big', 'pad' => \str_repeat('x', times: 200_000)]);
-        $this->assertGreaterThan(0, $connection->backlog());
+        // Past what the socket takes at once: a Linux socket pair swallows
+        // 200 kB whole, and nothing was left to drain.
+        $connection->send(['t' => 'big', 'pad' => \str_repeat('x', times: 2_097_152)]);
+        $this->assertGreaterThan(0, $connection->backlog(), 'the premise: something is queued');
         \stream_set_blocking($client, enable: false);
         $this->await(static function () use ($client, $connection): bool {
             \fread($client, length: 1_048_576);

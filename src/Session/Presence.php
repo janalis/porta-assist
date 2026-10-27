@@ -102,6 +102,16 @@ final class Presence
     }
 
     /**
+     * Forget where this side's caret was said to be: whoever heard it has
+     * forgotten it — a host that let this guest back in — so the next
+     * {@see moved()} says it again, moved or not.
+     */
+    public function unsaid(): void
+    {
+        $this->mine = null;
+    }
+
+    /**
      * Where this side's caret was last said to be — for a peer who arrives
      * after it stopped moving.
      *

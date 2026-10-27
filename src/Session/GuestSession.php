@@ -393,6 +393,11 @@ final class GuestSession
 
     private function caret(): void
     {
+        // Not before the host has let this guest in: said to nobody, it would
+        // count as said, and the host would not hear of it until it moved.
+        if (!$this->isConnected()) {
+            return;
+        }
         $mine = $this->presence->moved();
         if (null === $mine) {
             return;
@@ -499,6 +504,8 @@ final class GuestSession
             $this->kinds[$peer['id']] = \is_string($peer['role'] ?? null) ? $peer['role'] : 'edit';
         }
         $this->hostName = $this->peers['host'] ?? null;
+        // A host letting this guest (back) in knows nothing of where it is.
+        $this->presence->unsaid();
         $this->api->notify($this->api->trans('Connected to %name%\'s session', ['%name%' => (string) $this->hostName]), ToastSeverity::Success, slot: 'assist');
         // Whoever left while this side was away: their marks go — and the
         // terminals no longer shared, theirs.
