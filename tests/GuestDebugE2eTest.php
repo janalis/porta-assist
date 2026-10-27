@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\RunsIde;
 use Porta\Tests\Support\ScreenReads;
-use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\Toasts;
 use Porta\Tests\Support\UsesBundledPlugins;
 use Porta\Ui\Glyphs;
@@ -104,11 +102,7 @@ final class GuestDebugE2eTest extends TestCase
     public function testTheGuestWatchesAndStepsTheHostsDebugger(): void
     {
         $invite = $this->listen();
-        $project = new TempProject([
-            'src/A.php' => "<?php\n// two\n// three\n",
-            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
-        ]);
-        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
+        $project = $this->guestCopy($invite, self::TICKET, "<?php\n// two\n// three\n");
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {

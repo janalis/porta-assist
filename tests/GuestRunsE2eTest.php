@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\TalksAssist;
 use Porta\Ide;
 use Porta\Tests\Support\ClearsPortaLsp;
 use Porta\Tests\Support\RunsIde;
-use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\Toasts;
 use Porta\Tests\Support\UsesBundledPlugins;
 use Symfony\Component\Tui\Terminal\VirtualTerminal;
@@ -33,11 +31,7 @@ final class GuestRunsE2eTest extends TestCase
     public function testTheGuestPicksWhatTheHostOffers(): void
     {
         $invite = $this->listen();
-        $project = new TempProject([
-            'src/A.php' => "<?php\n",
-            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
-        ]);
-        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
+        $project = $this->guestCopy($invite, self::TICKET);
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {

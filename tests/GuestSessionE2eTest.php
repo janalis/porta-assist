@@ -56,13 +56,23 @@ final class GuestSessionE2eTest extends TestCase
 
     private function copy(Invite $invite): TempProject
     {
-        $project = new TempProject([
-            'src/A.php' => "<?php\n// stale copy\n",
-            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
-        ]);
-        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => self::TICKET, 'name' => 'Bo', 'languages' => []]);
+        return $this->guestCopy($invite, self::TICKET, "<?php\n// stale copy\n");
+    }
 
-        return $project;
+    /**
+     * Welcomed, src/A.php shared as "one\n" and shown here, an `x` typed into
+     * it: the op that says so, as the host receives it.
+     *
+     * @return array<string, mixed>
+     */
+    private function typedIntoTheSharedFile(Ide $ide, VirtualTerminal $terminal, string $path): array
+    {
+        $this->welcomeGuest();
+        $this->shareFile('src/A.php', "one\n");
+        $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
+        $terminal->simulateInput('x');
+
+        return $this->expect('op');
     }
 
     public function testTheCopyJoinsTakesTheHostsTextAndEditsAlong(): void
@@ -231,11 +241,7 @@ final class GuestSessionE2eTest extends TestCase
 
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
-                $this->welcomeGuest();
-                $this->shareFile('src/A.php', "one\n");
-                $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
-                $terminal->simulateInput('x');
-                $this->assertSame(['x', 4], $this->expect('op')['ops'], 'sent — and never acknowledged');
+                $this->assertSame(['x', 4], $this->typedIntoTheSharedFile($ide, $terminal, $path)['ops'], 'sent — and never acknowledged');
 
                 // Typed as the host goes, before anything read it: read as the drop is.
                 $terminal->simulateInput('y');
@@ -757,11 +763,7 @@ final class GuestSessionE2eTest extends TestCase
 
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
-                $this->welcomeGuest();
-                $this->shareFile('src/A.php', "one\n");
-                $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
-                $terminal->simulateInput('x');
-                $this->expect('op');
+                $this->typedIntoTheSharedFile($ide, $terminal, $path);
                 $this->say(['t' => 'ack', 'path' => 'src/A.php']);
                 $this->say(['t' => 'role', 'role' => 'read']);
                 $this->await(static fn (): bool => self::toasted($ide, 'read along'), what: 'read only');

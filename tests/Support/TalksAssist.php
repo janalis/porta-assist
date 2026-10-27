@@ -11,6 +11,7 @@ use Porta\AssistPlugin\Net\Rendezvous\GuestRendezvous;
 use Porta\AssistPlugin\Net\Rendezvous\Invite;
 use Porta\AssistPlugin\Net\Rendezvous\SessionKey;
 use Porta\AssistPlugin\Net\Wire;
+use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Session\HostSession;
 use Porta\Editor\BufferManager;
 use Porta\Event\CommandRunRequested;
@@ -19,6 +20,7 @@ use Porta\Plugin\Api\PluginApi;
 use Porta\Plugin\Lifecycle\PluginLifecycle;
 use Porta\Tests\Support\Probe;
 use Porta\Tests\Support\Services;
+use Porta\Tests\Support\TempProject;
 use Porta\Tests\Support\Toasts;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -232,6 +234,18 @@ trait TalksAssist
         $this->peer = \array_shift($this->arrived);
         $this->buffered = '';
         $this->inbox = [];
+    }
+
+    /** A guest's copy — assist enabled, src/A.php holding $source — with the invite to $invite stored as `porta assist` stores it, for Bo. */
+    private function guestCopy(Invite $invite, string $ticket, string $source = "<?php\n"): TempProject
+    {
+        $project = new TempProject([
+            'src/A.php' => $source,
+            '.porta.json' => \json_encode(['enabledPlugins' => ['assist']], \JSON_THROW_ON_ERROR),
+        ]);
+        GuestSession::store($project->dir, ['invite' => $invite, 'ticket' => $ticket, 'name' => 'Bo', 'languages' => []]);
+
+        return $project;
     }
 
     /** @param array<string, mixed> $message */
