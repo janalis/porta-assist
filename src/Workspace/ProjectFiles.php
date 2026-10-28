@@ -71,7 +71,9 @@ final class ProjectFiles
         if (!\file_exists($this->root.'/.git')) {
             return null;
         }
-        $process = new Process(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], $this->root);
+        // The project's own config can name an fsmonitor — a program git runs
+        // to list what changed. A listing is no reason to run it.
+        $process = new Process(['git', '-c', 'core.fsmonitor=false', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], $this->root);
         $process->run();
 
         return $process->isSuccessful()

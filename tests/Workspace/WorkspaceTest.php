@@ -96,6 +96,21 @@ final class WorkspaceTest extends TestCase
         $this->assertSame(['a.php'], \array_keys(new ProjectFiles($bare->dir, 100)->scan()), 'no vendor folder: none walked');
     }
 
+    /** An fsmonitor the repository's config names: the listing does not run it, and still lists. */
+    public function testTheRepositorysFsmonitorDoesNotRun(): void
+    {
+        $project = new TempProject(['a.php' => '<?php', 'hook.sh' => "#!/bin/sh\ntouch \"\$(dirname \"\$0\")/ran-\$\$\"\n"]);
+        \chmod($project->path('hook.sh'), permissions: 0o755);
+        new Process(['git', 'init', '-q'], $project->dir)->mustRun();
+        new Process(['git', 'add', 'a.php'], $project->dir)->mustRun();
+        new Process(['git', 'config', 'core.fsmonitor', $project->path('hook.sh')], $project->dir)->mustRun();
+
+        $this->assertSame(['a.php', 'hook.sh'], \array_keys(new ProjectFiles($project->dir, 100)->scan()));
+        $this->assertSame([], \glob($project->path('ran-*')));
+        new Process(['git', 'ls-files'], $project->dir)->run();
+        $this->assertNotSame([], \glob($project->path('ran-*')), 'where a plain listing runs it');
+    }
+
     public function testOutsideARepositoryEveryFileButThePrivateOnesAndNodeModules(): void
     {
         $outside = new TempProject(['x.php' => '']);
