@@ -24,6 +24,12 @@ in `.porta.json`.
 3. When someone joins with it, the host is asked: **Let them edit**, **Let
    them read along**, or **Turn them away**.
 
+**Letting a guest edit trusts them with more than the text.** Your project is
+trusted on your machine, so your tools obey its files. A guest who may edit can
+change what they run: a composer script or a Makefile target, or a config that
+names a program, like a `.phpantom.toml` or a `mago.toml`. Only let someone
+edit whom you would let type in your terminal. Reading along changes nothing.
+
 **A code lets one person in.** Once it is used, the next one is ready at once:
 click `⇄` in the status bar and pick **Copy the code** to get it. If someone
 tries a code and gets it wrong, that code is spent too, and a toast gives the
@@ -170,7 +176,8 @@ everyone sees what it prints, and the host is told who ran it.
 machine, so the host lets each guest separately: in **Participants**, pick the
 guest, then **Let them run the run configurations** (or **Stop them running**).
 A guest only ever picks a configuration the host offers. It cannot send a
-command of its own.
+command of its own, but a guest who may also edit can change what a
+configuration runs, a composer script or a Makefile target, before running it.
 
 ## Debugging together
 
