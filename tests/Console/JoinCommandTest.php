@@ -10,6 +10,7 @@ use Porta\AssistPlugin\Console\JoinCommand;
 use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Tests\Support\FakeWormhole;
 use Porta\Config\IdeConfig;
+use Porta\Config\WorkspaceTrust;
 use Porta\Onboarding\OnboardingState;
 use Porta\Tests\Support\TempProject;
 use Symfony\Component\Console\Application;
@@ -31,6 +32,9 @@ final class JoinCommandTest extends TestCase
     /** @var list<string> */
     private array $launched = [];
 
+    /** @var list<array<string, string>> what each launch was given to set */
+    private array $environments = [];
+
     private ?Process $host = null;
 
     private FakeWormhole $wormhole;
@@ -39,6 +43,7 @@ final class JoinCommandTest extends TestCase
     {
         $this->home = new TempProject([]);
         $this->launched = [];
+        $this->environments = [];
         $this->wormhole = new FakeWormhole();
     }
 
@@ -76,8 +81,9 @@ final class JoinCommandTest extends TestCase
     {
         $application = new Application();
         $application->addCommand(new JoinCommand(
-            function (string $root) use ($exit): int {
+            function (string $root, array $env) use ($exit): int {
                 $this->launched[] = $root;
+                $this->environments[] = $env;
 
                 return $exit;
             },
@@ -149,6 +155,34 @@ final class JoinCommandTest extends TestCase
         $config = \json_decode((string) \file_get_contents($this->launched[0].'/.porta.json'), associative: true, flags: \JSON_THROW_ON_ERROR);
         $this->assertSame('guest', GuestSession::load($this->launched[0])['name'] ?? null, 'no name given, and no login name: a guest');
         $this->assertSame([...IdeConfig::DEFAULT_ENABLED_PLUGINS, 'assist'], $config['enabledPlugins'] ?? null);
+    }
+
+    /**
+     * The copy is the host's code: it opens restricted — nothing the host
+     * ships runs on the guest's machine — and assist is on all the same,
+     * through the run's environment, which a restricted project keeps. A
+     * guest who once trusted the copy keeps that answer.
+     */
+    public function testTheCopyOpensRestrictedWithAssistOn(): void
+    {
+        $project = new TempProject(['a.php' => '<?php']);
+        $trust = new WorkspaceTrust($this->home->dir);
+
+        $this->assertSame(0, $this->join($this->host('welcome', $project))->getStatusCode());
+        $root = $this->launched[0];
+        $this->assertSame(['PORTA_PLUGINS' => 'assist'], $this->environments[0]);
+        $this->assertFalse($trust->isTrusted($root));
+        $this->assertFalse($trust->shouldAsk($root), 'answered, so the IDE does not ask');
+
+        $trust->trust($root);
+        \putenv('PORTA_PLUGINS=todo');
+        try {
+            $this->assertSame(0, $this->join($this->host('welcome', $project))->getStatusCode());
+        } finally {
+            \putenv('PORTA_PLUGINS');
+        }
+        $this->assertTrue($trust->isTrusted($root), 'the guest\'s own answer stands');
+        $this->assertSame(['PORTA_PLUGINS' => 'todo,assist'], $this->environments[1], 'beside what the guest\'s environment turns on');
     }
 
     /**

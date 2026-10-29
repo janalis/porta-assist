@@ -23,6 +23,7 @@ use Porta\Overlay\State\ToastSeverity;
 use Porta\Plugin\Api\AbstractPlugin;
 use Porta\Plugin\Api\DisposablePlugin;
 use Porta\Plugin\Api\PluginApi;
+use Porta\Plugin\Api\ServerRole;
 use Porta\Workbench\Menu\MenuItem;
 use Porta\Workbench\StatusCell;
 use Porta\Workbench\StatusTone;
@@ -98,7 +99,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         // is reached through `porta assist-lsp`, which the host answers.
         $session = GuestSession::load($api->projectRoot());
         foreach (null === $session ? [] : $session['languages'] as $language) {
-            $api->registerLanguageServer($language, 'assist', static fn (): array => [\PHP_BINARY, PortaBinary::path(), 'assist-lsp', $language]);
+            $api->registerLanguageServer($language, 'assist', static fn (): array => [\PHP_BINARY, PortaBinary::path(), 'assist-lsp', $language], role: ServerRole::Relayed);
         }
 
         $api->onReady($this->rejoin(...));

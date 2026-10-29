@@ -82,7 +82,11 @@ login name.
 1. The host is asked to let you in.
 2. Once you are in, a copy of the host's project is brought up to date under
    `~/.porta/assist/`.
-3. Porta opens on that copy, connected to the session.
+3. Porta opens on that copy, connected to the session. The copy is the host's
+   code, so it opens **restricted** unless you once chose to trust it: nothing
+   the host ships — a `.porta.json` program, a `vendor/bin` tool, a language
+   server's config — runs on your machine. Assist and the host's language
+   servers work all the same.
 
 What the copy holds:
 

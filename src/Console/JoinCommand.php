@@ -15,6 +15,7 @@ use Porta\AssistPlugin\Session\GuestSession;
 use Porta\AssistPlugin\Workspace\Mirror;
 use Porta\Config\IdeConfig;
 use Porta\Config\PortaHome;
+use Porta\Config\WorkspaceTrust;
 use Porta\Install\PortaBinary;
 use Porta\Onboarding\OnboardingState;
 use Porta\Plugin\Api\PluginCommand;
@@ -57,7 +58,8 @@ final class JoinCommand extends PluginCommand
     private array $received = [];
 
     /**
-     * @param (\Closure(string): int)|null $launch opens the IDE on a directory and waits for it; null runs this Porta
+     * @param (\Closure(string, array<string, string>): int)|null $launch opens the IDE on a directory, with these variables
+     *                                                             set, and waits for it; null runs this Porta
      * @param string|null                  $home   where copies are kept; null is the user's home
      */
     public function __construct(
@@ -135,8 +137,17 @@ final class JoinCommand extends PluginCommand
         // The first-run card walks through setting a project up; this one is
         // the host's, set up already.
         new OnboardingState($mirror->root)->markWelcomeSeen();
+        // The copy is the host's code: opened restricted unless this guest
+        // said otherwise for it once — nothing the host ships runs here — and
+        // with assist on all the same, through the environment, which is the
+        // guest's and which a restricted project keeps.
+        $trust = null === $this->home ? WorkspaceTrust::fromEnvironment() : new WorkspaceTrust($this->home);
+        if ($trust->shouldAsk($mirror->root)) {
+            $trust->restrict($mirror->root);
+        }
         $output->writeln(\sprintf('Opening <info>%s</info>…', OutputFormatter::escape($mirror->root)));
-        $exit = ($this->launch ?? self::launch(...))($mirror->root);
+        $plugins = \implode(',', \array_filter([(string) \getenv('PORTA_PLUGINS'), 'assist'], static fn (string $list): bool => '' !== $list));
+        $exit = ($this->launch ?? self::launch(...))($mirror->root, ['PORTA_PLUGINS' => $plugins]);
 
         return 0 === $exit ? null : \sprintf('Porta exited with %d', $exit);
     }
@@ -367,10 +378,11 @@ final class JoinCommand extends PluginCommand
      * real terminal.
      */
     // @codeCoverageIgnoreStart
-    private static function launch(string $root): int
+    /** @param array<string, string> $env */
+    private static function launch(string $root, array $env): int
     {
         $pipes = [];
-        $process = \proc_open([\PHP_BINARY, PortaBinary::path(), $root], [\STDIN, \STDOUT, \STDERR], $pipes);
+        $process = \proc_open([\PHP_BINARY, PortaBinary::path(), $root], [\STDIN, \STDOUT, \STDERR], $pipes, env_vars: [...\getenv(), ...$env]);
 
         return false === $process ? 1 : \proc_close($process);
     }
