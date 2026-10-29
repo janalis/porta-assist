@@ -50,6 +50,10 @@ final class WorkspaceTest extends TestCase
             'sub/.git/config',
             'vendor/acme/.porta/x',
             'a/.porta.json',
+            // macOS's file system ignores case: these ARE the private ones there
+            '.GIT/hooks/pre-commit',
+            '.Porta/plugins/x/plugin.php',
+            '.PORTA.json',
         ] as $refused) {
             $this->assertNull($paths->absolute($refused), \json_encode($refused, \JSON_THROW_ON_ERROR));
         }

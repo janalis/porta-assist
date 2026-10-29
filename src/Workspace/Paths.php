@@ -102,7 +102,12 @@ final readonly class Paths
         }
         $segments = \explode('/', $relative);
 
-        // At any depth: a submodule's `.git`, a vendored project's `.porta`.
-        return !\array_any($segments, static fn (string $segment): bool => '' === $segment || '.' === $segment || '..' === $segment) && [] === \array_intersect($segments, self::PRIVATE);
+        // At any depth: a submodule's `.git`, a vendored project's `.porta`. In
+        // any case: on a case-insensitive file system — macOS's by default —
+        // `.Porta/plugins/x/plugin.php` is a plugin the host's next start runs.
+        return (
+            !\array_any($segments, static fn (string $segment): bool => '' === $segment || '.' === $segment || '..' === $segment)
+            && [] === \array_intersect(\array_map(\strtolower(...), $segments), self::PRIVATE)
+        );
     }
 }
