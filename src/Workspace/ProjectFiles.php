@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Workspace;
 
+use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Process;
 
 /**
@@ -65,7 +66,7 @@ final class ProjectFiles
         return \is_dir($this->root.'/vendor') ? [...$files, ...new Paths($this->root)->walk('vendor', self::SKIPPED_DIRECTORIES)] : $files;
     }
 
-    /** @return list<string>|null what git lists, or null when the project is not a repository git can list */
+    /** @return list<string>|null what git lists — or, where it cannot, what the .gitignore files leave — or null outside a repository */
     private function tracked(): ?array
     {
         if (!\file_exists($this->root.'/.git')) {
@@ -78,6 +79,31 @@ final class ProjectFiles
 
         return $process->isSuccessful()
             ? \array_values(\array_filter(\explode("\0", $process->getOutput()), static fn (string $file): bool => '' !== $file))
-            : null;
+            : $this->unignored();
+    }
+
+    /**
+     * A repository git cannot list — no git on the PATH, one a dubious owner
+     * makes it refuse, a `.git` naming a gitdir that is gone — read by its
+     * .gitignore files alone. Walked whole, it handed a guest the gitignored
+     * `.env`. What only `.git/info/exclude` or the user's own excludes file
+     * ignore, nothing here knows of.
+     *
+     * @return list<string>
+     */
+    private function unignored(): array
+    {
+        $files = [];
+        foreach (new Finder()
+            ->files()
+            ->in($this->root)
+            ->exclude(self::SKIPPED_DIRECTORIES)
+            ->ignoreDotFiles(false)
+            ->ignoreVCSIgnored(true)
+            ->sortByName() as $file) {
+            $files[] = $file->getRelativePathname();
+        }
+
+        return $files;
     }
 }

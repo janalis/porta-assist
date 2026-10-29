@@ -111,6 +111,16 @@ final class WorkspaceTest extends TestCase
         $this->assertNotSame([], \glob($project->path('ran-*')), 'where a plain listing runs it');
     }
 
+    /** A repository git cannot list is read by its .gitignore files: what they ignore is not the guest's. */
+    public function testARepositoryGitCannotListStillKeepsWhatItIgnores(): void
+    {
+        $project = new TempProject(['.gitignore' => ".env\nlogs/\n", '.env' => 'SECRET=1', 'logs/a.log' => 'x', 'a.php' => '<?php', 'sub/b.php' => '<?php']);
+        new Process(['git', 'init', '-q'], $project->dir)->mustRun();
+        \file_put_contents($project->path('.git/HEAD'), data: 'not a ref');
+
+        $this->assertSame(['.gitignore', 'a.php', 'sub/b.php'], \array_keys(new ProjectFiles($project->dir, 100)->scan()));
+    }
+
     public function testOutsideARepositoryEveryFileButThePrivateOnesAndNodeModules(): void
     {
         $outside = new TempProject(['x.php' => '']);

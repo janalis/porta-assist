@@ -88,7 +88,9 @@ What the copy holds:
 
 - **Which files.** What git shows (tracked files, and untracked ones that are
   not ignored), plus `vendor/` so your own language server can resolve the
-  dependencies. Outside a git repository, every file except `node_modules/`.
+  dependencies. Where git cannot list the repository (it is not on the host's
+  `PATH`, or it refuses a folder another user owns), what the `.gitignore`
+  files leave; outside a git repository, every file except `node_modules/`.
 - **What stays with the host.** The host's `.git/`, `.porta/` and `.porta.json`
   are never sent.
 - **Joining again.** It fetches only what changed since last time.
