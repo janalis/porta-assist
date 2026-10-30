@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Workspace;
 
+use Porta\Support\GitIgnored;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Process;
 
@@ -87,7 +88,9 @@ final class ProjectFiles
      * makes it refuse, a `.git` naming a gitdir that is gone — read by its
      * .gitignore files alone. Walked whole, it handed a guest the gitignored
      * `.env`. What only `.git/info/exclude` or the user's own excludes file
-     * ignore, nothing here knows of.
+     * ignore, nothing here knows of. A folder it cannot read — a database
+     * volume a container owns — is passed over, as a listing would, and an
+     * ignored one is not walked at all.
      *
      * @return list<string>
      */
@@ -100,7 +103,8 @@ final class ProjectFiles
             ->exclude(self::SKIPPED_DIRECTORIES)
             ->ignoreDotFiles(false)
             ->ignoreVCSIgnored(true)
-            ->sortByName() as $file) {
+            ->ignoreUnreadableDirs()
+            ->filter(GitIgnored::pruner($this->root), prune: true) as $file) {
             $files[] = $file->getRelativePathname();
         }
 

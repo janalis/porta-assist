@@ -32,6 +32,7 @@ final class WorkspaceTest extends TestCase
         $this->assertSame('src/A.php', $paths->relative($root.'/src/A.php'));
         $this->assertSame($root.'/src/New.php', $paths->absolute('src/New.php'), 'a file that is not there yet is fine');
         $this->assertSame($root.'/a/b/c.php', $paths->absolute('a/b/c.php'), 'in folders not there yet too');
+        $this->assertSame($root."/Caf\u{E9}/.Gitignore", $paths->absolute("Caf\u{E9}/.Gitignore"), 'a name folded is only compared, never changed');
         foreach ([
             '',
             '../x',
@@ -54,8 +55,14 @@ final class WorkspaceTest extends TestCase
             '.GIT/hooks/pre-commit',
             '.Porta/plugins/x/plugin.php',
             '.PORTA.json',
+            // and folded in full: APFS opens this one as .porta.json
+            ".porta.j\u{17F}on",
+            // HFS+ skips these code points in a name
+            ".git\u{200C}/hooks/pre-commit",
+            ".porta\u{FEFF}/plugins/x/plugin.php",
+            "\xFF.php", // not UTF-8: nothing says what the disk makes of it
         ] as $refused) {
-            $this->assertNull($paths->absolute($refused), \json_encode($refused, \JSON_THROW_ON_ERROR));
+            $this->assertNull($paths->absolute($refused), \json_encode($refused, \JSON_THROW_ON_ERROR | \JSON_INVALID_UTF8_SUBSTITUTE));
         }
         $this->assertNull($paths->relative('/elsewhere/a.php'));
         $this->assertNull($paths->relative($root.'/.porta.json'));
@@ -123,6 +130,19 @@ final class WorkspaceTest extends TestCase
         \file_put_contents($project->path('.git/HEAD'), data: 'not a ref');
 
         $this->assertSame(['.gitignore', 'a.php', 'sub/b.php'], \array_keys(new ProjectFiles($project->dir, 100)->scan()));
+
+        // a database volume a container owns: passed over, not the end of the share
+        \mkdir($project->path('volume'));
+        \file_put_contents($project->path('volume/x.php'), data: '<?php');
+        \chmod($project->path('volume'), permissions: 0);
+        try {
+            if (\is_readable($project->path('volume'))) {
+                $this->markTestSkipped('root reads any folder');
+            }
+            $this->assertSame(['.gitignore', 'a.php', 'sub/b.php'], \array_keys(new ProjectFiles($project->dir, 100)->scan()));
+        } finally {
+            \chmod($project->path('volume'), permissions: 0o755);
+        }
     }
 
     public function testOutsideARepositoryEveryFileButThePrivateOnesAndNodeModules(): void

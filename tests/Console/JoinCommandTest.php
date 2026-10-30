@@ -32,8 +32,8 @@ final class JoinCommandTest extends TestCase
     /** @var list<string> */
     private array $launched = [];
 
-    /** @var list<array<string, string>> what each launch was given to set */
-    private array $environments = [];
+    /** @var list<list<string>> the options each launch was given */
+    private array $options = [];
 
     private ?Process $host = null;
 
@@ -43,7 +43,7 @@ final class JoinCommandTest extends TestCase
     {
         $this->home = new TempProject([]);
         $this->launched = [];
-        $this->environments = [];
+        $this->options = [];
         $this->wormhole = new FakeWormhole();
     }
 
@@ -81,9 +81,9 @@ final class JoinCommandTest extends TestCase
     {
         $application = new Application();
         $application->addCommand(new JoinCommand(
-            function (string $root, array $env) use ($exit): int {
+            function (string $root, array $options) use ($exit): int {
                 $this->launched[] = $root;
-                $this->environments[] = $env;
+                $this->options[] = $options;
 
                 return $exit;
             },
@@ -160,8 +160,8 @@ final class JoinCommandTest extends TestCase
     /**
      * The copy is the host's code: it opens restricted — nothing the host
      * ships runs on the guest's machine — and assist is on all the same,
-     * through the run's environment, which a restricted project keeps. A
-     * guest who once trusted the copy keeps that answer.
+     * through the command line, which a restricted project keeps. A guest
+     * who once trusted the copy keeps that answer.
      */
     public function testTheCopyOpensRestrictedWithAssistOn(): void
     {
@@ -170,19 +170,13 @@ final class JoinCommandTest extends TestCase
 
         $this->assertSame(0, $this->join($this->host('welcome', $project))->getStatusCode());
         $root = $this->launched[0];
-        $this->assertSame(['PORTA_PLUGINS' => 'assist'], $this->environments[0]);
+        $this->assertSame(['--plugin=assist'], $this->options[0]);
         $this->assertFalse($trust->isTrusted($root));
         $this->assertFalse($trust->shouldAsk($root), 'answered, so the IDE does not ask');
 
         $trust->trust($root);
-        \putenv('PORTA_PLUGINS=todo');
-        try {
-            $this->assertSame(0, $this->join($this->host('welcome', $project))->getStatusCode());
-        } finally {
-            \putenv('PORTA_PLUGINS');
-        }
+        $this->assertSame(0, $this->join($this->host('welcome', $project))->getStatusCode());
         $this->assertTrue($trust->isTrusted($root), 'the guest\'s own answer stands');
-        $this->assertSame(['PORTA_PLUGINS' => 'todo,assist'], $this->environments[1], 'beside what the guest\'s environment turns on');
     }
 
     /**

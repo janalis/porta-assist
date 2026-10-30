@@ -58,7 +58,7 @@ final class JoinCommand extends PluginCommand
     private array $received = [];
 
     /**
-     * @param (\Closure(string, array<string, string>): int)|null $launch opens the IDE on a directory, with these variables
+     * @param (\Closure(string, list<string>): int)|null $launch opens the IDE on a directory, with these options
      *                                                             set, and waits for it; null runs this Porta
      * @param string|null                  $home   where copies are kept; null is the user's home
      */
@@ -139,15 +139,14 @@ final class JoinCommand extends PluginCommand
         new OnboardingState($mirror->root)->markWelcomeSeen();
         // The copy is the host's code: opened restricted unless this guest
         // said otherwise for it once — nothing the host ships runs here — and
-        // with assist on all the same, through the environment, which is the
+        // with assist on all the same, through the command line, which is the
         // guest's and which a restricted project keeps.
         $trust = null === $this->home ? WorkspaceTrust::fromEnvironment() : new WorkspaceTrust($this->home);
         if ($trust->shouldAsk($mirror->root)) {
             $trust->restrict($mirror->root);
         }
         $output->writeln(\sprintf('Opening <info>%s</info>…', OutputFormatter::escape($mirror->root)));
-        $plugins = \implode(',', \array_filter([(string) \getenv('PORTA_PLUGINS'), 'assist'], static fn (string $list): bool => '' !== $list));
-        $exit = ($this->launch ?? self::launch(...))($mirror->root, ['PORTA_PLUGINS' => $plugins]);
+        $exit = ($this->launch ?? self::launch(...))($mirror->root, ['--plugin=assist']);
 
         return 0 === $exit ? null : \sprintf('Porta exited with %d', $exit);
     }
@@ -378,11 +377,11 @@ final class JoinCommand extends PluginCommand
      * real terminal.
      */
     // @codeCoverageIgnoreStart
-    /** @param array<string, string> $env */
-    private static function launch(string $root, array $env): int
+    /** @param list<string> $options */
+    private static function launch(string $root, array $options): int
     {
         $pipes = [];
-        $process = \proc_open([\PHP_BINARY, PortaBinary::path(), $root], [\STDIN, \STDOUT, \STDERR], $pipes, env_vars: [...\getenv(), ...$env]);
+        $process = \proc_open([\PHP_BINARY, PortaBinary::path(), ...$options, $root], [\STDIN, \STDOUT, \STDERR], $pipes);
 
         return false === $process ? 1 : \proc_close($process);
     }
