@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Workspace;
 
+use Porta\Support\Files;
+
 /**
  * Paths as they cross the wire: relative to the project, `/`-separated — and
  * CHECKED on the way in, both ways. A guest names files on the host's disk and
@@ -110,16 +112,11 @@ final readonly class Paths
     }
 
     /**
-     * $segment as a case-insensitive file system — macOS's by default — finds
-     * it: `.Porta/plugins/x/plugin.php` is a plugin the host's next start
-     * runs. Folded in full, not only ASCII: APFS opens `.porta.jſon` as
-     * `.porta.json`. HFS+ also skips the code points it ignores, as git's
-     * own `.git` check does; a name not in UTF-8 reads as private.
+     * {@see Files::asTheDiskReadsIt()}: `.Porta/plugins/x/plugin.php` is a
+     * plugin the host's next start runs. A name not in UTF-8 reads as private.
      */
     private static function asTheDiskReadsIt(string $segment): string
     {
-        $visible = \preg_replace('/[\x{200C}-\x{200F}\x{202A}-\x{202E}\x{206A}-\x{206F}\x{FEFF}]/u', replacement: '', subject: $segment);
-
-        return null === $visible ? self::PRIVATE[0] : \mb_convert_case($visible, \MB_CASE_FOLD, encoding: 'UTF-8');
+        return Files::asTheDiskReadsIt($segment) ?? self::PRIVATE[0];
     }
 }
