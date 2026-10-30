@@ -70,6 +70,8 @@ and [magic-wormhole-transit-relay](https://github.com/magic-wormhole/magic-wormh
 Then set **Mailbox server** (a `ws://` address) and **Transit relay**
 (`host:port`) on the host. Guests join with
 `porta assist <code> --mailbox ws://…`. The relay comes from the host.
+A project you have not trusted cannot pick them in its own `.porta.json`: it
+would learn who shares it, and when. Yours, set globally, still apply.
 
 ## Joining
 
