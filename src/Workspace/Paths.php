@@ -79,9 +79,13 @@ final readonly class Paths
     public function walk(string $relative, array $skip): array
     {
         $directory = '' === $relative ? $this->root : $this->root.'/'.$relative;
-        $entries = \scandir($directory);
+        // Sorted here, as bytes: scandir() sorts with strcoll(), which follows
+        // the locale — a CI runner listed alias.php before a.php.
+        $entries = \scandir($directory, \SCANDIR_SORT_NONE);
+        $entries = false === $entries ? [] : $entries;
+        \sort($entries, \SORT_STRING);
         $files = [];
-        foreach (false === $entries ? [] : $entries as $entry) {
+        foreach ($entries as $entry) {
             if ('.' === $entry || '..' === $entry || \in_array($entry, $skip, strict: true)) {
                 continue;
             }
