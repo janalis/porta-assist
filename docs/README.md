@@ -6,6 +6,8 @@ One person, the **host**, shares the project they have open. Others, the
 **guests**, join from their own Porta. Everyone edits the same files at once
 and sees each other's carets and selections. Anyone can follow anyone.
 
+![The assist page in Settings → Plugins](/screenshots/plugin-assist.svg)
+
 The host's copy is the one that counts:
 
 - A guest needs no checkout of their own.
