@@ -28,7 +28,7 @@ final class AssistPluginTest extends TestCase
         $manager = new PluginManager(new EventDispatcher(), $settings);
         $manager->wireRuntime(TestPluginRuntime::create(new CodeEditorWidget(), new StatusBarWidget()));
         $api = $manager->api('assist', $project->dir, $settings);
-        $plugin = require \dirname(__DIR__).'/plugin.php';
+        $plugin = require \dirname(__DIR__).'/porta.php';
         $plugin->activate($api);
         $manager->commit($api, $plugin);
 
@@ -61,7 +61,7 @@ final class AssistPluginTest extends TestCase
         $manager = new PluginManager(new EventDispatcher(), $settings);
         $manager->wireRuntime(TestPluginRuntime::create(new CodeEditorWidget(), new StatusBarWidget()));
         $api = $manager->api('assist', $project->dir, $settings);
-        $plugin = require \dirname(__DIR__).'/plugin.php';
+        $plugin = require \dirname(__DIR__).'/porta.php';
         $plugin->activate($api);
         $manager->commit($api, $plugin);
 

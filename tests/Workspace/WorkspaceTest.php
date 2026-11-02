@@ -53,13 +53,13 @@ final class WorkspaceTest extends TestCase
             'a/.porta.json',
             // macOS's file system ignores case: these ARE the private ones there
             '.GIT/hooks/pre-commit',
-            '.Porta/plugins/x/plugin.php',
+            '.Porta/plugins/x/porta.php',
             '.PORTA.json',
             // and folded in full: APFS opens this one as .porta.json
             ".porta.j\u{17F}on",
             // HFS+ skips these code points in a name
             ".git\u{200C}/hooks/pre-commit",
-            ".porta\u{FEFF}/plugins/x/plugin.php",
+            ".porta\u{FEFF}/plugins/x/porta.php",
             "\xFF.php", // not UTF-8: nothing says what the disk makes of it
         ] as $refused) {
             $this->assertNull($paths->absolute($refused), \json_encode($refused, \JSON_THROW_ON_ERROR | \JSON_INVALID_UTF8_SUBSTITUTE));

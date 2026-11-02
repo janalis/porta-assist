@@ -112,7 +112,7 @@ final readonly class Paths
     }
 
     /**
-     * {@see Files::asTheDiskReadsIt()}: `.Porta/plugins/x/plugin.php` is a
+     * {@see Files::asTheDiskReadsIt()}: `.Porta/plugins/x/porta.php` is a
      * plugin the host's next start runs. A name not in UTF-8 reads as private.
      */
     private static function asTheDiskReadsIt(string $segment): string
