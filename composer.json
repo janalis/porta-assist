@@ -1,5 +1,5 @@
 {
-    "name": "porta/assist",
+    "name": "janalis/porta-assist",
     "description": "Work on one project together, live: a host shares it over the network, guests join, everyone edits the same files and sees each other's carets",
     "type": "porta-plugin",
     "license": "MIT",
