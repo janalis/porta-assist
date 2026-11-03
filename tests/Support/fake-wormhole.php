@@ -123,7 +123,7 @@ $handle = static function (int $id, array $message) use (&$sockets, &$nameplates
             foreach (array_keys($nameplates) as $name) {
                 $nameplates[$name]['sides'] = ['stranger1', 'stranger2'];
             }
-        // no break: and hang up on everyone
+            // no break: and hang up on everyone
         case 'x-drop':
             foreach (array_keys($sockets) as $other) {
                 $hangUp($other);

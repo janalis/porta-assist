@@ -275,10 +275,10 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
             $api->pick($participant['name'], $actions, function (string $action) use ($host, $peer, $participant): void {
                 $role = Role::tryFrom($action);
                 match (true) {
-                    null !== $role => $host?->setRole($peer, $role),
-                    \in_array($action, ['typing', 'running', 'debugging'], strict: true) => $host?->permit($peer, $action, true),
-                    \in_array($action, ['no-typing', 'no-running', 'no-debugging'], strict: true) => $host?->permit($peer, \substr($action, offset: 3), false),
-                    'remove' === $action => $host?->remove($peer),
+                    null !== $role => $host->setRole($peer, $role),
+                    \in_array($action, ['typing', 'running', 'debugging'], strict: true) => $host->permit($peer, $action, true),
+                    \in_array($action, ['no-typing', 'no-running', 'no-debugging'], strict: true) => $host->permit($peer, \substr($action, offset: 3), false),
+                    'remove' === $action => $host->remove($peer),
                     default => $this->follow()->start($peer, $participant['name']),
                 };
             });
