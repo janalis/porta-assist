@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Workspace;
 
+use Porta\Support\Files;
+
 /**
  * A guest's copy of the host's project: a real directory, so everything the
  * IDE does with files — the tree, search, a language server — works on it as
@@ -33,9 +35,7 @@ final readonly class Mirror
     {
         $folder = '' === $name || '.' === $name || '..' === $name || 1 === \preg_match('#[/\\\\\0]#', $name) ? 'project' : $name;
         $root = $home.'/.porta/assist/'.$id.'/'.$folder;
-        if (!\is_dir($root)) {
-            \mkdir($root, permissions: 0o700, recursive: true);
-        }
+        Files::ensureDir($root, permissions: 0o700);
 
         return new self((string) \realpath($root));
     }
