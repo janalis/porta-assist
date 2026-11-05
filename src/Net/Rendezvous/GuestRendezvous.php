@@ -6,6 +6,7 @@ namespace Porta\AssistPlugin\Net\Rendezvous;
 
 use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Tls;
+use Porta\Support\Decoded;
 use Porta\Support\FiberWait;
 use Revolt\EventLoop;
 
@@ -48,10 +49,8 @@ final class GuestRendezvous
             }
             $key = new SessionKey($key ?? \random_bytes(32));
             $opened = $key->open('invite', $sealed);
-            // @mago-expect analysis:mixed-assignment -- narrowed by Invite::fromArray
-            // @noinspection JsonEncodingApiUsageInspection -- a peer's line that is not JSON is dropped, not thrown: it comes off the network
-            $fields = null === $opened ? null : \json_decode($opened, associative: true);
-            $invite = \is_array($fields) ? Invite::fromArray($fields) : null;
+            $fields = null === $opened ? null : Decoded::json($opened);
+            $invite = null === $fields ? null : Invite::fromArray($fields);
             // Said either way: the host learns from this whether the code was right.
             $mailbox->add('ack', $key->seal('ack', null === $invite ? 'no' : 'ok'));
             $mailbox->leave(null === $invite ? 'scary' : 'happy');
