@@ -18,6 +18,7 @@ use Porta\Overlay\State\ToastSeverity;
 use Porta\Plugin\Api\PluginApi;
 use Porta\Support\Backoff;
 use Porta\Support\Decoded;
+use Porta\Support\Files;
 use Porta\Support\JsonFile;
 use Revolt\EventLoop;
 
@@ -165,8 +166,7 @@ final class GuestSession
     {
         $file = $root.'/'.self::FILE;
         $dir = \dirname($file);
-        // @mago-expect lint:no-error-control-operator -- a folder that cannot be made is reported by the exception, not a warning
-        if (!\is_dir($dir) && !@\mkdir($dir, permissions: 0o700, recursive: true) && !\is_dir($dir)) {
+        if (!Files::ensureDir($dir, permissions: 0o700)) {
             throw new \RuntimeException('cannot create '.$dir);
         }
         \touch($file);

@@ -94,7 +94,7 @@ final readonly class Mirror
         }
         $dir = \dirname($path);
 
-        // @mago-expect lint:no-error-control-operator -- a folder that cannot be made (a file holds its name) is answered false, not warned about
-        return (\is_dir($dir) || @\mkdir($dir, permissions: 0o755, recursive: true) || \is_dir($dir)) && false !== \file_put_contents($path, $content);
+        // A folder that cannot be made (a file holds its name) is answered false.
+        return Files::ensureDir($dir, permissions: 0o755) && false !== \file_put_contents($path, $content);
     }
 }
