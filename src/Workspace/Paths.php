@@ -26,8 +26,7 @@ final readonly class Paths
 
     public function __construct(string $root)
     {
-        $real = \realpath($root);
-        $this->root = false === $real ? $root : $real;
+        $this->root = Files::canonical($root);
     }
 
     /** $path relative to the root, or null when it is not a shareable file under it. */
