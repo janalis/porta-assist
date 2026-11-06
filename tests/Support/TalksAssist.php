@@ -118,10 +118,15 @@ trait TalksAssist
         return $code;
     }
 
-    /** Hand $code to the host waiting with it, as `porta assist` does — the loop the IDE runs on running meanwhile. */
-    private function redeem(Code $code): Invite
+    /**
+     * Hand $code to the host waiting with it, as `porta assist` does — the loop the IDE runs on running meanwhile.
+     *
+     * $timeout is the guest's budget, and it waits three of them for the host's
+     * answer: a code nobody waits with spends all three, so pass a short one there.
+     */
+    private function redeem(Code $code, float $timeout = 5.0): Invite
     {
-        return GuestRendezvous::blocking(fn (): Invite => GuestRendezvous::redeem($this->wormhole()->mailbox, $code, 5.0));
+        return GuestRendezvous::blocking(fn (): Invite => GuestRendezvous::redeem($this->wormhole()->mailbox, $code, $timeout));
     }
 
     /** The plugin as the IDE loaded it — its sessions are read through {@see Probe}. */
@@ -333,20 +338,28 @@ trait TalksAssist
         if (null === $this->peer) {
             return;
         }
-        $bytes = \fread($this->peer, length: 1_048_576);
-        if ('' === $bytes && \feof($this->peer)) {
-            \fclose($this->peer);
-            $this->peer = null;
-
-            return;
-        }
-        $this->buffered .= $bytes;
+        // Until a whole message is in, not one read: a non-blocking read over
+        // TLS hands back one record at a time, and one per 20ms turn capped a
+        // fetch at a few hundred KB/s — 3 MB files took 6s each. Not until the
+        // stream is empty either: the tests that hand one inbox from guest to
+        // guest expect a guest's later messages to still be on its stream.
+        // What arrived just before a hang-up is still read: the bye, above all.
+        $ended = false;
+        do {
+            $bytes = \fread($this->peer, length: 1_048_576);
+            $ended = '' === $bytes && \feof($this->peer);
+            $this->buffered .= $bytes;
+        } while ('' !== $bytes && false !== $bytes && !\str_contains($this->buffered, "\n"));
         while (false !== ($end = \strpos($this->buffered, needle: "\n"))) {
             $message = Wire::decode(\substr($this->buffered, offset: 0, length: $end));
             $this->buffered = \substr($this->buffered, $end + 1);
             if (null !== $message) {
                 $this->inbox[] = $message;
             }
+        }
+        if ($ended) {
+            \fclose($this->peer);
+            $this->peer = null;
         }
     }
 }

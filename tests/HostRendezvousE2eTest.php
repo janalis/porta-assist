@@ -76,7 +76,7 @@ final class HostRendezvousE2eTest extends TestCase
                 $third = $this->code($ide, not: $second);
                 $this->assertFalse(self::toasted($ide, 'the code is now '.$third->text()), 'a code used is replaced quietly');
                 try {
-                    $this->redeem(Code::parse('99-AAAA-AAAA'));
+                    $this->redeem(Code::parse('99-AAAA-AAAA'), timeout: 0.5); // nobody answers: no need to wait 15s to hear it
                     $this->fail('a code nobody waits with gets nothing');
                 } catch (RendezvousFailed $e) {
                     $this->assertSame('No host is waiting with that code — check it, or ask the host for a new one', $e->getMessage());
