@@ -329,11 +329,17 @@ final class TransportTest extends TestCase
         $connection->send(['t' => 'big', 'pad' => \str_repeat('x', times: 2_097_152)]);
         $this->assertGreaterThan(0, $connection->backlog(), 'the premise: something is queued');
         \stream_set_blocking($client, enable: false);
-        $this->await(static function () use ($client, $connection): bool {
+        // Read as the bytes arrive, not once per await turn: a socket pair
+        // holds ~8 KiB on macOS, so one read per 20ms turn paced this 2 MiB
+        // message at 256 turns — 7s of a 10s limit.
+        $reader = EventLoop::onReadable($client, static function () use ($client): void {
             \fread($client, length: 1_048_576);
-
-            return 0 === $connection->backlog();
-        }, what: 'the drain');
+        });
+        try {
+            $this->await(static fn (): bool => 0 === $connection->backlog(), what: 'the drain');
+        } finally {
+            EventLoop::cancel($reader);
+        }
         $this->pump(0.05);
         $this->assertSame(1, $calls, 'not again when something else drained');
         $connection->close('done');
