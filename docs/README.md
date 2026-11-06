@@ -13,8 +13,8 @@ The host's copy is the one that counts:
 - A guest needs no checkout of their own.
 - A guest's saves and file operations are asked of the host, who carries them out.
 
-Enable it under **Settings ▸ Plugins**, or add `"assist"` to `enabledPlugins`
-in `.porta.json`.
+Bundled with Porta and off by default — turn it on under **Settings → Plugins
+→ assist**, or add `"assist"` to `enabledPlugins` in `.porta.json`.
 
 ## Sharing a project
 
