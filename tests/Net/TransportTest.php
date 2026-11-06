@@ -351,6 +351,7 @@ final class TransportTest extends TestCase
                 throw new \RuntimeException('handler broke');
             }
         }, static function (): void {});
+        $suite = EventLoop::getErrorHandler();
         EventLoop::setErrorHandler(static function (\Throwable $error) use (&$errors): void {
             $errors[] = $error->getMessage();
         });
@@ -360,7 +361,7 @@ final class TransportTest extends TestCase
                 return 2 === \count($heard) && [] !== $errors;
             }, what: 'both lines and the error');
         } finally {
-            EventLoop::setErrorHandler(null);
+            EventLoop::setErrorHandler($suite); // never null: that hands the next test none
             $connection->close('done');
             \fclose($client);
         }
