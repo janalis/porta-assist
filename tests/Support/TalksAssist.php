@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Tests\Support;
 
+use PHPUnit\Framework\Attributes\After;
 use Porta\AssistPlugin\Net\Certificate;
 use Porta\AssistPlugin\Net\Rendezvous\Code;
 use Porta\AssistPlugin\Net\Rendezvous\Door;
@@ -321,6 +322,14 @@ trait TalksAssist
             \fclose($this->peer);
         }
         $this->peer = null;
+    }
+
+    /** The certificate is a key file in the temp dir: gone with the test, not left there for good. */
+    #[After]
+    protected function forgetCertificate(): void
+    {
+        $this->certificate?->forget();
+        $this->certificate = null;
     }
 
     private function hangUp(): void

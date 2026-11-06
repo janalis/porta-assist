@@ -382,7 +382,9 @@ final class GuestSessionE2eTest extends TestCase
     {
         $invite = $this->listen();
         // The invite names another certificate than the one that answers.
-        $project = $this->copy(new Invite($invite->key, $invite->transit, Certificate::create()->fingerprint, $invite->token));
+        $other = Certificate::create();
+        $other->forget(); // only its fingerprint is wanted, not its key file
+        $project = $this->copy(new Invite($invite->key, $invite->transit, $other->fingerprint, $invite->token));
 
         $this->runIde($project, (string) \realpath($project->path('src/A.php')), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
