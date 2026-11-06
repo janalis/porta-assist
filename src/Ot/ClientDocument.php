@@ -34,12 +34,6 @@ final class ClientDocument
         private string $acknowledged,
     ) {}
 
-    /** Whether a change of this guest's has not reached the host yet. */
-    public function isPending(): bool
-    {
-        return null !== $this->outstanding;
-    }
-
     /** A change made here: what to send now — null while one is still in flight. */
     public function local(TextOperation $operation): ?TextOperation
     {

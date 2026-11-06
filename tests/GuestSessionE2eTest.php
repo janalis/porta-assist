@@ -192,7 +192,7 @@ final class GuestSessionE2eTest extends TestCase
 
                 $this->dropPeer();
                 $this->await(static fn (): bool => self::toasted($ide, 'Lost the host (the connection was closed)'), what: 'the guest told');
-                $this->assertTrue($roster->isOutOfTouch(Participants::pluginSource('assist')), 'kept as last seen while it tries again');
+                $this->assertArrayHasKey(Participants::pluginSource('assist'), Probe::array($roster, 'lost'), 'kept as last seen while it tries again');
                 $this->assertCount(2, $roster->all());
                 $terminal->simulateInput('x');
                 $this->await(static fn (): bool => self::toasted($ide, 'This file is read-only'), what: 'nothing typed while away');
@@ -208,7 +208,7 @@ final class GuestSessionE2eTest extends TestCase
                 $this->assertNotContains('assist:host', $left, 'the host\'s kept: still here');
                 $this->say(['t' => 'opened', 'path' => 'src/A.php', 'rev' => 0, 'text' => "one\ntwo\n"]);
                 $this->await(fn (): bool => "one\ntwo\n" === $this->bufferText($ide, $path), what: 'the host\'s copy');
-                $this->assertFalse($roster->isOutOfTouch(Participants::pluginSource('assist')), 'back in touch');
+                $this->assertArrayNotHasKey(Participants::pluginSource('assist'), Probe::array($roster, 'lost'), 'back in touch');
                 $terminal->simulateInput('y');
                 $this->assertSame(['y', 8], $this->expect('op')['ops'], 'writable again');
 

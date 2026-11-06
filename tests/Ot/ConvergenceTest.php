@@ -10,6 +10,7 @@ use Porta\AssistPlugin\Ot\ServerDocument;
 use Porta\AssistPlugin\Ot\TextDiff;
 use Porta\AssistPlugin\Ot\TextOperation;
 use Porta\AssistPlugin\Ot\UndoStack;
+use Porta\Tests\Support\Probe;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
 
@@ -88,7 +89,7 @@ final class ConvergenceTest extends TestCase
         $this->deliverAll();
         foreach ($this->guests as $g => $guest) {
             $this->assertSame($this->host->text, $guest['text'], \sprintf('seed %d, guest %d', $seed, $g));
-            $this->assertFalse($guest['doc']->isPending());
+            $this->assertNull(Probe::get($guest['doc'], 'outstanding'));
         }
     }
 
