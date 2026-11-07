@@ -80,6 +80,12 @@ final class HostFilesE2eTest extends TestCase
                 $this->say(['t' => 'manifest']);
                 $this->expect('manifest');
                 $this->assertSame([], \array_filter($this->inbox, static fn (array $m): bool => 'changed' === $m['t']), 'no change told before the list was');
+                // Asked again at once, the listing just taken answers: each ask
+                // was a whole scan on the host's UI loop, as many as a guest sent.
+                \file_put_contents($root.'/fresh.txt', data: 'new');
+                $this->say(['t' => 'manifest']);
+                $this->assertNotContains('fresh.txt', \array_column(Wire::list($this->expect('manifest'), 'files'), 0), 'not scanned again');
+                \unlink($root.'/fresh.txt');
                 // Listed, then gone from disk before the next rescan: offered, and still not there to open.
                 \unlink($root.'/grows.txt');
                 $this->say(['t' => 'open', 'path' => 'grows.txt']);

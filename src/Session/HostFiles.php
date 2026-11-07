@@ -27,10 +27,16 @@ final class HostFiles
     /** The largest file whose encoding fits the queue a connection keeps, with room to spare. */
     private const int LARGEST = ((NonBlockingWriter::DEFAULT_LIMIT - self::HIGH_WATER) / 4) * 3;
 
+    /** How long a listing answers a guest's `manifest` before it is taken again: two seconds. */
+    private const int FRESH_NS = 2_000_000_000;
+
     /** @var array<array-key, array{size: int, hash: string}>|null the project as last listed, null before anyone asked */
     private ?array $listed = null;
 
     private ?string $rescan = null;
+
+    /** When the listing was last taken, on the monotonic clock. */
+    private int $scannedAt = 0;
 
     /** @var array<string, true> files guests wrote this session, fetchable though no listing has them yet */
     private array $written = [];
@@ -51,7 +57,13 @@ final class HostFiles
 
     public function manifest(Guest $guest): void
     {
-        $this->listed = $this->files->scan();
+        // A listing taken in the last moments is the list: every `manifest`
+        // ran a whole scan on the UI loop — git, a walk of vendor/, a hash per
+        // file — and a guest sending many in one read froze the host for each.
+        // A tree change still rescans on its own, and tells everyone.
+        if (null === $this->listed || (\hrtime(as_number: true) - $this->scannedAt) > self::FRESH_NS) {
+            $this->listed = $this->scan();
+        }
         $files = [];
         foreach ($this->listed as $path => $file) {
             // A path in digits keys as an int: sent as one, the guest drops it.
@@ -155,6 +167,14 @@ final class HostFiles
         $this->rescan = EventLoop::unreference(EventLoop::delay(0.5, $this->rescan(...)));
     }
 
+    /** @return array<array-key, array{size: int, hash: string}> the project now, with when it was taken */
+    private function scan(): array
+    {
+        $this->scannedAt = (int) \hrtime(as_number: true);
+
+        return $this->files->scan();
+    }
+
     public function stop(): void
     {
         if (null !== $this->rescan) {
@@ -169,7 +189,7 @@ final class HostFiles
     {
         $this->rescan = null;
         $before = $this->listed ?? [];
-        $now = $this->files->scan();
+        $now = $this->scan();
         $this->listed = $now;
         $changed = [];
         foreach ($now as $path => $file) {
@@ -192,7 +212,7 @@ final class HostFiles
      */
     public function offered(string $relative): bool
     {
-        $this->listed ??= $this->files->scan();
+        $this->listed ??= $this->scan();
 
         return \array_key_exists($relative, $this->listed) || \array_key_exists($relative, $this->written);
     }
