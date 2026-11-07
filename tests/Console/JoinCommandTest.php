@@ -49,7 +49,7 @@ final class JoinCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->host?->stop(0);
+        $this->host?->stop(1); // SIGTERM, which the host exits on, removing its key
     }
 
     /** A fake host serving $mode — through the relay at $transit, when not the test's: the code to join it with. */
@@ -229,7 +229,7 @@ final class JoinCommandTest extends TestCase
         $code = $this->host('welcome', new TempProject(['a.txt' => 'a']));
         $wrong = \substr($code, offset: 0, length: -4).'AAAA';
         $this->assertStringContainsString('That code is not right — check it with the host', $this->join($wrong)->getErrorOutput());
-        $this->host?->stop(0);
+        $this->host?->stop(1); // SIGTERM, which the host exits on, removing its key
 
         // The code right, the relay it names out of reach.
         $this->assertStringContainsString('Cannot reach the host: 127.0.0.1:1 refused the connection', $this->join($this->host('welcome', transit: '127.0.0.1:1'))->getErrorOutput());

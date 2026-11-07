@@ -57,6 +57,11 @@ require __DIR__.'/../../../../vendor/autoload.php';
 require __DIR__.'/../../../../tests/plugin-autoload.php';
 $certificate = Certificate::create();
 register_shutdown_function($certificate->forget(...));
+// A test stops this host with SIGTERM, which ends PHP without its shutdown
+// functions: the key above stayed in the temp dir, one per test, for good.
+// Exiting on it runs them.
+pcntl_async_signals(true);
+pcntl_signal(SIGTERM, static fn () => exit(0));
 $transit = (string) getenv('PORTA_FAKE_TRANSIT');
 // @mago-expect lint:no-literal-password -- the fake host's token: the tests know it, and it guards nothing
 $token = '00112233445566778899aabbccddeeff';

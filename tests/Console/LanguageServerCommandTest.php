@@ -33,7 +33,7 @@ final class LanguageServerCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->host?->stop(0);
+        $this->host?->stop(1); // SIGTERM, which the host exits on, removing its key
         $this->relay?->stop(0);
     }
 
@@ -41,7 +41,7 @@ final class LanguageServerCommandTest extends TestCase
     private function host(string $mode): Invite
     {
         $this->wormhole ??= new FakeWormhole();
-        $this->host?->stop(0);
+        $this->host?->stop(1); // SIGTERM, which the host exits on, removing its key
         $this->host = new Process([\PHP_BINARY, __DIR__.'/../Support/fake-assist-host.php', $mode], env: ['PORTA_FAKE_TRANSIT' => $this->wormhole->transit, 'PORTA_FAKE_DOOR' => '1']);
         $invite = Invite::fromArray((array) \json_decode(self::firstLine($this->host), associative: true, flags: \JSON_THROW_ON_ERROR));
         $this->assertInstanceOf(Invite::class, $invite);
