@@ -106,6 +106,10 @@ GuestRendezvous::blocking(static function () use (&$client): bool {
 if (null === $client) {
     exit(0);
 }
+// The handshake is done, and with it the key's use. Gone now, it is not left
+// by a host stopped while it blocks in fgets() below: a SIGTERM there does not
+// reach the handler above before the SIGKILL that follows it.
+$certificate->forget();
 stream_set_blocking($client, enable: true);
 $send = static function (array $message) use ($client): void {
     fwrite($client, json_encode($message, \JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n");
