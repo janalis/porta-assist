@@ -61,6 +61,34 @@ final class HostLanguageServerE2eTest extends TestCase
         return $this->inbox[0] ?? ['t' => 'closed'];
     }
 
+    /**
+     * The guest's `initialize`, naming a root and a folder past its copy, as
+     * the host's server hears it: the host's project and options, no process
+     * of the guest's, and no folder of the guest's beside the host's.
+     */
+    private function assertTheServerHearsTheHostsWorkspace(string $root): void
+    {
+        $initialize = $this->ask([
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'initialize',
+            'params' => [
+                'processId' => 4_242,
+                'rootUri' => 'file:///elsewhere',
+                'workspaceFolders' => [['uri' => 'file://'.self::COPY, 'name' => 'copy'], ['uri' => 'file:///elsewhere', 'name' => 'elsewhere']],
+                'initializationOptions' => ['phpCommand' => '/bin/sh -c evil'],
+            ],
+        ]);
+        $heard = \json_decode((string) \base64_decode((string) ($initialize['result']['raw'] ?? ''), strict: true), associative: true, flags: \JSON_THROW_ON_ERROR);
+        $this->assertIsArray($heard);
+        $this->assertSame(
+            [null, Uri::fromPath($root), Uri::fromPath($root), null],
+            [$heard['processId'], $heard['rootUri'], $heard['workspaceFolders'][0]['uri'], $heard['initializationOptions']],
+            'the host\'s project and options, no process of the guest\'s — whatever root the guest named',
+        );
+        $this->assertCount(1, $heard['workspaceFolders'], 'and no folder of the guest\'s beside it');
+    }
+
     /** @param array<string, mixed> $message @return array<string, mixed> the server's answer, relayed */
     private function ask(array $message): array
     {
@@ -106,24 +134,7 @@ final class HostLanguageServerE2eTest extends TestCase
 
                 $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, 'php'));
                 $this->inbox = [];
-                $initialize = $this->ask([
-                    'jsonrpc' => '2.0',
-                    'id' => 1,
-                    'method' => 'initialize',
-                    'params' => [
-                        'processId' => 4_242,
-                        'rootUri' => 'file://'.self::COPY,
-                        'workspaceFolders' => [['uri' => 'file://'.self::COPY, 'name' => 'copy']],
-                        'initializationOptions' => ['phpCommand' => '/bin/sh -c evil'],
-                    ],
-                ]);
-                $heard = \json_decode((string) \base64_decode((string) ($initialize['result']['raw'] ?? ''), strict: true), associative: true, flags: \JSON_THROW_ON_ERROR);
-                $this->assertIsArray($heard);
-                $this->assertSame(
-                    [null, Uri::fromPath($root), Uri::fromPath($root), null],
-                    [$heard['processId'], $heard['rootUri'], $heard['workspaceFolders'][0]['uri'], $heard['initializationOptions']],
-                    'the host\'s project and options, no process of the guest\'s',
-                );
+                $this->assertTheServerHearsTheHostsWorkspace($root);
                 // Nor may a guest reconfigure the host's server later, whatever its role.
                 $reconfigure = $this->ask(['jsonrpc' => '2.0', 'id' => 5, 'method' => 'workspace/didChangeConfiguration', 'params' => ['settings' => ['phpCommand' => 'evil']]]);
                 $this->assertSame(5, $reconfigure['id']);

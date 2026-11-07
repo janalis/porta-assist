@@ -190,7 +190,7 @@ final class HostFiles
      * that the listing leaves out — a gitignored `.env` — is not a guest's to
      * read, move, overwrite or delete.
      */
-    private function offered(string $relative): bool
+    public function offered(string $relative): bool
     {
         $this->listed ??= $this->files->scan();
 

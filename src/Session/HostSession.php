@@ -688,7 +688,12 @@ final class HostSession
 
     private function open(Guest $guest, string $relative): void
     {
-        $doc = $this->doc($relative);
+        // Only what the host shares — listed, written this session, or a file
+        // the session already has open: under the root is not enough. Opened
+        // unasked, a gitignored `.env` came back whole to any guest, and an
+        // edit guest could then rewrite it through op and save.
+        $shared = \array_key_exists($relative, $this->docs) || $this->files->offered($relative);
+        $doc = $shared ? $this->doc($relative) : null;
         if (null === $doc) {
             $guest->send(['t' => 'error', 'path' => $relative, 'message' => 'not a file the host can share']);
 
@@ -905,7 +910,9 @@ final class HostSession
 
     private function save(Guest $guest, string $relative): void
     {
-        $doc = Role::Edit === $guest->role ? $this->doc($relative) : null;
+        // A file this guest has open, as an op needs: saving any path under
+        // the root opened it on the host, and wrote it back.
+        $doc = Role::Edit === $guest->role && \array_key_exists($relative, $guest->docs) ? $this->doc($relative) : null;
         if (null === $doc) {
             return;
         }

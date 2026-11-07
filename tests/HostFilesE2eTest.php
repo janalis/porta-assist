@@ -75,8 +75,16 @@ final class HostFilesE2eTest extends TestCase
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root): void {
                 $this->editor($tui, $terminal, $ide);
+                // Before anyone asked for the list: nothing to tell, and nothing scanned for it.
+                $this->emit($ide, new WorkingTreeChanged());
                 $this->say(['t' => 'manifest']);
                 $this->expect('manifest');
+                $this->assertSame([], \array_filter($this->inbox, static fn (array $m): bool => 'changed' === $m['t']), 'no change told before the list was');
+                // Listed, then gone from disk before the next rescan: offered, and still not there to open.
+                \unlink($root.'/grows.txt');
+                $this->say(['t' => 'open', 'path' => 'grows.txt']);
+                $this->assertSame('grows.txt', $this->expect('error')['path'], 'a listed file gone from disk is not opened');
+                \file_put_contents($root.'/grows.txt', data: "g\n"); // back as it was, for what follows
 
                 // Written: a new file, and one the host does not have open.
                 $this->say(['t' => 'write', 'path' => 'src/New.php', 'data' => \base64_encode('<?php // new')]);

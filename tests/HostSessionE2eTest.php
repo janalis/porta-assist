@@ -58,7 +58,7 @@ final class HostSessionE2eTest extends TestCase
         $path = (string) \realpath($project->path('src/A.php'));
 
         $this->runIde($project, $path, [
-            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
+            100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path, $project): void {
                 $invite = $this->invited($ide);
 
                 // A wrong token is not even asked about.
@@ -86,6 +86,13 @@ final class HostSessionE2eTest extends TestCase
                 $this->assertTrue($this->expect('file')['missing'], 'nor its settings');
                 $this->assertTrue($this->expect('file')['missing'], 'nor a file the listing never offered');
                 $this->expect('fetched');
+                // Nor through open, which handed the whole file over — and,
+                // opened, an edit guest's op and save could rewrite it.
+                $this->say(['t' => 'open', 'path' => 'node_modules/x.js']);
+                $refused = $this->expect('error');
+                $this->assertSame('node_modules/x.js', $refused['path'], 'open refuses a file the listing never offered');
+                $this->say(['t' => 'save', 'path' => 'node_modules/x.js']);
+                $this->assertSame('never listed', (string) \file_get_contents($project->path('node_modules/x.js')), 'and a save of one it never opened writes nothing');
 
                 $this->say(['t' => 'open', 'path' => 'src/A.php']);
                 $opened = $this->expect('opened');

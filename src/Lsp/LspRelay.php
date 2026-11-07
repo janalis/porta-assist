@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Porta\AssistPlugin\Lsp;
 
 use Porta\AssistPlugin\Net\Connection;
+use Porta\Lsp\Uri;
 use Porta\Support\JsonRpcTransport;
 
 /**
@@ -41,7 +42,7 @@ final readonly class LspRelay
         private Connection $guest,
         private JsonRpcTransport $server,
         string $guestRoot,
-        string $hostRoot,
+        private string $hostRoot,
         private ?array $initializationOptions,
         private \Closure $readOnly,
     ) {
@@ -129,6 +130,12 @@ final readonly class LspRelay
     {
         $params['processId'] = null;
         $params['initializationOptions'] = $this->initializationOptions;
+        // Set, not rewritten: a root the guest named outside its copy passed
+        // through as it was, and the host's server indexed that folder — the
+        // host's disk past the share, read back through hover and symbols.
+        $params['rootUri'] = Uri::fromPath($this->hostRoot);
+        $params['rootPath'] = $this->hostRoot;
+        $params['workspaceFolders'] = [['uri' => Uri::fromPath($this->hostRoot), 'name' => \basename($this->hostRoot)]];
 
         return $params;
     }
