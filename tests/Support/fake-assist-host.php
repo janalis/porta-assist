@@ -61,7 +61,7 @@ register_shutdown_function($certificate->forget(...));
 // functions: the key above stayed in the temp dir, one per test, for good.
 // Exiting on it runs them.
 pcntl_async_signals(true);
-pcntl_signal(SIGTERM, static fn () => exit(0));
+pcntl_signal(SIGTERM, static fn (): never => exit(0));
 $transit = (string) getenv('PORTA_FAKE_TRANSIT');
 // @mago-expect lint:no-literal-password -- the fake host's token: the tests know it, and it guards nothing
 $token = '00112233445566778899aabbccddeeff';
