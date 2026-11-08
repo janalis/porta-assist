@@ -75,7 +75,9 @@ final class RendezvousTest extends TestCase
         $this->assertNotSame($sealed, $key->seal('invite', 'the host'), 'a nonce of its own each time');
         $this->assertNull($key->open('ack', $sealed), 'another purpose');
         $this->assertNull(new SessionKey(\random_bytes(32))->open('invite', $sealed), 'another key');
-        $this->assertNull($key->open('invite', \substr($sealed, offset: 0, length: -1).'x'), 'tampered with');
+        // A bit flipped, not the byte replaced: one seal in 256 already ended
+        // in the 'x' that replaced it, opened, and failed the test.
+        $this->assertNull($key->open('invite', \substr($sealed, offset: 0, length: -1).\chr(\ord($sealed[-1]) ^ 1)), 'tampered with');
         $this->assertNull($key->open('invite', 'short'));
         $this->assertNull($key->open('invite', \str_repeat('x', times: 20)), 'a nonce and less than a seal: nothing, not an error');
         $this->assertSame('', $key->open('invite', $key->seal('invite', '')), 'nothing sealed is the shortest seal, and opens');
