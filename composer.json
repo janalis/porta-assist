@@ -22,6 +22,10 @@
             "commands": {
                 "assist": "Porta\\AssistPlugin\\Console\\JoinCommand",
                 "assist-lsp": "Porta\\AssistPlugin\\Console\\LanguageServerCommand"
+            },
+            "store": {
+                "title": "Assist",
+                "category": "ai"
             }
         }
     }
