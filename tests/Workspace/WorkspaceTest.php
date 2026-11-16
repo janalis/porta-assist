@@ -172,21 +172,21 @@ final class WorkspaceTest extends TestCase
     public function testTheMirrorFollowsTheHostsListAndWritesOnlyInsideItself(): void
     {
         $home = new TempProject([]);
-        $mirror = Mirror::under($home->dir, 'abc', 'shop');
+        $mirror = Mirror::under($home->dir, id: 'abc', name: 'shop');
         $this->assertSame((string) \realpath($home->path('.porta/assist/abc/shop')), $mirror->root, 'named as the project, for the tree\'s title');
         $this->assertSame(0o700, \fileperms($mirror->root) & 0o777);
-        $this->assertSame($mirror->root, Mirror::under($home->dir, 'abc', 'shop')->root, 'the same copy the next time');
+        $this->assertSame($mirror->root, Mirror::under($home->dir, id: 'abc', name: 'shop')->root, 'the same copy the next time');
         foreach (['', '.', '..', 'a/b', 'a\\b', "a\0b"] as $name) {
-            $this->assertStringEndsWith('/abc/project', Mirror::under($home->dir, 'abc', $name)->root, \json_encode($name, \JSON_THROW_ON_ERROR));
+            $this->assertStringEndsWith('/abc/project', Mirror::under($home->dir, id: 'abc', name: $name)->root, \json_encode($name, \JSON_THROW_ON_ERROR));
         }
 
-        $this->assertTrue($mirror->write('src/A.php', 'same'));
+        $this->assertTrue($mirror->write('src/A.php', content: 'same'));
         $this->assertSame(0o755 & ~\umask(), \fileperms($mirror->root.'/src') & 0o777, 'a folder made for it is an ordinary one');
-        $this->assertTrue($mirror->write('old.php', 'gone soon'));
-        $this->assertTrue($mirror->write('stale.php', 'old'));
-        $this->assertFalse($mirror->write('../escape.php', 'x'));
-        $this->assertFalse($mirror->write('.porta.json', '{}'), 'the copy\'s own settings are not the host\'s to write');
-        $this->assertFalse($mirror->write('old.php/inside.php', 'x'), 'a file holds the folder\'s name: nothing to write into');
+        $this->assertTrue($mirror->write('old.php', content: 'gone soon'));
+        $this->assertTrue($mirror->write('stale.php', content: 'old'));
+        $this->assertFalse($mirror->write('../escape.php', content: 'x'));
+        $this->assertFalse($mirror->write('.porta.json', content: '{}'), 'the copy\'s own settings are not the host\'s to write');
+        $this->assertFalse($mirror->write('old.php/inside.php', content: 'x'), 'a file holds the folder\'s name: nothing to write into');
         \mkdir($mirror->root.'/.porta');
         \file_put_contents($mirror->root.'/.porta/assist-session.json', data: '{}');
 

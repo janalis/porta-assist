@@ -125,7 +125,7 @@ final class WebSocket
             $this->waiting = $done;
         };
         /** @var string|null $message */
-        $message = null === $timeout ? FiberWait::for($wait) : FiberWait::within($timeout, $wait, null);
+        $message = null === $timeout ? FiberWait::for($wait) : FiberWait::within($timeout, $wait, timedOut: null);
         // A timeout answered instead: nothing waits any more.
         $this->waiting = null;
 
@@ -151,7 +151,7 @@ final class WebSocket
             return;
         }
         ++$this->unanswered;
-        $this->writer->write(Frames::encode(Frames::PING, '', \random_bytes(4)));
+        $this->writer->write(Frames::encode(Frames::PING, payload: '', mask: \random_bytes(4)));
     }
 
     /** Why the socket closed — null while it is open. */
@@ -239,7 +239,7 @@ final class WebSocket
                     }
                 }));
             },
-            false,
+            timedOut: false,
         );
         EventLoop::cancel($watcher);
 

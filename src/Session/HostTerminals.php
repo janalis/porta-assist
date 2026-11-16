@@ -36,7 +36,7 @@ final class HostTerminals
     {
         $runs = $this->api->runs();
         if (\array_key_exists($id, $this->shared)) {
-            $runs->watch($id, null);
+            $runs->watch($id, onOutput: null);
             unset($this->shared[$id]);
             ($this->broadcast)(['t' => 'terminal-end', 'id' => $id]);
 
@@ -70,8 +70,8 @@ final class HostTerminals
     /** @param array<string, mixed> $message keys a guest typed */
     public function input(Guest $guest, array $message): void
     {
-        $id = Wire::string($message, 'id');
-        $bytes = \base64_decode(Wire::string($message, 'data'), strict: true);
+        $id = Wire::string($message, key: 'id');
+        $bytes = \base64_decode(Wire::string($message, key: 'data'), strict: true);
         if ($guest->typing && \array_key_exists($id, $this->shared) && false !== $bytes) {
             $this->api->runs()->write($id, $bytes);
         }
@@ -81,7 +81,7 @@ final class HostTerminals
     public function stop(): void
     {
         foreach (\array_keys($this->shared) as $id) {
-            $this->api->runs()->watch($id, null);
+            $this->api->runs()->watch($id, onOutput: null);
         }
         $this->shared = [];
     }

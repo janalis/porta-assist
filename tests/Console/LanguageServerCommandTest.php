@@ -118,7 +118,7 @@ final class LanguageServerCommandTest extends TestCase
         $project = new TempProject([]);
         $root = $this->copy($project);
 
-        [$tester, $sent] = $this->bridge($root, 'php', [
+        [$tester, $sent] = $this->bridge($root, language: 'php', frames: [
             ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => []],
             ['jsonrpc' => '2.0', 'method' => 'initialized', 'params' => []],
             ['jsonrpc' => '2.0', 'method' => 'exit'],
@@ -132,7 +132,7 @@ final class LanguageServerCommandTest extends TestCase
     {
         $project = new TempProject([]);
         $root = $this->copy($project);
-        [$tester] = $this->bridge($root, 'cobol', []);
+        [$tester] = $this->bridge($root, language: 'cobol', frames: []);
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('The host runs no cobol language server for this session (language)', $tester->getErrorOutput());
 
@@ -140,11 +140,11 @@ final class LanguageServerCommandTest extends TestCase
         // start to — a port closed by this test could be taken by a parallel one.
         $port = 1;
         $gone = $this->store(new TempProject([]), new Invite(new SessionKey(\str_repeat('k', times: 32)), '127.0.0.1:'.$port, \str_repeat('0', times: 64), \str_repeat('ab', times: 16)), []);
-        [$tester] = $this->bridge($gone, 'php', []);
+        [$tester] = $this->bridge($gone, language: 'php', frames: []);
         $this->assertStringContainsString('127.0.0.1:'.$port.' refused the connection', $tester->getErrorOutput());
 
         $stranger = new TempProject([]);
-        [$tester] = $this->bridge($stranger->dir, 'php', []);
+        [$tester] = $this->bridge($stranger->dir, language: 'php', frames: []);
         $this->assertSame(1, $tester->getStatusCode());
         $this->assertStringContainsString('is not a copy of a shared project', $tester->getErrorOutput());
     }
@@ -152,7 +152,7 @@ final class LanguageServerCommandTest extends TestCase
     public function testAHostThatTurnsItAwayOrNeverAnswersIsNoServer(): void
     {
         foreach (['deny:host' => '(host)', 'silent' => '()'] as $mode => $says) {
-            [$tester] = $this->bridge($this->store(new TempProject([]), $this->host($mode)), 'php', []);
+            [$tester] = $this->bridge($this->store(new TempProject([]), $this->host($mode)), language: 'php', frames: []);
             $this->assertSame(1, $tester->getStatusCode(), $mode);
             $this->assertStringContainsString('The host runs no php language server for this session '.$says, $tester->getErrorOutput(), $mode);
         }
@@ -162,7 +162,7 @@ final class LanguageServerCommandTest extends TestCase
     {
         $root = $this->store(new TempProject([]), $this->host('lsp-mute'));
 
-        [$tester] = $this->bridge($root, 'php', [], ping: 0.1, silence: 0.6);
+        [$tester] = $this->bridge($root, language: 'php', frames: [], ping: 0.1, silence: 0.6);
 
         $this->assertSame(1, $tester->getStatusCode(), 'the editor sees its server exit, and starts it again');
         $this->assertStringContainsString('The host stopped answering.', $tester->getErrorOutput());
@@ -176,7 +176,7 @@ final class LanguageServerCommandTest extends TestCase
         $this->assertSame(0, GuestSession::channel($root));
         // The host waits on a few channels past the last one used: a channel
         // taken and never used is stepped over.
-        [$tester, $sent] = $this->bridge($root, 'php', [
+        [$tester, $sent] = $this->bridge($root, language: 'php', frames: [
             ['jsonrpc' => '2.0', 'id' => 7, 'method' => 'initialize', 'params' => []],
             ['jsonrpc' => '2.0', 'method' => 'exit'],
         ]);
@@ -196,7 +196,7 @@ final class LanguageServerCommandTest extends TestCase
         $port = self::firstLine($this->relay);
         $project = $this->store(new TempProject([]), new Invite(new SessionKey(\str_repeat('k', times: 32)), '127.0.0.1:'.$port, \str_repeat('0', times: 64), \str_repeat('ab', times: 16)), []);
 
-        [$tester] = $this->bridge($project, 'php', []);
+        [$tester] = $this->bridge($project, language: 'php', frames: []);
 
         $this->assertStringContainsString('says <href=https://evil.example>click</>', $tester->getErrorOutput(), 'the tag shown as written');
     }

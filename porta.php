@@ -54,33 +54,41 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $this->api = $api;
         $api->registerSetting(
             'mailbox',
-            'Mailbox server',
-            'text',
-            Mailbox::PUBLIC,
+            label: 'Mailbox server',
+            kind: 'text',
+            default: Mailbox::PUBLIC,
             hint: 'where a host and a guest with the same code meet — magic-wormhole\'s public one, or one of your own; guests name the same with --mailbox',
         );
         $api->registerSetting(
             'transit',
-            'Transit relay',
-            'text',
-            Transit::PUBLIC,
+            label: 'Transit relay',
+            kind: 'text',
+            default: Transit::PUBLIC,
             hint: 'host:port of the relay every connection goes through, encrypted end to end — magic-wormhole\'s public one, or one of your own',
         );
-        $api->registerSetting('maxGuests', 'Most guests at once', 'int', 8, hint: 'past eight, the colours that tell carets apart repeat — the names beside them do not', min: 1, max: 32);
-        $api->registerSetting('maxFileSize', 'Largest file to share (MB)', 'int', 4, hint: 'a bigger one stays on the host', min: 1, max: 64);
+        $api->registerSetting(
+            'maxGuests',
+            label: 'Most guests at once',
+            kind: 'int',
+            default: 8,
+            hint: 'past eight, the colours that tell carets apart repeat — the names beside them do not',
+            min: 1,
+            max: 32,
+        );
+        $api->registerSetting('maxFileSize', label: 'Largest file to share (MB)', kind: 'int', default: 4, hint: 'a bigger one stays on the host', min: 1, max: 64);
 
-        $api->registerCommand('share', 'Assist: Share This Project', $this->share(...));
-        $api->registerCommand('stop', 'Assist: Stop Sharing', $this->stop(...));
-        $api->registerCommand('join', 'Assist: Join a Session…', $this->join(...));
-        $api->registerCommand('follow', 'Assist: Follow Someone', $this->pickToFollow(...));
-        $api->registerCommand('participants', 'Assist: Participants', $this->participants(...));
-        $api->registerCommand('leave', 'Assist: Leave the Session', $this->leave(...));
-        $api->registerCommand('share_terminal', 'Assist: Share a Terminal', $this->shareTerminal(...));
-        $api->registerCommand('share_server', 'Assist: Share a Server', $this->shareServer(...));
-        $api->registerCommand('servers', 'Assist: Shared Servers', $this->servers(...));
-        $api->registerCommand('run', 'Assist: Run on the Host…', $this->runOnHost(...));
-        $api->registerCommand('focus', 'Assist: Ask Everyone to Follow Me', $this->focus(...));
-        $api->registerCommand('debugger', 'Assist: Host\'s Debugger', $this->hostDebugger(...));
+        $api->registerCommand('share', label: 'Assist: Share This Project', handler: $this->share(...));
+        $api->registerCommand('stop', label: 'Assist: Stop Sharing', handler: $this->stop(...));
+        $api->registerCommand('join', label: 'Assist: Join a Session…', handler: $this->join(...));
+        $api->registerCommand('follow', label: 'Assist: Follow Someone', handler: $this->pickToFollow(...));
+        $api->registerCommand('participants', label: 'Assist: Participants', handler: $this->participants(...));
+        $api->registerCommand('leave', label: 'Assist: Leave the Session', handler: $this->leave(...));
+        $api->registerCommand('share_terminal', label: 'Assist: Share a Terminal', handler: $this->shareTerminal(...));
+        $api->registerCommand('share_server', label: 'Assist: Share a Server', handler: $this->shareServer(...));
+        $api->registerCommand('servers', label: 'Assist: Shared Servers', handler: $this->servers(...));
+        $api->registerCommand('run', label: 'Assist: Run on the Host…', handler: $this->runOnHost(...));
+        $api->registerCommand('focus', label: 'Assist: Ask Everyone to Follow Me', handler: $this->focus(...));
+        $api->registerCommand('debugger', label: 'Assist: Host\'s Debugger', handler: $this->hostDebugger(...));
         $api->addMenuItem('share', fn (): bool => null === $this->guest);
         $api->addMenuItem('join', fn (): bool => null === $this->host && null === $this->guest);
         $api->addMenuItem('follow', fn (): bool => [] !== $this->peers());
@@ -99,7 +107,7 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         // is reached through `porta assist-lsp`, which the host answers.
         $session = GuestSession::load($api->projectRoot());
         foreach (null === $session ? [] : $session['languages'] as $language) {
-            $api->registerLanguageServer($language, 'assist', static fn (): array => [\PHP_BINARY, PortaBinary::path(), 'assist-lsp', $language], role: ServerRole::Relayed);
+            $api->registerLanguageServer($language, name: 'assist', resolveCommand: static fn (): array => [\PHP_BINARY, PortaBinary::path(), 'assist-lsp', $language], role: ServerRole::Relayed);
         }
 
         $api->onReady($this->rejoin(...));
@@ -171,12 +179,12 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
         $this->host->start((string) $api->setting('mailbox'), (string) $api->setting('transit'), function (Code|string $started) use ($api): void {
             if (\is_string($started)) {
                 $this->host = null;
-                $api->notify($api->trans('Cannot share: %why%', ['%why%' => $started]), ToastSeverity::Error, 8.0, slot: 'assist');
+                $api->notify($api->trans('Cannot share: %why%', ['%why%' => $started]), ToastSeverity::Error, seconds: 8.0, slot: 'assist');
 
                 return;
             }
             $api->copyToClipboard('porta assist '.$started->text());
-            $api->notify($api->trans('Sharing. The code to read out: %code% (copied: porta assist %code%)', ['%code%' => $started->text()]), ToastSeverity::Success, 15.0, slot: 'assist');
+            $api->notify($api->trans('Sharing. The code to read out: %code% (copied: porta assist %code%)', ['%code%' => $started->text()]), ToastSeverity::Success, seconds: 15.0, slot: 'assist');
             $api->refreshStatusSegments();
         });
     }
@@ -276,8 +284,8 @@ return new class('assist') extends AbstractPlugin implements DisposablePlugin {
                 $role = Role::tryFrom($action);
                 match (true) {
                     null !== $role => $host->setRole($peer, $role),
-                    \in_array($action, ['typing', 'running', 'debugging'], strict: true) => $host->permit($peer, $action, true),
-                    \in_array($action, ['no-typing', 'no-running', 'no-debugging'], strict: true) => $host->permit($peer, \substr($action, offset: 3), false),
+                    \in_array($action, ['typing', 'running', 'debugging'], strict: true) => $host->permit($peer, $action, allowed: true),
+                    \in_array($action, ['no-typing', 'no-running', 'no-debugging'], strict: true) => $host->permit($peer, \substr($action, offset: 3), allowed: false),
                     'remove' === $action => $host->remove($peer),
                     default => $this->follow()->start($peer, $participant['name']),
                 };

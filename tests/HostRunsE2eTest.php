@@ -38,7 +38,7 @@ final class HostRunsE2eTest extends TestCase
     /** Pick, in the host's participants, $name and the action $downs rows below the first. */
     private function permit(Tui $tui, VirtualTerminal $terminal, Ide $ide, string $name, string $action, int $downs): void
     {
-        $this->command($ide, 'assist:participants');
+        $this->command($ide, id: 'assist:participants');
         $this->awaitPainted($tui, $terminal, $name);
         $terminal->simulateInput(self::DOWN."\r");
         $this->awaitPainted($tui, $terminal, $action);
@@ -55,21 +55,21 @@ final class HostRunsE2eTest extends TestCase
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
                 $invite = $this->invited($ide);
-                $this->askIn($invite, 'Ana');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->askIn($invite, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $this->expect('welcome');
 
                 // Offered, but not hers to run yet.
                 $this->say(['t' => 'runs']);
                 $offer = $this->expect('runs');
-                $this->assertContains(self::LABEL, Wire::strings($offer, 'labels'));
+                $this->assertContains(self::LABEL, Wire::strings($offer, key: 'labels'));
                 $this->assertFalse($offer['allowed']);
                 $this->say(['t' => 'run', 'label' => self::LABEL]);
                 $this->assertSame(['t' => 'run-refused', 'label' => self::LABEL, 'reason' => 'not-allowed'], $this->expect('run-refused'));
 
                 // Let: she runs it, everyone sees it run, and the host is told.
-                $this->permit($tui, $terminal, $ide, 'Ana', 'Let them run the run configurations', downs: 5);
+                $this->permit($tui, $terminal, $ide, name: 'Ana', action: 'Let them run the run configurations', downs: 5);
                 $this->assertTrue($this->expect('running')['allowed']);
                 $this->say(['t' => 'runs']);
                 $this->assertTrue($this->expect('runs')['allowed']);
@@ -85,7 +85,7 @@ final class HostRunsE2eTest extends TestCase
                         if ('terminal-out' !== $message['t']) {
                             continue;
                         }
-                        $printed .= \base64_decode(Wire::string($message, 'data'), strict: true);
+                        $printed .= \base64_decode(Wire::string($message, key: 'data'), strict: true);
                         unset($this->inbox[$i]);
                     }
 
@@ -100,11 +100,11 @@ final class HostRunsE2eTest extends TestCase
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'terminal-end' === $m['t'])), 'not unshared by a second run');
 
                 // Not any more.
-                $this->permit($tui, $terminal, $ide, 'Ana', 'Stop them running the run configurations', downs: 6);
+                $this->permit($tui, $terminal, $ide, name: 'Ana', action: 'Stop them running the run configurations', downs: 6);
                 $this->assertFalse($this->expect('running')['allowed']);
                 $this->say(['t' => 'run', 'label' => self::LABEL]);
                 $this->assertSame('not-allowed', $this->expect('run-refused')['reason']);
-                $this->command($ide, 'assist:stop');
+                $this->command($ide, id: 'assist:stop');
                 $this->hangUp();
             },
         ]);
@@ -120,22 +120,22 @@ final class HostRunsE2eTest extends TestCase
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
                 $invite = $this->invited($ide);
-                $this->askIn($invite, 'Ana');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->askIn($invite, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $welcome = $this->expect('welcome');
-                $this->permit($tui, $terminal, $ide, 'Ana', 'Let them run the run configurations', downs: 5);
+                $this->permit($tui, $terminal, $ide, name: 'Ana', action: 'Let them run the run configurations', downs: 5);
                 $this->assertTrue($this->expect('running')['allowed']);
                 // Let type too; let debug, then not.
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertInstanceOf(HostSession::class, $host);
-                $host->permit(Wire::string($welcome, 'peer'), 'typing', true);
-                $host->permit(Wire::string($welcome, 'peer'), 'debugging', true);
-                $host->permit(Wire::string($welcome, 'peer'), 'debugging', false);
+                $host->permit(Wire::string($welcome, key: 'peer'), right: 'typing', allowed: true);
+                $host->permit(Wire::string($welcome, key: 'peer'), right: 'debugging', allowed: true);
+                $host->permit(Wire::string($welcome, key: 'peer'), right: 'debugging', allowed: false);
                 $this->assertTrue($this->expect('typing')['allowed']);
                 $this->assertSame([true, false], [$this->expect('debugging')['allowed'], $this->expect('debugging')['allowed']]);
                 $debugging = static function () use ($host, $welcome): bool {
-                    $guest = Probe::get($host, 'guests')[Wire::string($welcome, 'peer')] ?? null;
+                    $guest = Probe::get($host, property: 'guests')[Wire::string($welcome, key: 'peer')] ?? null;
                     Assert::assertInstanceOf(Guest::class, $guest, 'she is in');
 
                     return $guest->debugging;
@@ -153,18 +153,18 @@ final class HostRunsE2eTest extends TestCase
 
                 // Gone, the host seeing it go — then back.
                 $this->dropPeer();
-                $this->await(static fn (): bool => self::toasted($ide, 'Ana left'), what: 'the host to see her go');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Ana left'), what: 'the host to see her go');
                 $this->dial($invite);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'ticket' => $welcome['ticket']]);
                 $this->expect('welcome');
                 $this->assertTrue($this->expect('running')['allowed'], 'kept while she was away');
                 $this->assertTrue($this->expect('typing')['allowed'], 'each right she had');
-                $this->await(static fn (): bool => self::toasted($ide, 'Ana joined and can edit'), what: 'her welcome back seen through to its end');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Ana joined and can edit'), what: 'her welcome back seen through to its end');
                 $this->say(['t' => 'open', 'path' => 'nope.php']);
                 $this->expect('error'); // answered in order: the welcome's rights came before it
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'debugging' === $m['t'])), 'and only those: one taken back is not given again');
                 $this->assertFalse($debugging(), 'not even quietly');
-                $this->command($ide, 'assist:stop');
+                $this->command($ide, id: 'assist:stop');
                 $this->hangUp();
             },
         ]);

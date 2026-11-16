@@ -13,11 +13,11 @@ final class TextDiffTest extends TestCase
 {
     public function testOneCaretTypingIsOneSmallChange(): void
     {
-        $this->assertSame([5, 'X', 6], TextDiff::between('hello world', 'helloX world')->toWire());
-        $this->assertSame([11], TextDiff::between('hello world', 'hello world')->toWire(), 'nothing changed');
-        $this->assertSame(['abc'], TextDiff::between('', 'abc')->toWire());
-        $this->assertSame([-3], TextDiff::between('abc', '')->toWire());
-        $this->assertSame([2, -1], TextDiff::between('aaa', 'aa')->toWire(), 'the common start and end do not overlap');
+        $this->assertSame([5, 'X', 6], TextDiff::between('hello world', new: 'helloX world')->toWire());
+        $this->assertSame([11], TextDiff::between('hello world', new: 'hello world')->toWire(), 'nothing changed');
+        $this->assertSame(['abc'], TextDiff::between('', new: 'abc')->toWire());
+        $this->assertSame([-3], TextDiff::between('abc', new: '')->toWire());
+        $this->assertSame([2, -1], TextDiff::between('aaa', new: 'aa')->toWire(), 'the common start and end do not overlap');
     }
 
     public function testCaretsFarApartAreSeveralChangesNotOne(): void
@@ -36,25 +36,25 @@ final class TextDiffTest extends TestCase
 
         $this->assertSame($new, $operation->apply($old));
         $this->assertSame([5, -5, 10, "you\nnew", -2, 10, '!'], $operation->toWire());
-        $this->assertSame("\n\nx", TextDiff::between("\n", "\n\nx")->apply("\n"));
-        $this->assertSame("b\n", TextDiff::between("a\nb\n", "b\n")->apply("a\nb\n"), 'a line gone at the start');
+        $this->assertSame("\n\nx", TextDiff::between("\n", new: "\n\nx")->apply("\n"));
+        $this->assertSame("b\n", TextDiff::between("a\nb\n", new: "b\n")->apply("a\nb\n"), 'a line gone at the start');
     }
 
     public function testACutNeverFallsInsideACharacter(): void
     {
         // é is C3 A9, è is C3 A8: they share a first byte, and a cut after
         // it would leave the caret mid-character.
-        $this->assertSame([1, 'è', -2, 1], TextDiff::between('aéb', 'aèb')->toWire());
-        $this->assertSame([1, 'è', -2], TextDiff::between('aé', 'aè')->toWire(), 'at the end too');
-        $this->assertSame(['ü', -2, 1], TextDiff::between('éa', 'üa')->toWire(), 'and at the start');
+        $this->assertSame([1, 'è', -2, 1], TextDiff::between('aéb', new: 'aèb')->toWire());
+        $this->assertSame([1, 'è', -2], TextDiff::between('aé', new: 'aè')->toWire(), 'at the end too');
+        $this->assertSame(['ü', -2, 1], TextDiff::between('éa', new: 'üa')->toWire(), 'and at the start');
         // é is C3 A9 and ة is D8 A9: their common END is a continuation byte.
-        $this->assertSame([1, 'ة', -2], TextDiff::between('aé', 'aة')->toWire(), 'nor inside one at the end');
+        $this->assertSame([1, 'ة', -2], TextDiff::between('aé', new: 'aة')->toWire(), 'nor inside one at the end');
     }
 
     /** The lines kept are as many as can be: two lines deleted, one inserted, the rest kept — not a costlier script that also reaches it. */
     public function testTheLineScriptIsTheShortest(): void
     {
-        $this->assertSame([-4, 2, "c\n", 3, "\nc", 1], TextDiff::between("b\nb\na\nb\na\n", "a\nc\nb\na\nc\n")->toWire());
+        $this->assertSame([-4, 2, "c\n", 3, "\nc", 1], TextDiff::between("b\nb\na\nb\na\n", new: "a\nc\nb\na\nc\n")->toWire());
     }
 
     /** At exactly the edit distance the middle is still diffed line by line: the one line both keep is kept. */

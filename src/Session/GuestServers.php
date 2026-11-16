@@ -46,10 +46,10 @@ final class GuestServers
     public function receive(array $message): void
     {
         match ($message['t']) {
-            'server' => $this->listen(Wire::int($message, 'port')),
-            'server-end' => $this->endAnnounced(Wire::int($message, 'port')),
-            'tunnel-data' => ($this->tunnels[Wire::int($message, 'conn', -1)] ?? null)?->write((string) \base64_decode(Wire::string($message, 'data'), strict: true)),
-            default => $this->closed(Wire::int($message, 'conn', -1)),
+            'server' => $this->listen(Wire::int($message, key: 'port')),
+            'server-end' => $this->endAnnounced(Wire::int($message, key: 'port')),
+            'tunnel-data' => ($this->tunnels[Wire::int($message, key: 'conn', default: -1)] ?? null)?->write((string) \base64_decode(Wire::string($message, key: 'data'), strict: true)),
+            default => $this->closed(Wire::int($message, key: 'conn', default: -1)),
         };
     }
 

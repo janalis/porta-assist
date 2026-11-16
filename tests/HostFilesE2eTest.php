@@ -55,11 +55,11 @@ final class HostFilesE2eTest extends TestCase
     private function editor(Tui $tui, VirtualTerminal $terminal, Ide $ide): string
     {
         $invite = $this->invited($ide);
-        $this->askIn($invite, 'Ana');
-        $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+        $this->askIn($invite, name: 'Ana');
+        $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
         $terminal->simulateInput("\r");
 
-        return Wire::string($this->expect('welcome'), 'peer');
+        return Wire::string($this->expect('welcome'), key: 'peer');
     }
 
     private function emit(Ide $ide, object $event): void
@@ -84,7 +84,7 @@ final class HostFilesE2eTest extends TestCase
                 // was a whole scan on the host's UI loop, as many as a guest sent.
                 \file_put_contents($root.'/fresh.txt', data: 'new');
                 $this->say(['t' => 'manifest']);
-                $this->assertNotContains('fresh.txt', \array_column(Wire::list($this->expect('manifest'), 'files'), 0), 'not scanned again');
+                $this->assertNotContains('fresh.txt', \array_column(Wire::list($this->expect('manifest'), key: 'files'), 0), 'not scanned again');
                 \unlink($root.'/fresh.txt');
                 // Listed, then gone from disk before the next rescan: offered, and still not there to open.
                 \unlink($root.'/grows.txt');
@@ -103,12 +103,12 @@ final class HostFilesE2eTest extends TestCase
                 $this->assertFileDoesNotExist($root.'/src/Bad.php', 'not base64: nothing written');
                 $this->say(['t' => 'write', 'path' => 'src/deep/er/New.php', 'data' => \base64_encode('<?php // deep')]);
                 $this->say(['t' => 'fetch', 'paths' => ['src/deep/er/New.php']]);
-                $this->assertSame('<?php // deep', \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true), 'its folders made for it');
+                $this->assertSame('<?php // deep', \base64_decode(Wire::string($this->expect('file'), key: 'data'), strict: true), 'its folders made for it');
                 $this->expect('fetched');
                 // Where no listing looks, what a guest wrote is still the others' to fetch.
                 $this->say(['t' => 'write', 'path' => 'node_modules/w.js', 'data' => \base64_encode('mine')]);
                 $this->say(['t' => 'fetch', 'paths' => ['node_modules/w.js']]);
-                $this->assertSame('mine', \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true));
+                $this->assertSame('mine', \base64_decode(Wire::string($this->expect('file'), key: 'data'), strict: true));
                 $this->expect('fetched');
 
                 // What the listing never offered is not a guest's to touch: not
@@ -136,7 +136,7 @@ final class HostFilesE2eTest extends TestCase
                 $this->assertFileDoesNotExist($root.'/src/Moved.php');
                 $terminal->simulateInput('!');
                 $this->say(['t' => 'delete', 'path' => 'src/A.php']);
-                $this->assertStringContainsString('unsaved changes', Wire::string($this->expect('error'), 'message'));
+                $this->assertStringContainsString('unsaved changes', Wire::string($this->expect('error'), key: 'message'));
 
                 // Changed under the editor: listed again once it settles.
                 \file_put_contents($root.'/notes.txt', data: 'changed on disk');
@@ -179,12 +179,12 @@ final class HostFilesE2eTest extends TestCase
                 $this->expect('fetched');
                 \file_put_contents($root.'/grows.txt', \str_repeat('g', $largest));
                 $this->say(['t' => 'fetch', 'paths' => ['grows.txt']]);
-                $this->assertSame($largest, \strlen((string) \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true)));
+                $this->assertSame($largest, \strlen((string) \base64_decode(Wire::string($this->expect('file'), key: 'data'), strict: true)));
                 $this->expect('fetched');
 
                 // Stopped while a change under the editor settles: the rescan goes with the session.
                 $this->emit($ide, new WorkingTreeChanged());
-                $this->command($ide, 'assist:stop');
+                $this->command($ide, id: 'assist:stop');
                 $this->assertSame(['t' => 'bye', 'reason' => 'ended'], $this->expect('bye'));
                 $this->hangUp();
             },
@@ -218,31 +218,31 @@ final class HostFilesE2eTest extends TestCase
                 $this->awaitPainted($tui, $terminal, Glyphs::AGENT.' Codex');
 
                 // Everyone in the participants, and the host follows the guest.
-                $this->command($ide, 'assist:participants');
-                $this->awaitPainted($tui, $terminal, 'Codex');
+                $this->command($ide, id: 'assist:participants');
+                $this->awaitPainted($tui, $terminal, needle: 'Codex');
                 $terminal->simulateInput("\r");
-                $this->awaitPainted($tui, $terminal, 'Follow Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Follow Ana');
                 $terminal->simulateInput("\r");
-                $this->await(static fn (): bool => self::toasted($ide, 'Following Ana'), what: 'following');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Following Ana'), what: 'following');
                 // In a file with no caret in it: the host goes to its top, and a
                 // look at its own caret there is no move of the user's.
                 $this->say(['t' => 'presence', 'path' => 'README.md', 'line' => -1, 'column' => 0]);
                 $this->await(fn (): bool => $root.'/README.md' === $this->api($ide)->activeFile(), what: 'the file Ana is in');
                 $this->assertSame(0, $this->api($ide)->caretPosition()['line'] ?? null);
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertInstanceOf(HostSession::class, $host);
-                Probe::invoke($host, 'caret');
+                Probe::invoke($host, method: 'caret');
                 $this->say(['t' => 'presence', 'path' => 'README.md', 'line' => 1, 'column' => 3, 'top' => 1]);
                 $this->await(fn (): bool => 1 === ($this->api($ide)->caretPosition()['line'] ?? null), what: 'her caret, still followed');
                 $this->assertSame(['line' => 1, 'column' => 3, 'top' => 1, 'segment' => 0, 'sticky' => []], $this->api($ide)->caretPosition(), 'at her caret, scrolled as she is');
                 $terminal->simulateInput(self::DOWN);
-                $this->await(static fn (): bool => self::toasted($ide, 'Stopped following Ana'), what: 'the user moved on');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Stopped following Ana'), what: 'the user moved on');
 
                 // Following the host's agent: where it goes, the host's editor goes.
-                $this->command($ide, 'assist:participants');
-                $this->awaitPainted($tui, $terminal, 'Codex');
+                $this->command($ide, id: 'assist:participants');
+                $this->awaitPainted($tui, $terminal, needle: 'Codex');
                 $terminal->simulateInput(self::DOWN."\r");
-                $this->await(static fn (): bool => self::toasted($ide, 'Following Claude'), what: 'following the agent');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Following Claude'), what: 'following the agent');
                 $this->emit($ide, new AgentActivity('claude', 'Claude', $root.'/src/A.php', AgentActivityKind::Editing, 0, 4, 10.0));
                 $this->await(fn (): bool => $root.'/src/A.php' === $this->api($ide)->activeFile(), what: 'the agent\'s file');
                 $this->await(
@@ -250,13 +250,13 @@ final class HostFilesE2eTest extends TestCase
                     what: 'its caret, on the first line too',
                 );
                 $this->emit($ide, new AgentLeft('claude'));
-                $this->await(static fn (): bool => self::toasted($ide, 'Stopped following Claude'), what: 'gone, not followed');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Stopped following Claude'), what: 'gone, not followed');
                 $this->assertSame('host~claude', $this->expect('left')['peer']);
                 $this->emit($ide, new AgentLeft('claude'));
 
                 // The guest's agent leaves, then the guest — and with it, anything of its own.
                 $this->say(['t' => 'presence', 'path' => 'src/A.php', 'line' => 0, 'column' => 2]);
-                $carets = static fn (): array => \array_keys(Probe::get($host, 'docs')['src/A.php']['text']->carets());
+                $carets = static fn (): array => \array_keys(Probe::get($host, property: 'docs')['src/A.php']['text']->carets());
                 $this->say(['t' => 'open', 'path' => 'nope.php']);
                 $this->expect('error'); // answered in order
                 $this->assertSame([$ana.'~codex', $ana], $carets());
@@ -264,9 +264,9 @@ final class HostFilesE2eTest extends TestCase
                 $this->say(['t' => 'agent', 'id' => 'other', 'name' => 'Other', 'path' => 'notes.txt', 'line' => -1, 'column' => 0]);
                 $this->say(['t' => 'presence', 'path' => 'notes.txt', 'line' => -1, 'column' => 0]);
                 $this->say(['t' => 'close', 'path' => 'src/A.php']);
-                $host->follow->start($ana, 'Ana');
+                $host->follow->start($ana, name: 'Ana');
                 $this->say(['t' => 'bye']);
-                $this->await(static fn (): bool => self::toasted($ide, 'Ana left'), what: 'Ana gone');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Ana left'), what: 'Ana gone');
                 $this->assertSame([], $carets(), 'no caret of hers, nor of her agent\'s, left in the text');
                 $this->assertNull($host->follow->target, 'not followed, gone');
                 $this->hangUp();
@@ -314,7 +314,7 @@ final class HostFilesE2eTest extends TestCase
                 $this->assertSame("<?php\necho 'a';\n// one!", $this->bufferText($ide, $path));
 
                 // Stopping tells the guest the session is over.
-                $this->command($ide, 'assist:stop');
+                $this->command($ide, id: 'assist:stop');
                 $this->assertSame('ended', $this->expect('bye')['reason']);
                 $this->hangUp();
             },
@@ -340,7 +340,7 @@ final class HostFilesE2eTest extends TestCase
                 foreach (['a.bin', 'b.bin', 'c.bin'] as $name) {
                     $file = $this->expect('file', timeout: 20.0);
                     $this->assertSame($name, $file['path']);
-                    $this->assertSame($big, \base64_decode(Wire::string($file, 'data'), strict: true));
+                    $this->assertSame($big, \base64_decode(Wire::string($file, key: 'data'), strict: true));
                 }
                 $this->expect('fetched');
                 $this->assertFalse($this->hungUp(), 'twelve megabytes of base64, and still connected');

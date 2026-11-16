@@ -189,7 +189,7 @@ final class HostSession
                             ? $this->api->trans('Someone tried the code and did not get in — the code is now %code%', ['%code%' => $code->text()])
                             : $this->api->trans('The code was taken at the mailbox server — the code is now %code%', ['%code%' => $code->text()]),
                         ToastSeverity::Warn,
-                        15.0,
+                        seconds: 15.0,
                         slot: 'assist',
                     );
                 }
@@ -201,7 +201,7 @@ final class HostSession
                 $this->rendezvous = null;
                 $done($why);
             },
-            fn (string $why) => $this->api->notify($this->api->trans('Lost the mailbox server (%why%) — trying again', ['%why%' => $why]), ToastSeverity::Warn, 8.0, slot: 'assist'),
+            fn (string $why) => $this->api->notify($this->api->trans('Lost the mailbox server (%why%) — trying again', ['%why%' => $why]), ToastSeverity::Warn, seconds: 8.0, slot: 'assist'),
             $this->accept(...),
         );
         $this->rendezvous->start();
@@ -454,11 +454,11 @@ final class HostSession
     /** @param array<string, mixed> $message the connection's first */
     private function hello(int $id, Connection $connection, array $message): void
     {
-        $name = Wire::text($message, 'name', max: 40);
-        $ticket = $this->tickets[Wire::string($message, 'ticket')] ?? null;
-        $token = Wire::string($message, 'token');
+        $name = Wire::text($message, key: 'name', max: 40);
+        $ticket = $this->tickets[Wire::string($message, key: 'ticket')] ?? null;
+        $token = Wire::string($message, key: 'token');
         $refusal = match (true) {
-            'hello' !== $message['t'] || Wire::VERSION !== Wire::int($message, 'v') => 'version',
+            'hello' !== $message['t'] || Wire::VERSION !== Wire::int($message, key: 'v') => 'version',
             null === $ticket && ('' === $this->token || !\hash_equals($this->token, $token)) => 'token',
             '' === $name => 'name',
             null === $ticket && \count($this->guests) >= (int) $this->api->setting('maxGuests') => 'full',
@@ -470,8 +470,8 @@ final class HostSession
             return;
         }
         match (true) {
-            'lsp' === Wire::string($message, 'channel') => $this->languageServer($id, $connection, $message, $ticket),
-            null !== $ticket => $this->admit($id, $connection, $ticket['id'], $ticket['name'], $ticket['role'], Wire::string($message, 'ticket')),
+            'lsp' === Wire::string($message, key: 'channel') => $this->languageServer($id, $connection, $message, $ticket),
+            null !== $ticket => $this->admit($id, $connection, $ticket['id'], $ticket['name'], $ticket['role'], Wire::string($message, key: 'ticket')),
             default => $this->ask($id, $connection, $name),
         };
     }
@@ -524,8 +524,8 @@ final class HostSession
     {
         unset($this->pending[$id], $this->pendingDoors[$id]);
         $intelligence = $this->api->codeIntelligence();
-        $server = $intelligence->languageServers()[Wire::string($message, 'language')] ?? null;
-        $guestRoot = Wire::string($message, 'root');
+        $server = $intelligence->languageServers()[Wire::string($message, key: 'language')] ?? null;
+        $guestRoot = Wire::string($message, key: 'root');
         if (null === $ticket || null === $server || '' === $guestRoot) {
             $refusal = match (true) {
                 null === $ticket => 'token',
@@ -662,26 +662,26 @@ final class HostSession
     {
         match ($message['t']) {
             'manifest' => $this->files->manifest($guest),
-            'fetch' => $this->files->fetch($guest, Wire::strings($message, 'paths')),
-            'open' => $this->open($guest, Wire::string($message, 'path')),
-            'close' => $this->close($guest, Wire::string($message, 'path')),
+            'fetch' => $this->files->fetch($guest, Wire::strings($message, key: 'paths')),
+            'open' => $this->open($guest, Wire::string($message, key: 'path')),
+            'close' => $this->close($guest, Wire::string($message, key: 'path')),
             'op' => $this->operation($guest, $message),
             'presence' => $this->guestCaret($guest, $message),
             'agent' => $this->guestAgent($guest, $message),
-            'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, 'id')),
+            'agentLeft' => $this->dropAgent($guest->id.'~'.Wire::string($message, key: 'id')),
             'terminal-in' => $this->terminals->input($guest, $message),
             'focus' => $this->focusOn($guest),
             'debug-vars', 'debug-children', 'debug-step' => $this->debug->receive($guest, $message),
             'runs' => $this->runs->offer($guest),
-            'run' => $this->runs->run($guest, Wire::string($message, 'label')),
+            'run' => $this->runs->run($guest, Wire::string($message, key: 'label')),
             'tunnel-open' => $this->servers->open($guest, $message),
             'tunnel-data' => $this->servers->data($guest, $message),
             'tunnel-close' => $this->servers->closed($guest, $message),
-            'save' => $this->save($guest, Wire::string($message, 'path')),
-            'write' => $this->files->write($guest, Wire::string($message, 'path'), Wire::string($message, 'data'), \array_key_exists(Wire::string($message, 'path'), $this->docs)),
-            'move' => $this->files->move($guest, Wire::string($message, 'from'), Wire::string($message, 'to')),
-            'delete' => $this->files->delete($guest, Wire::string($message, 'path')),
-            'bye' => 'good' === Wire::string($message, 'for') ? $this->forgetTicket($guest) : $guest->connection->close('left'),
+            'save' => $this->save($guest, Wire::string($message, key: 'path')),
+            'write' => $this->files->write($guest, Wire::string($message, key: 'path'), Wire::string($message, key: 'data'), \array_key_exists(Wire::string($message, key: 'path'), $this->docs)),
+            'move' => $this->files->move($guest, Wire::string($message, key: 'from'), Wire::string($message, key: 'to')),
+            'delete' => $this->files->delete($guest, Wire::string($message, key: 'path')),
+            'bye' => 'good' === Wire::string($message, key: 'for') ? $this->forgetTicket($guest) : $guest->connection->close('left'),
             default => null,
         };
     }
@@ -785,7 +785,7 @@ final class HostSession
     /** @param array<string, mixed> $message */
     private function operation(Guest $guest, array $message): void
     {
-        $relative = Wire::string($message, 'path');
+        $relative = Wire::string($message, key: 'path');
         $doc = Role::Edit === $guest->role && \array_key_exists($relative, $guest->docs) ? $this->doc($relative) : null;
         if (null === $doc) {
             // Out of step — a role taken away mid-change, a file gone: the
@@ -796,7 +796,7 @@ final class HostSession
         }
         $this->read($relative);
         try {
-            $operation = $doc['server']->receive(Wire::int($message, 'rev', -1), TextOperation::fromWire($message['ops'] ?? null));
+            $operation = $doc['server']->receive(Wire::int($message, key: 'rev', default: -1), TextOperation::fromWire($message['ops'] ?? null));
         } catch (\InvalidArgumentException) {
             $guest->send(['t' => 'reopen', 'path' => $relative]);
 
@@ -865,8 +865,8 @@ final class HostSession
     /** @param array<string, mixed> $message */
     private function guestAgent(Guest $guest, array $message): void
     {
-        $peer = $guest->id.'~'.Wire::string($message, 'id');
-        $name = Wire::text($message, 'name', max: 40);
+        $peer = $guest->id.'~'.Wire::string($message, key: 'id');
+        $name = Wire::text($message, key: 'name', max: 40);
         $caret = Wire::caret($message);
         $this->agents[$peer] = ['name' => $name, 'owner' => $guest->id, 'caret' => $caret];
         $this->place($peer, $name, $caret);

@@ -109,7 +109,7 @@ final class Transit
             }));
         };
         /** @var bool|string|null $joined */
-        $joined = null === $wait ? FiberWait::for($start) : FiberWait::within($wait, $start, 'timeout');
+        $joined = null === $wait ? FiberWait::for($start) : FiberWait::within($wait, $start, timedOut: 'timeout');
         EventLoop::cancel($watcher);
         $this->answer = null;
         // Joined, then called off before this fiber ran again: called off.

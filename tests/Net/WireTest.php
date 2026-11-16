@@ -31,14 +31,14 @@ final class WireTest extends TestCase
             'files' => [['a.php', 3, 'h'], ['bad', 'size', 'h'], 'nope', ['b.php', 1, 'g']],
         ];
 
-        $this->assertSame('text', Wire::string($message, 's'));
-        $this->assertSame('', Wire::string($message, 'i'));
-        $this->assertSame(4, Wire::int($message, 'i'));
-        $this->assertSame(7, Wire::int($message, 's', default: 7));
-        $this->assertSame(['a', 2, 'b'], Wire::list($message, 'l'));
-        $this->assertSame([], Wire::list($message, 'map'), 'a map is not a list');
-        $this->assertSame(['a', 'b'], Wire::strings($message, 'l'));
-        $this->assertSame(['a.php' => ['size' => 3, 'hash' => 'h'], 'b.php' => ['size' => 1, 'hash' => 'g']], Wire::files($message, 'files'));
+        $this->assertSame('text', Wire::string($message, key: 's'));
+        $this->assertSame('', Wire::string($message, key: 'i'));
+        $this->assertSame(4, Wire::int($message, key: 'i'));
+        $this->assertSame(7, Wire::int($message, key: 's', default: 7));
+        $this->assertSame(['a', 2, 'b'], Wire::list($message, key: 'l'));
+        $this->assertSame([], Wire::list($message, key: 'map'), 'a map is not a list');
+        $this->assertSame(['a', 'b'], Wire::strings($message, key: 'l'));
+        $this->assertSame(['a.php' => ['size' => 3, 'hash' => 'h'], 'b.php' => ['size' => 1, 'hash' => 'g']], Wire::files($message, key: 'files'));
     }
 
     public function testACaretHasAnAnchorOnlyWhenItSaysOne(): void
@@ -59,10 +59,10 @@ final class WireTest extends TestCase
     {
         // An OSC 52 clipboard write, a clear screen, a C1 CSI, a bidi override.
         $name = "  Ev\x1b]52;c;aGFja2Vk\x07il\x1b[2J\u{009B}31m\u{202E}gnp.exe  ";
-        $this->assertSame('Ev]52;c;aGFja2Vkil[2J31mgnp.exe', Wire::text(['name' => $name], 'name'));
-        $this->assertSame('Ev]52', Wire::text(['name' => $name], 'name', max: 5));
-        $this->assertSame('', Wire::text([], 'name'));
-        $this->assertSame(200, \mb_strlen(Wire::text(['name' => \str_repeat('é', times: 201)], 'name')), 'two hundred characters at most');
+        $this->assertSame('Ev]52;c;aGFja2Vkil[2J31mgnp.exe', Wire::text(['name' => $name], key: 'name'));
+        $this->assertSame('Ev]52', Wire::text(['name' => $name], key: 'name', max: 5));
+        $this->assertSame('', Wire::text([], key: 'name'));
+        $this->assertSame(200, \mb_strlen(Wire::text(['name' => \str_repeat('é', times: 201)], key: 'name')), 'two hundred characters at most');
         $this->assertSame(200, \mb_strlen(Wire::clean(\str_repeat('é', times: 201))));
         $this->assertSame(200, \mb_strlen(Wire::clean(\str_repeat('é', times: 200))));
         $this->assertSame('Ana Ünal — שלום', Wire::clean("Ana Ünal — שלום\n"), 'letters of every script stay; a line break does not');

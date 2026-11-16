@@ -146,12 +146,12 @@ final class GuestSession
             return null;
         }
 
-        /** @var array<string, mixed> $json */
+        /** @var array{ticket: string, name: string, ...<string, mixed>} $json the checks above */
         return [
             'invite' => $invite,
             'ticket' => $json['ticket'],
             'name' => $json['name'],
-            'languages' => Wire::strings($json, 'languages'),
+            'languages' => Wire::strings($json, key: 'languages'),
         ];
     }
 
@@ -459,30 +459,30 @@ final class GuestSession
         match ($message['t']) {
             'pending' => $this->api->notify($this->api->trans('Waiting for the host to let you in…'), slot: 'assist'),
             'welcome' => $this->welcome($message),
-            'denied' => $this->denied(Wire::string($message, 'reason')),
-            'opened' => $this->share(Wire::string($message, 'path'), Wire::int($message, 'rev'), Wire::string($message, 'text')),
-            'reopen' => $this->reopen(Wire::string($message, 'path')),
-            'op' => $this->remote(Wire::string($message, 'path'), $message['ops'] ?? null),
-            'ack' => $this->acknowledged(Wire::string($message, 'path')),
+            'denied' => $this->denied(Wire::string($message, key: 'reason')),
+            'opened' => $this->share(Wire::string($message, key: 'path'), Wire::int($message, key: 'rev'), Wire::string($message, key: 'text')),
+            'reopen' => $this->reopen(Wire::string($message, key: 'path')),
+            'op' => $this->remote(Wire::string($message, key: 'path'), $message['ops'] ?? null),
+            'ack' => $this->acknowledged(Wire::string($message, key: 'path')),
             'presence' => $this->peerCaret($message),
-            'peer' => $this->peer(Wire::string($message, 'id'), Wire::text($message, 'name'), Wire::string($message, 'role')),
-            'left' => $this->peerLeft(Wire::string($message, 'peer')),
-            'role' => $this->roleChanged(Role::tryFrom(Wire::string($message, 'role')) ?? Role::ReadOnly),
-            'saved' => $this->hostSaved(Wire::string($message, 'path'), Wire::string($message, 'hash')),
-            'moved' => $this->hostMoved(Wire::string($message, 'from'), Wire::string($message, 'to')),
-            'deleted' => $this->hostDeleted(Wire::string($message, 'path')),
-            'changed' => $this->hostChanged(Wire::files($message, 'files'), Wire::strings($message, 'gone')),
-            'file' => $this->file(Wire::string($message, 'path'), $message),
-            'error' => $this->refused(Wire::string($message, 'path'), Wire::text($message, 'path').': '.Wire::text($message, 'message')),
-            'bye' => $this->bye(Wire::string($message, 'reason')),
-            'terminal' => $this->terminal(Wire::string($message, 'id'), Wire::text($message, 'title'), Wire::string($message, 'data')),
-            'terminal-out' => $this->api->runs()->feed(self::TERMINAL.Wire::string($message, 'id'), (string) \base64_decode(Wire::string($message, 'data'), strict: true)),
-            'terminal-end' => $this->terminalEnded(Wire::string($message, 'id')),
+            'peer' => $this->peer(Wire::string($message, key: 'id'), Wire::text($message, key: 'name'), Wire::string($message, key: 'role')),
+            'left' => $this->peerLeft(Wire::string($message, key: 'peer')),
+            'role' => $this->roleChanged(Role::tryFrom(Wire::string($message, key: 'role')) ?? Role::ReadOnly),
+            'saved' => $this->hostSaved(Wire::string($message, key: 'path'), Wire::string($message, key: 'hash')),
+            'moved' => $this->hostMoved(Wire::string($message, key: 'from'), Wire::string($message, key: 'to')),
+            'deleted' => $this->hostDeleted(Wire::string($message, key: 'path')),
+            'changed' => $this->hostChanged(Wire::files($message, key: 'files'), Wire::strings($message, key: 'gone')),
+            'file' => $this->file(Wire::string($message, key: 'path'), $message),
+            'error' => $this->refused(Wire::string($message, key: 'path'), Wire::text($message, key: 'path').': '.Wire::text($message, key: 'message')),
+            'bye' => $this->bye(Wire::string($message, key: 'reason')),
+            'terminal' => $this->terminal(Wire::string($message, key: 'id'), Wire::text($message, key: 'title'), Wire::string($message, key: 'data')),
+            'terminal-out' => $this->api->runs()->feed(self::TERMINAL.Wire::string($message, key: 'id'), (string) \base64_decode(Wire::string($message, key: 'data'), strict: true)),
+            'terminal-end' => $this->terminalEnded(Wire::string($message, key: 'id')),
             'typing' => $this->typingAllowed(true === ($message['allowed'] ?? null)),
             'server', 'server-end', 'tunnel-data', 'tunnel-close' => $this->servers?->receive($message),
             'runs', 'running', 'run-refused' => $this->runs->receive($message),
             'debug', 'debug-vars', 'debug-children', 'debugging', 'debug-refused' => $this->debug->receive($message),
-            'focus' => $this->follow->asked(Wire::string($message, 'peer'), Wire::text($message, 'name')),
+            'focus' => $this->follow->asked(Wire::string($message, key: 'peer'), Wire::text($message, key: 'name')),
             default => null,
         };
     }
@@ -492,11 +492,11 @@ final class GuestSession
     {
         $this->tries = 0;
         $this->lostFor = null;
-        $this->role = Role::tryFrom(Wire::string($message, 'role')) ?? Role::ReadOnly;
+        $this->role = Role::tryFrom(Wire::string($message, key: 'role')) ?? Role::ReadOnly;
         $before = $this->peers;
         $this->peers = [];
         $this->kinds = [];
-        foreach (Decoded::objects(Wire::list($message, 'peers')) as $peer) {
+        foreach (Decoded::objects(Wire::list($message, key: 'peers')) as $peer) {
             if (!\is_string($peer['id'] ?? null) || !\is_string($peer['name'] ?? null)) {
                 continue;
             }
@@ -510,7 +510,7 @@ final class GuestSession
         // Whoever left while this side was away: their marks go — and the
         // terminals no longer shared, theirs.
         \array_map($this->presence->left(...), \array_keys(\array_diff_key($before, $this->peers)));
-        \array_map($this->terminalEnded(...), \array_keys(\array_diff_key($this->terminals, \array_flip(Wire::strings($message, 'terminals')))));
+        \array_map($this->terminalEnded(...), \array_keys(\array_diff_key($this->terminals, \array_flip(Wire::strings($message, key: 'terminals')))));
         // What is open here is asked again: after a drop, the host's copy is
         // the one to carry on from — and what was typed here and never
         // reached it is carried onto that ({@see share()}). Undo is the
@@ -535,7 +535,7 @@ final class GuestSession
                 default => $this->api->trans('The session is over — ask the host for a new code'),
             },
             ToastSeverity::Warn,
-            8.0,
+            seconds: 8.0,
             slot: 'assist',
         );
         $this->over = true;
@@ -547,7 +547,7 @@ final class GuestSession
         $this->api->notify(
             'removed' === $reason ? $this->api->trans('The host removed you from the session') : $this->api->trans('The host ended the session'),
             ToastSeverity::Warn,
-            8.0,
+            seconds: 8.0,
             slot: 'assist',
         );
         $this->over = true;
@@ -573,7 +573,7 @@ final class GuestSession
         if (Tls::IMPOSTOR === $reason) {
             // Not the link: someone else answers at the host's address, and
             // will at the next try too.
-            $this->api->notify($this->api->trans('Not rejoining: %why%', ['%why%' => $reason]), ToastSeverity::Error, 8.0, slot: 'assist');
+            $this->api->notify($this->api->trans('Not rejoining: %why%', ['%why%' => $reason]), ToastSeverity::Error, seconds: 8.0, slot: 'assist');
             $this->over = true;
             $this->end();
 
@@ -608,7 +608,7 @@ final class GuestSession
         $runs = $this->api->runs();
         if ($again) {
             // Back after a drop: the host sends all of it again, from the top.
-            $runs->feed(self::TERMINAL.$id, "\x1b[3J");
+            $runs->feed(self::TERMINAL.$id, bytes: "\x1b[3J");
         }
         $runs->mirror(self::TERMINAL.$id, self::GLYPH.' '.$title, function (string $bytes) use ($id): void {
             if (!$this->typing) {
@@ -634,7 +634,7 @@ final class GuestSession
         unset($this->terminals[$id]);
         $runs = $this->api->runs();
         $runs->feed(self::TERMINAL.$id, "\r\n".$this->api->trans('[no longer shared]')."\r\n");
-        $runs->mirror(self::TERMINAL.$id, self::GLYPH.' '.$title.' '.$this->api->trans('(ended)'), null);
+        $runs->mirror(self::TERMINAL.$id, self::GLYPH.' '.$title.' '.$this->api->trans('(ended)'), onInput: null);
     }
 
     // @mago-expect lint:no-boolean-flag-parameter -- whether it may type IS the one fact the call carries
@@ -805,8 +805,8 @@ final class GuestSession
     /** @param array<string, mixed> $message */
     private function peerCaret(array $message): void
     {
-        $peer = Wire::string($message, 'peer');
-        $name = Wire::text($message, 'name');
+        $peer = Wire::string($message, key: 'peer');
+        $name = Wire::text($message, key: 'name');
         $caret = Wire::caret($message);
         $isNew = !\array_key_exists($peer, $this->peers);
         $this->peers[$peer] = $name;
@@ -928,7 +928,7 @@ final class GuestSession
     private function file(string $relative, array $message): void
     {
         // Missing on the host by the fetch: no data — which decodes to an empty file, not to none.
-        $content = true === ($message['missing'] ?? null) ? false : \base64_decode(Wire::string($message, 'data'), strict: true);
+        $content = true === ($message['missing'] ?? null) ? false : \base64_decode(Wire::string($message, key: 'data'), strict: true);
         if (false !== $content && !\array_key_exists($relative, $this->docs)) {
             $this->mirror->write($relative, $content);
         }

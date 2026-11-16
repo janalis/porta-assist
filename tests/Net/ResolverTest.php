@@ -15,29 +15,29 @@ final class ResolverTest extends TestCase
 {
     public function testAnAddressIsItsOwnAnswer(): void
     {
-        $this->assertSame('127.0.0.1', GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('127.0.0.1', 1.0)));
-        $this->assertSame('[::1]', GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('[::1]', 1.0)));
+        $this->assertSame('127.0.0.1', GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('127.0.0.1', timeout: 1.0)));
+        $this->assertSame('[::1]', GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('[::1]', timeout: 1.0)));
     }
 
     public function testANameIsLookedUpWhileTheLoopTurnsAndKept(): void
     {
-        Probe::setStatic(Resolver::class, 'known', []);
+        Probe::setStatic(Resolver::class, property: 'known', value: []);
         $turns = 0;
         $ticker = EventLoop::repeat(0.001, static function () use (&$turns): void {
             ++$turns;
         });
         try {
-            $address = GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('localhost', 5.0));
+            $address = GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('localhost', timeout: 5.0));
         } finally {
             EventLoop::cancel($ticker);
         }
 
         $this->assertSame('127.0.0.1', $address);
         $this->assertGreaterThan(0, $turns, 'the loop was not held while it looked');
-        $this->assertSame('127.0.0.1', Probe::getStatic(Resolver::class, 'known')['localhost']['address'] ?? null, 'and it is kept');
-        Probe::setStatic(Resolver::class, 'known', ['localhost' => ['address' => '10.9.8.7', 'until' => \PHP_FLOAT_MAX]]);
-        $this->assertSame('10.9.8.7', GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('localhost', 5.0)), 'not asked again');
-        Probe::setStatic(Resolver::class, 'known', []);
+        $this->assertSame('127.0.0.1', Probe::getStatic(Resolver::class, member: 'known')['localhost']['address'] ?? null, 'and it is kept');
+        Probe::setStatic(Resolver::class, property: 'known', value: ['localhost' => ['address' => '10.9.8.7', 'until' => \PHP_FLOAT_MAX]]);
+        $this->assertSame('10.9.8.7', GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve('localhost', timeout: 5.0)), 'not asked again');
+        Probe::setStatic(Resolver::class, property: 'known', value: []);
     }
 
     public function testANameNobodyKnowsHasNoAddress(): void
@@ -48,6 +48,6 @@ final class ResolverTest extends TestCase
         // gives it an address.
         $nobody = \str_repeat('x', times: 64).'.invalid';
 
-        $this->assertNull(GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve($nobody, 5.0)));
+        $this->assertNull(GuestRendezvous::blocking(static fn (): ?string => Resolver::resolve($nobody, timeout: 5.0)));
     }
 }

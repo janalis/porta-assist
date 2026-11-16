@@ -43,8 +43,8 @@ final readonly class HostDebug
     {
         $debugger = $this->api->runs()->debugger();
         match ($message['t']) {
-            'debug-vars' => self::variables($debugger, $guest, Wire::int($message, 'frame')),
-            'debug-children' => self::children($debugger, $guest, Wire::int($message, 'reference')),
+            'debug-vars' => self::variables($debugger, $guest, Wire::int($message, key: 'frame')),
+            'debug-children' => self::children($debugger, $guest, Wire::int($message, key: 'reference')),
             default => self::step($debugger, $guest, $message),
         };
     }
@@ -67,7 +67,7 @@ final readonly class HostDebug
 
             return;
         }
-        match (Wire::string($message, 'verb')) {
+        match (Wire::string($message, key: 'verb')) {
             'continue' => $debugger->continue(),
             'stepOver' => $debugger->stepOver(),
             'stepIn' => $debugger->stepIn(),

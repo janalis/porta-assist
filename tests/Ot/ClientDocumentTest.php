@@ -20,7 +20,7 @@ final class ClientDocumentTest extends TestCase
     public function testWhatNeverReachedTheHostIsMadeAgainOnItsText(): void
     {
         $client = new ClientDocument(0, "one\n");
-        $client->local(TextDiff::between("one\n", "one\nmine\n"));
+        $client->local(TextDiff::between("one\n", new: "one\nmine\n"));
 
         $carried = $client->carry("one\n");
 
@@ -31,8 +31,8 @@ final class ClientDocumentTest extends TestCase
     public function testWhatTheHostChangedMeanwhileStays(): void
     {
         $client = new ClientDocument(0, "one\n");
-        $client->local(TextDiff::between("one\n", "one\nmine\n"));
-        $client->local(TextDiff::between("one\nmine\n", "one\nmine\nmore\n")); // buffered behind it
+        $client->local(TextDiff::between("one\n", new: "one\nmine\n"));
+        $client->local(TextDiff::between("one\nmine\n", new: "one\nmine\nmore\n")); // buffered behind it
 
         $carried = $client->carry("theirs\none\n");
 
@@ -43,13 +43,13 @@ final class ClientDocumentTest extends TestCase
     public function testWhatLandedAndLostOnlyItsAcknowledgementIsNotMadeTwice(): void
     {
         $client = new ClientDocument(0, "one\n");
-        $client->local(TextDiff::between("one\n", "one\nmine\n"));
+        $client->local(TextDiff::between("one\n", new: "one\nmine\n"));
 
         $this->assertNull($client->carry("one\nmine\n"), 'the host has it');
 
         $client = new ClientDocument(0, "one\n");
-        $client->local(TextDiff::between("one\n", "one\nmine\n"));
-        $client->local(TextDiff::between("one\nmine\n", "one\nmine\nmore\n"));
+        $client->local(TextDiff::between("one\n", new: "one\nmine\n"));
+        $client->local(TextDiff::between("one\nmine\n", new: "one\nmine\nmore\n"));
         $carried = $client->carry("one\nmine\n");
         $this->assertInstanceOf(TextOperation::class, $carried);
         $this->assertSame("one\nmine\nmore\n", $carried->apply("one\nmine\n"), 'only what was buffered behind it');
@@ -58,10 +58,10 @@ final class ClientDocumentTest extends TestCase
     public function testTheHostsTextIsFollowedThroughAcknowledgementsAndItsOwnChanges(): void
     {
         $client = new ClientDocument(0, 'a');
-        $client->local(TextDiff::between('a', 'ab'));
+        $client->local(TextDiff::between('a', new: 'ab'));
         $client->acknowledged();
-        $client->remote(TextDiff::between('ab', 'xab'));
-        $client->local(TextDiff::between('xab', 'xabc'));
+        $client->remote(TextDiff::between('ab', new: 'xab'));
+        $client->local(TextDiff::between('xab', new: 'xabc'));
 
         $carried = $client->carry('xab');
 

@@ -107,12 +107,12 @@ final class HostLanguageServerE2eTest extends TestCase
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root): void {
                 $invite = $this->invited($ide);
-                $this->askIn($invite, 'Ana');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->askIn($invite, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $welcome = $this->expect('welcome');
                 $this->assertContains('php', $welcome['languages']);
-                $ticket = Wire::string($welcome, 'ticket');
+                $ticket = Wire::string($welcome, key: 'ticket');
                 $main = $this->peer;
 
                 // Refused: no ticket, a language the host has no server for, no copy, a server that does not start.
@@ -128,11 +128,11 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->dial($invite);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'channel' => 'lsp', 'name' => 'Ana', 'token' => $invite->token, 'language' => 'php', 'root' => self::COPY]);
                 $this->assertSame(['t' => 'denied', 'reason' => 'token'], $this->expect('denied'));
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertIsObject($host);
-                $this->assertSame([], Probe::get($host, 'relays'), 'nothing kept of a server that did not start');
+                $this->assertSame([], Probe::get($host, property: 'relays'), 'nothing kept of a server that did not start');
 
-                $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, 'php'));
+                $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, language: 'php'));
                 $this->inbox = [];
                 $this->assertTheServerHearsTheHostsWorkspace($root);
                 // Nor may a guest reconfigure the host's server later, whatever its role.
@@ -164,7 +164,7 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->say(['t' => 'nonsense']);
 
                 // Reading along: the server's commands are not hers to run.
-                $host->setRole(Wire::string($welcome, 'peer'), Role::ReadOnly);
+                $host->setRole(Wire::string($welcome, key: 'peer'), Role::ReadOnly);
                 $this->say(['t' => 'lsp', 'm' => ['jsonrpc' => '2.0', 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]]);
                 $refused = $this->ask(['jsonrpc' => '2.0', 'id' => 3, 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']]);
                 $this->assertSame(
@@ -172,7 +172,7 @@ final class HostLanguageServerE2eTest extends TestCase
                     $refused,
                     'an Invalid Request, said as JSON-RPC says it',
                 );
-                $host->setRole(Wire::string($welcome, 'peer'), Role::Edit);
+                $host->setRole(Wire::string($welcome, key: 'peer'), Role::Edit);
                 $this->assertSame(
                     'workspace/executeCommand',
                     $this->ask(['jsonrpc' => '2.0', 'id' => 4, 'method' => 'workspace/executeCommand', 'params' => ['command' => 'x']])['result']['heard']['method'] ?? null,
@@ -183,7 +183,7 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->await($this->hungUp(...), what: 'the channel closed with the server');
 
                 // Her connection dropped: her language servers go with her.
-                $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, 'php'));
+                $this->assertSame(['t' => 'ready'], $this->channel($invite, $ticket, language: 'php'));
                 $channel = $this->peer;
                 $this->peer = $main;
                 $this->dropPeer();
@@ -200,19 +200,19 @@ final class HostLanguageServerE2eTest extends TestCase
                 $this->expect('ready');
                 $channel = $this->peer;
                 $this->peer = $main;
-                $host->remove(Wire::string($welcome, 'peer'));
+                $host->remove(Wire::string($welcome, key: 'peer'));
                 $this->peer = $channel;
                 $this->await($this->hungUp(...), what: 'her server stopped');
 
                 // And stopping the session stops every one. Bo comes with a code
                 // of his own: Ana's way in went with her.
                 $invite = $this->redeem($this->code($ide));
-                $this->askIn($invite, 'Bo');
-                $this->awaitPainted($tui, $terminal, 'Bo asks to join');
+                $this->askIn($invite, name: 'Bo');
+                $this->awaitPainted($tui, $terminal, needle: 'Bo asks to join');
                 $terminal->simulateInput("\r");
-                $bo = Wire::string($this->expect('welcome'), 'ticket');
-                $this->assertSame(['t' => 'ready'], $this->channel($invite, $bo, 'php'));
-                $this->command($ide, 'assist:stop');
+                $bo = Wire::string($this->expect('welcome'), key: 'ticket');
+                $this->assertSame(['t' => 'ready'], $this->channel($invite, $bo, language: 'php'));
+                $this->command($ide, id: 'assist:stop');
                 $this->await($this->hungUp(...), what: 'his server stopped with the session');
                 $this->hangUp();
             },

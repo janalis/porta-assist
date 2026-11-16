@@ -139,30 +139,34 @@ final class MailboxTest extends TestCase
 
     public function testAWebSocketShakesHandsAnswersPingsAndNoticesTheClose(): void
     {
-        $this->assertSame('"http://x" is not a ws:// address', GuestRendezvous::blocking(static fn (): mixed => WebSocket::connect('http://x', 1.0)));
+        $this->assertSame('"http://x" is not a ws:// address', GuestRendezvous::blocking(static fn (): mixed => WebSocket::connect('http://x', timeout: 1.0)));
         $url = $this->serve();
         foreach (["HTTP/1.1 200 OK\r\n\r\n", "HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: wrong\r\n\r\n"] as $answer) {
-            $result = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+            $result = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
             $this->answer($answer);
             $this->assertSame($url.' is not a WebSocket server', $result());
         }
-        $result = $this->start(static fn (): mixed => WebSocket::connect($url, 0.3));
+        $result = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 0.3));
         $this->answer("HTTP/1.1 101 Switching Protocols\r\n");
         $this->assertSame($url.' is not a WebSocket server', $result(), 'a handshake never finished');
-        $result = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $result = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $this->answer("HTTP/1.1 101 Switching Protocols\r\n");
         $this->assertIsResource($this->client);
         \fclose($this->client);
         $this->assertSame($url.' is not a WebSocket server', $result(), 'hung up on, halfway');
 
-        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $this->answer();
         $client = $this->client;
         $this->assertIsResource($client);
-        \fwrite($client, Frames::encode(Frames::TEXT, 'early'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: 'early'));
         $socket = $socket();
         $this->assertInstanceOf(WebSocket::class, $socket);
-        \fwrite($client, Frames::encode(Frames::PING, 'are you there').Frames::encode(Frames::PONG, 'unasked').Frames::encode(Frames::TEXT, 'one').Frames::encode(Frames::TEXT, 'two'));
+        \fwrite(
+            $client,
+            Frames::encode(Frames::PING, payload: 'are you there').Frames::encode(Frames::PONG, payload: 'unasked').Frames::encode(Frames::TEXT, payload: 'one')
+                .Frames::encode(Frames::TEXT, payload: 'two'),
+        );
         $this->assertSame('early', $this->start($socket->receive(...))());
         $this->assertSame('one', $this->start(static fn (): mixed => $socket->receive(1.0))());
         $this->assertSame('two', $this->start(static fn (): mixed => $socket->receive(1.0))());
@@ -182,13 +186,13 @@ final class MailboxTest extends TestCase
         );
 
         $waiting = $this->start($socket->receive(...));
-        \fwrite($client, Frames::encode(Frames::CLOSE, ''));
+        \fwrite($client, Frames::encode(Frames::CLOSE, payload: ''));
         $this->assertNull($waiting(), 'a fiber waiting is let go');
         $this->assertSame('the server closed the socket', $socket->closed());
         $this->assertNull($this->start($socket->receive(...))());
         $socket->close();
 
-        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $this->answer();
         $socket = $socket();
         $this->assertInstanceOf(WebSocket::class, $socket);
@@ -196,7 +200,7 @@ final class MailboxTest extends TestCase
         $this->assertNull($this->start($socket->receive(...))());
         $this->assertSame('the server hung up', $socket->closed());
 
-        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $this->answer();
         $socket = $socket();
         $this->assertInstanceOf(WebSocket::class, $socket);
@@ -212,11 +216,11 @@ final class MailboxTest extends TestCase
     public function testOnlyASwitchingStatusLineOpensTheSocket(): void
     {
         $url = $this->serve();
-        $result = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $result = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $this->answer(status: "HTTP/1.1 200 OK\r\nVia: HTTP/1.1 101 relay");
         $this->assertSame($url.' is not a WebSocket server', $result());
 
-        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $this->answer(firstWrite: 20); // mid status line
         $socket = $socket();
         $this->assertInstanceOf(WebSocket::class, $socket, 'an answer that comes in two reads is put together');
@@ -227,12 +231,12 @@ final class MailboxTest extends TestCase
     public function testTheLastMessageBeforeAHangUpIsStillReceived(): void
     {
         $url = $this->serve();
-        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $client = $this->answer();
         $socket = $socket();
         $this->assertInstanceOf(WebSocket::class, $socket);
 
-        \fwrite($client, Frames::encode(Frames::TEXT, 'last'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: 'last'));
         \fclose($client);
         $this->await(static fn (): bool => null !== $socket->closed(), what: 'the hang-up');
 
@@ -243,7 +247,7 @@ final class MailboxTest extends TestCase
     public function testAServerThatStopsAnsweringPingsIsTakenForGone(): void
     {
         $url = $this->serve();
-        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, 2.0));
+        $socket = $this->start(static fn (): mixed => WebSocket::connect($url, timeout: 2.0));
         $this->answer();
         $socket = $socket();
         $this->assertInstanceOf(WebSocket::class, $socket);
@@ -251,7 +255,7 @@ final class MailboxTest extends TestCase
         $this->assertIsResource($client);
 
         $socket->ping();
-        \fwrite($client, Frames::encode(Frames::PONG, ''));
+        \fwrite($client, Frames::encode(Frames::PONG, payload: ''));
         $this->start(static fn (): mixed => $socket->receive(0.05))();
         $socket->ping();
         $socket->ping();
@@ -265,37 +269,37 @@ final class MailboxTest extends TestCase
     public function testAMailboxServerThatRefusesSaysNonsenseOrHangsUpIsSaid(): void
     {
         $refusing = new FakeWormhole(['FAKE_WORMHOLE_REFUSE' => "too old \x1b[31m"]);
-        $this->assertSame('the mailbox server says: too old [31m', $this->failure(static fn (): Mailbox => Mailbox::connect($refusing->mailbox, 'ab', 2.0)));
-        $this->assertSame('127.0.0.1:1 refused the connection', $this->failure(static fn (): Mailbox => Mailbox::connect('ws://127.0.0.1:1/v1', 'ab', 2.0)));
+        $this->assertSame('the mailbox server says: too old [31m', $this->failure(static fn (): Mailbox => Mailbox::connect($refusing->mailbox, side: 'ab', timeout: 2.0)));
+        $this->assertSame('127.0.0.1:1 refused the connection', $this->failure(static fn (): Mailbox => Mailbox::connect('ws://127.0.0.1:1/v1', side: 'ab', timeout: 2.0)));
 
         $url = $this->serve();
-        $result = $this->start(static fn (): mixed => Mailbox::connect($url, 'ab', 0.3));
+        $result = $this->start(static fn (): mixed => Mailbox::connect($url, side: 'ab', timeout: 0.3));
         $client = $this->answer();
-        \fwrite($client, Frames::encode(Frames::TEXT, 'not json').Frames::encode(Frames::TEXT, '{"type": 3}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: 'not json').Frames::encode(Frames::TEXT, payload: '{"type": 3}'));
         $failure = $result();
         $this->assertInstanceOf(RendezvousFailed::class, $failure);
         $this->assertSame('the mailbox server sent no welcome', $failure->getMessage(), 'what is not a message skipped');
         $this->assertSame([[Frames::CLOSE, \pack('n', 1000)]], $this->heard(1), 'and the socket let go');
 
-        $result = $this->start(static fn (): mixed => Mailbox::connect($url, 'ab', 2.0));
-        \fwrite($this->answer(), Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {"error": "go away"}}'));
+        $result = $this->start(static fn (): mixed => Mailbox::connect($url, side: 'ab', timeout: 2.0));
+        \fwrite($this->answer(), Frames::encode(Frames::TEXT, payload: '{"type": "welcome", "welcome": {"error": "go away"}}'));
         $failure = $result();
         $this->assertInstanceOf(RendezvousFailed::class, $failure);
         $this->assertSame('the mailbox server says: go away', $failure->getMessage());
         $this->assertSame([[Frames::CLOSE, \pack('n', 1000)]], $this->heard(1), 'refused: the socket let go');
 
-        $result = $this->start(static fn (): mixed => Mailbox::connect($url, 'ab', 2.0));
+        $result = $this->start(static fn (): mixed => Mailbox::connect($url, side: 'ab', timeout: 2.0));
         \fclose($this->answer());
         $failure = $result();
         $this->assertInstanceOf(RendezvousFailed::class, $failure);
         $this->assertSame('the mailbox server hung up (the server hung up)', $failure->getMessage());
 
         // A claim the server refuses for its own reason: passed on.
-        $result = $this->start(static fn (): mixed => GuestRendezvous::redeem($url, Code::parse('5-AAAA-AAAA'), 2.0));
+        $result = $this->start(static fn (): mixed => GuestRendezvous::redeem($url, Code::parse('5-AAAA-AAAA'), timeout: 2.0));
         $client = $this->answer();
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "welcome", "welcome": {}}'));
         $this->heard(2);
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "error", "error": "nope"}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "error", "error": "nope"}'));
         $failure = $result();
         $this->assertInstanceOf(RendezvousFailed::class, $failure);
         $this->assertSame('the mailbox server says: nope', $failure->getMessage());
@@ -306,15 +310,15 @@ final class MailboxTest extends TestCase
     public function testLeavingReleasesClosesAndHangsUp(): void
     {
         $url = $this->serve();
-        $mailbox = $this->start(static fn (): mixed => Mailbox::connect($url, 'ab', 2.0));
+        $mailbox = $this->start(static fn (): mixed => Mailbox::connect($url, side: 'ab', timeout: 2.0));
         $client = $this->answer();
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "welcome", "welcome": {}}'));
         $mailbox = $mailbox();
         $this->assertInstanceOf(Mailbox::class, $mailbox);
         $this->heard(1);
         $claimed = $this->start(static fn (): mixed => $mailbox->claim('4'));
         $this->assertSame('claim', self::said($this->heard(1)[0])['type']);
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "claimed", "mailbox": "mb"}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "claimed", "mailbox": "mb"}'));
         $claimed();
         $this->assertSame('open', self::said($this->heard(1)[0])['type']);
 
@@ -330,20 +334,20 @@ final class MailboxTest extends TestCase
     public function testTheFirstMessageUnderAPhaseIsTheOneKept(): void
     {
         $url = $this->serve();
-        $mailbox = $this->start(static fn (): mixed => Mailbox::connect($url, 'ab', 2.0));
+        $mailbox = $this->start(static fn (): mixed => Mailbox::connect($url, side: 'ab', timeout: 2.0));
         $client = $this->answer();
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "welcome", "welcome": {}}'));
         $mailbox = $mailbox();
         $this->assertInstanceOf(Mailbox::class, $mailbox);
         \fwrite(
             $client,
-            Frames::encode(Frames::TEXT, '{"type": "message", "side": "cd", "phase": "pake", "body": "aa"}')
-                .Frames::encode(Frames::TEXT, '{"type": "message", "side": "cd", "phase": "pake", "body": "bb"}')
-                .Frames::encode(Frames::TEXT, '{"type": "message", "side": "cd", "phase": "x", "body": "cc"}'),
+            Frames::encode(Frames::TEXT, payload: '{"type": "message", "side": "cd", "phase": "pake", "body": "aa"}')
+                .Frames::encode(Frames::TEXT, payload: '{"type": "message", "side": "cd", "phase": "pake", "body": "bb"}')
+                .Frames::encode(Frames::TEXT, payload: '{"type": "message", "side": "cd", "phase": "x", "body": "cc"}'),
         );
 
-        $this->assertSame("\xcc", $this->start(static fn (): mixed => $mailbox->receive('x', 2.0))());
-        $this->assertSame("\xaa", $mailbox->receive('pake', 0.0));
+        $this->assertSame("\xcc", $this->start(static fn (): mixed => $mailbox->receive('x', timeout: 2.0))());
+        $this->assertSame("\xaa", $mailbox->receive('pake', timeout: 0.0));
         $mailbox->hangUp();
     }
 
@@ -365,9 +369,9 @@ final class MailboxTest extends TestCase
     {
         $wormhole = new FakeWormhole();
         $claims = GuestRendezvous::blocking(static function () use ($wormhole): array {
-            $first = Mailbox::connect($wormhole->mailbox, 'aa', 2.0);
+            $first = Mailbox::connect($wormhole->mailbox, side: 'aa', timeout: 2.0);
             $first->claim('5');
-            $second = Mailbox::connect($wormhole->mailbox, 'bb', 2.0);
+            $second = Mailbox::connect($wormhole->mailbox, side: 'bb', timeout: 2.0);
             $second->claim('5');
 
             return [$first, $second];
@@ -375,14 +379,14 @@ final class MailboxTest extends TestCase
         $this->assertSame('That code was used already — ask the host for a new one', $this->failure(static fn (): Invite => GuestRendezvous::redeem(
             $wormhole->mailbox,
             Code::parse('5-AAAA-AAAA'),
-            2.0,
+            timeout: 2.0,
         )));
         foreach ($claims as $claim) {
             $claim->hangUp();
         }
 
         $nowhere = new Invite(new SessionKey(\random_bytes(32)), 'nowhere', \str_repeat('0', times: 64), \str_repeat('ab', times: 16));
-        $this->assertSame('the relay "nowhere" is not host:port', GuestRendezvous::blocking(static fn (): mixed => GuestRendezvous::connect($nowhere, 0, 1.0)));
+        $this->assertSame('the relay "nowhere" is not host:port', GuestRendezvous::blocking(static fn (): mixed => GuestRendezvous::connect($nowhere, n: 0, timeout: 1.0)));
     }
 
     public function testAHostStoppedBeforeTheServerAnsweredHandsOutNothing(): void
@@ -405,7 +409,7 @@ final class MailboxTest extends TestCase
         $host->start();
         $client = $this->answer();
         $host->stop();
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "welcome", "welcome": {}}'));
         $this->assertSame(Frames::CLOSE, $this->heard(2)[1][0] ?? null, 'bound, then hung up on');
         $this->pump(0.1);
         $this->assertSame([], $codes);
@@ -438,10 +442,10 @@ final class MailboxTest extends TestCase
         $code = $host->code();
         $this->assertInstanceOf(Code::class, $code);
         GuestRendezvous::blocking(static function () use ($wormhole, $code): void {
-            $guest = Mailbox::connect($wormhole->mailbox, 'cd', 2.0);
+            $guest = Mailbox::connect($wormhole->mailbox, side: 'cd', timeout: 2.0);
             $guest->claim($code->nameplate);
             $guest->add('pake', new Spake2($code->text(), host: false)->message);
-            $guest->receive('invite', 2.0);
+            $guest->receive('invite', timeout: 2.0);
             $guest->hangUp();
         });
         $this->await(static function () use (&$codes): bool {
@@ -471,11 +475,11 @@ final class MailboxTest extends TestCase
         );
         $host->start();
         $client = $this->answer();
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "welcome", "welcome": {}}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "welcome", "welcome": {}}'));
         $this->assertSame('allocate', self::said($this->heard(2)[1])['type']);
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "allocated", "nameplate": "3"}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "allocated", "nameplate": "3"}'));
         $this->assertSame('claim', self::said($this->heard(1)[0])['type']);
-        \fwrite($client, Frames::encode(Frames::TEXT, '{"type": "claimed", "mailbox": "mb"}'));
+        \fwrite($client, Frames::encode(Frames::TEXT, payload: '{"type": "claimed", "mailbox": "mb"}'));
         $this->heard(2); // open, and the pake added
         $this->await(static fn (): bool => null !== $host->code(), what: 'the code');
 
@@ -518,7 +522,7 @@ final class MailboxTest extends TestCase
         $this->assertSame('That code is not right — check it with the host', $this->failure(static fn (): Invite => GuestRendezvous::redeem(
             $wormhole->mailbox,
             Code::parse($first.'-AAAA-AAAA'),
-            2.0,
+            timeout: 2.0,
         )));
         $this->await(static function () use (&$codes): bool {
             return 2 === \count($codes);
@@ -530,12 +534,12 @@ final class MailboxTest extends TestCase
         $this->assertSame('No host is waiting with that code — check it, or ask the host for a new one', $this->failure(static fn (): Invite => GuestRendezvous::redeem(
             $wormhole->mailbox,
             Code::parse('7-AAAA-AAAA'),
-            0.1,
+            timeout: 0.1,
         )));
         $held = GuestRendezvous::blocking(static function () use ($wormhole): int {
             $held = 0;
             foreach (['aa', 'bb'] as $side) {
-                $other = Mailbox::connect($wormhole->mailbox, $side, 2.0);
+                $other = Mailbox::connect($wormhole->mailbox, $side, timeout: 2.0);
                 $other->claim('7'); // a third side would be told "crowded"
                 $other->hangUp();
                 ++$held;

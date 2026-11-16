@@ -85,11 +85,11 @@ final class Wire
         $anchored = \is_int($message['anchorLine'] ?? null) && $message['anchorLine'] >= 0;
 
         return [
-            'path' => self::string($message, 'path'),
-            'line' => self::int($message, 'line'),
-            'column' => self::int($message, 'column'),
-            'anchorLine' => $anchored ? self::int($message, 'anchorLine') : null,
-            'anchorColumn' => $anchored ? self::int($message, 'anchorColumn') : null,
+            'path' => self::string($message, key: 'path'),
+            'line' => self::int($message, key: 'line'),
+            'column' => self::int($message, key: 'column'),
+            'anchorLine' => $anchored ? self::int($message, key: 'anchorLine') : null,
+            'anchorColumn' => $anchored ? self::int($message, key: 'anchorColumn') : null,
             'top' => \is_int($message['top'] ?? null) ? $message['top'] : null,
         ];
     }

@@ -84,7 +84,7 @@ trait TalksAssist
         $api = $this->api($ide);
         $api->changeSetting('mailbox', $this->wormhole()->mailbox);
         $api->changeSetting('transit', $this->wormhole()->transit);
-        $this->command($ide, 'assist:share');
+        $this->command($ide, id: 'assist:share');
         $code = '';
         $this->await(static function () use ($ide, &$code): bool {
             $match = [];
@@ -109,7 +109,7 @@ trait TalksAssist
     {
         $code = null;
         $this->await(function () use ($ide, $not, &$code): bool {
-            $host = Probe::get($this->plugin($ide), 'host');
+            $host = Probe::get($this->plugin($ide), property: 'host');
             $code = $host instanceof HostSession ? $host->code() : null;
 
             return null !== $code && $code->text() !== $not?->text();
@@ -133,7 +133,7 @@ trait TalksAssist
     /** The plugin as the IDE loaded it — its sessions are read through {@see Probe}. */
     private function plugin(Ide $ide): object
     {
-        $instances = Probe::get(Probe::get(Services::resolve($ide, PluginLifecycle::class), 'plugins'), 'instances');
+        $instances = Probe::get(Probe::get(Services::resolve($ide, PluginLifecycle::class), property: 'plugins'), property: 'instances');
         \assert(\is_array($instances) && \is_object($instances['assist'] ?? null), description: 'the plugin is enabled');
 
         return $instances['assist'];
@@ -148,7 +148,7 @@ trait TalksAssist
     /** The plugin's own API — the editor as the plugin sees it. */
     private function api(Ide $ide): PluginApi
     {
-        $api = Probe::get($this->plugin($ide), 'api');
+        $api = Probe::get($this->plugin($ide), property: 'api');
         \assert($api instanceof PluginApi, description: 'set when the plugin activated');
 
         return $api;
@@ -185,8 +185,8 @@ trait TalksAssist
     private function connect(Invite $invite)
     {
         $n = $this->nextChannel($invite);
-        $stream = GuestRendezvous::blocking(static fn (): mixed => GuestRendezvous::connect($invite, $n, 5.0));
-        $this->assertIsResource($stream, 'the host is reached through the relay');
+        $stream = GuestRendezvous::blocking(static fn (): mixed => GuestRendezvous::connect($invite, $n, timeout: 5.0));
+        $this->assertIsResource($stream, message: 'the host is reached through the relay');
 
         return $stream;
     }

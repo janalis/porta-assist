@@ -100,7 +100,7 @@ GuestRendezvous::blocking(static function () use (&$client): bool {
                 }
             });
         },
-        false,
+        timedOut: false,
     );
 });
 if (null === $client) {

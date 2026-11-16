@@ -84,8 +84,8 @@ final class HostServers
      */
     public function open(Guest $guest, array $message): void
     {
-        $port = Wire::int($message, 'port');
-        $conn = Wire::int($message, 'conn', -1);
+        $port = Wire::int($message, key: 'port');
+        $conn = Wire::int($message, key: 'conn', default: -1);
         $taken = \array_key_exists($conn, $this->tunnels[$guest->id] ?? []) || \array_key_exists($conn, $this->connecting[$guest->id] ?? []);
         if (!\array_key_exists($port, $this->shared) || $taken) {
             $guest->send(['t' => 'tunnel-close', 'conn' => $conn]);
@@ -139,8 +139,8 @@ final class HostServers
     /** @param array<string, mixed> $message bytes for one of a guest's connections */
     public function data(Guest $guest, array $message): void
     {
-        $bytes = \base64_decode(Wire::string($message, 'data'), strict: true);
-        $conn = Wire::int($message, 'conn', -1);
+        $bytes = \base64_decode(Wire::string($message, key: 'data'), strict: true);
+        $conn = Wire::int($message, key: 'conn', default: -1);
         if (false === $bytes) {
             return;
         }
@@ -155,7 +155,7 @@ final class HostServers
     /** @param array<string, mixed> $message one of a guest's connections, closed at its end */
     public function closed(Guest $guest, array $message): void
     {
-        $conn = Wire::int($message, 'conn', -1);
+        $conn = Wire::int($message, key: 'conn', default: -1);
         ($this->tunnels[$guest->id][$conn]['tunnel'] ?? null)?->finish();
         unset($this->tunnels[$guest->id][$conn], $this->connecting[$guest->id][$conn]);
     }

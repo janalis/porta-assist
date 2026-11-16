@@ -73,7 +73,7 @@ final class HostEdgesE2eTest extends TestCase
                 $invite = $this->invited($ide);
 
                 // Ana: in a shared file, with an agent of her own; the host's agent at work too.
-                $ana = $this->guest($tui, $terminal, $invite, 'Ana');
+                $ana = $this->guest($tui, $terminal, $invite, name: 'Ana');
                 $anaSocket = $this->peer;
                 $this->say(['t' => 'open', 'path' => 'src/A.php']);
                 $this->expect('opened');
@@ -89,7 +89,7 @@ final class HostEdgesE2eTest extends TestCase
 
                 // Bo arrives: where everyone is comes with the welcome — whole.
 
-                $bo = $this->guest($tui, $terminal, $invite, 'Bo');
+                $bo = $this->guest($tui, $terminal, $invite, name: 'Bo');
                 $told = \array_column($this->inboxOf('presence'), null, 'peer');
                 $nowhere = ['anchorLine' => null, 'anchorColumn' => null, 'top' => null];
                 $this->assertSame(['t' => 'presence', 'peer' => $ana['peer'], 'name' => 'Ana', 'path' => 'src/A.php', 'line' => 99, 'column' => 0, ...$nowhere], $told[$ana['peer']] ?? null);
@@ -129,7 +129,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->say(['t' => 'open', 'path' => 'barrier.php']);
                 $this->expect('error'); // answered in order: her caret is placed
                 $anaSide = $this->side();
-                $this->guest($tui, $terminal, $invite, 'Cy');
+                $this->guest($tui, $terminal, $invite, name: 'Cy');
                 $this->assertContains($ana['peer'], \array_column($this->inboxOf('presence'), 'peer'));
                 $this->hangUp();
                 $this->become($anaSide);
@@ -149,11 +149,11 @@ final class HostEdgesE2eTest extends TestCase
         $this->runIde($project, $root.'/src/A.php', [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root): void {
                 $invite = $this->invited($ide);
-                $ana = $this->guest($tui, $terminal, $invite, 'Ana');
-                $this->awaitPainted($tui, $terminal, '⇄ 1');
+                $ana = $this->guest($tui, $terminal, $invite, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: '⇄ 1');
                 $events = Services::resolve($ide, EventDispatcherInterface::class);
                 $events->dispatch(new AgentActivity('claude', 'Claude', $root.'/src/A.php', AgentActivityKind::Editing, 1, 0, 10.0));
-                $this->awaitPainted($tui, $terminal, '⇄ 2'); // the host's agent counts
+                $this->awaitPainted($tui, $terminal, needle: '⇄ 2'); // the host's agent counts
                 $left = [];
                 $events->addListener(AgentLeft::class, static function (AgentLeft $event) use (&$left): void {
                     $left[] = $event->agent;
@@ -164,7 +164,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->awaitPainted($tui, $terminal, $boName.' asks to join'); // cut to forty, here as everywhere
                 $terminal->simulateInput("\r");
                 $bo = $this->expect('welcome');
-                $this->awaitPainted($tui, $terminal, '⇄ 3');
+                $this->awaitPainted($tui, $terminal, needle: '⇄ 3');
                 $this->assertSame(
                     [['host', 'host'], ['id' => $ana['peer'], 'name' => 'Ana', 'role' => 'edit']],
                     [[$bo['peers'][0]['id'] ?? null, $bo['peers'][0]['role'] ?? null], $bo['peers'][1] ?? null],
@@ -182,7 +182,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->expect('opened');
                 $this->say(['t' => 'presence', 'path' => 'src/A.php', 'line' => 1, 'column' => 2]);
                 $this->say(['t' => 'agent', 'id' => 'codex', 'name' => 'Codex'.\str_repeat('x', times: 40), 'path' => 'src/A.php', 'line' => 0, 'column' => 1]);
-                $this->awaitPainted($tui, $terminal, '⇄ 4');
+                $this->awaitPainted($tui, $terminal, needle: '⇄ 4');
                 $boSide = $this->become($anaSide);
                 $this->assertSame(['t' => 'peer', 'id' => $bo['peer'], 'name' => $boName, 'role' => 'edit'], $this->expect('peer'), 'Ana is told who came — his name cut to forty');
                 $this->assertSame(
@@ -207,7 +207,7 @@ final class HostEdgesE2eTest extends TestCase
 
                 // Ana, the first in, edits the file Bo has open: he gets it — not only those before her.
                 $this->say(['t' => 'open', 'path' => 'src/A.php']);
-                $rev = Wire::int($this->expect('opened'), 'rev');
+                $rev = Wire::int($this->expect('opened'), key: 'rev');
                 $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => $rev, 'ops' => ['// Ana', 16]]);
                 $this->expect('ack');
                 $anaSide = $this->become($boSide);
@@ -227,7 +227,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->assertSame(['t' => 'changed', 'files' => [['src/Bo.php', 11, \hash('xxh128', data: '<?php // Bo')]], 'gone' => []], $this->expect('changed'));
 
                 // The host lets him only read along: Ana is told.
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertIsObject($host);
                 $host->setRole($bo['peer'], Role::ReadOnly);
                 $this->assertSame(['t' => 'peer', 'id' => $bo['peer'], 'name' => $boName, 'role' => 'read'], $this->expect('peer'));
@@ -240,7 +240,7 @@ final class HostEdgesE2eTest extends TestCase
                 $boSide = $this->become($anaSide);
                 $this->assertSame(['t' => 'left', 'peer' => $bo['peer'].'~codex'], $this->expect('left'));
                 $this->assertContains('assist:'.$bo['peer'].'~codex', $left, 'its caret taken off the host\'s tabs');
-                $this->awaitPainted($tui, $terminal, '⇄ 3');
+                $this->awaitPainted($tui, $terminal, needle: '⇄ 3');
                 $anaSide = $this->become($boSide);
                 $this->hangUp();
                 $this->become($anaSide);
@@ -248,7 +248,7 @@ final class HostEdgesE2eTest extends TestCase
                 $this->assertContains('assist:'.$bo['peer'], $left, 'his caret taken off the host\'s tabs');
                 $this->assertSame(['Ana'], \array_map(static fn (Participant $in): string => $in->name, Services::resolve($ide, Participants::class)->all()), 'and out of core\'s roster');
                 $this->assertContains('host~claude', \array_column($host->participants(), 'id'), 'the host\'s agent was never his to take');
-                $this->awaitPainted($tui, $terminal, '⇄ 2');
+                $this->awaitPainted($tui, $terminal, needle: '⇄ 2');
                 $this->hangUp();
             },
         ]);
@@ -264,7 +264,7 @@ final class HostEdgesE2eTest extends TestCase
         $this->runIde($project, $root.'/src/A.php', [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($root, $outside, $far): void {
                 $invite = $this->invited($ide);
-                $this->guest($tui, $terminal, $invite, 'Ana');
+                $this->guest($tui, $terminal, $invite, name: 'Ana');
 
                 // Not text: not shared.
                 $this->say(['t' => 'open', 'path' => 'pic.bin']);
@@ -287,7 +287,7 @@ final class HostEdgesE2eTest extends TestCase
                 // The host's own files outside the project are nobody else's business.
                 $buffers = $this->api($ide)->openBuffers();
                 $buffers->open($far);
-                $buffers->edit($far, 0, 0, 0, 0, '!');
+                $buffers->edit($far, line: 0, column: 0, endLine: 0, endColumn: 0, text: '!');
                 $buffers->save($far);
                 // Moved and deleted by hand (the plugin API's own stay inside the
                 // project): the host hears of it, and tells no one.
@@ -299,13 +299,13 @@ final class HostEdgesE2eTest extends TestCase
                 \file_put_contents($outside->path('x.txt'), data: 'x');
                 $this->api($ide)->openFile($outside->path('x.txt'));
                 $this->await(fn (): bool => \str_ends_with((string) $this->api($ide)->activeFile(), '/x.txt'), what: 'a file of nobody else\'s in front');
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertIsObject($host);
                 $this->say(['t' => 'open', 'path' => 'barrier.php']);
                 $this->expect('error');
-                Probe::invoke($host, 'caret'); // the poll, now: nothing to tell
+                Probe::invoke($host, method: 'caret'); // the poll, now: nothing to tell
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'saved' === $m['t'])), 'its save of a file of its own, outside: told to no one');
-                $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'presence' === $m['t'] && \str_contains(Wire::string($m, 'path'), 'x.txt'))));
+                $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'presence' === $m['t'] && \str_contains(Wire::string($m, key: 'path'), 'x.txt'))));
 
                 $this->say(['t' => 'op', 'path' => 'src/A.php', 'rev' => 0, 'ops' => [16, '// guest']]);
                 $this->expect('ack');

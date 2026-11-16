@@ -159,7 +159,7 @@ final class JoinCommand extends PluginCommand
      */
     private function enter(Invite $invite, string $name, OutputInterface $output): array|string
     {
-        $socket = GuestRendezvous::blocking(fn (): mixed => GuestRendezvous::connect($invite, 0, $this->timeout));
+        $socket = GuestRendezvous::blocking(fn (): mixed => GuestRendezvous::connect($invite, n: 0, timeout: $this->timeout));
         if (\is_string($socket)) {
             return \sprintf('Cannot reach the host: %s', $socket);
         }
@@ -202,7 +202,7 @@ final class JoinCommand extends PluginCommand
     {
         do {
             $message = $this->next($this->answerTimeout);
-            $kind = null === $message ? 'timeout' : Wire::string($message, 't');
+            $kind = null === $message ? 'timeout' : Wire::string($message, key: 't');
             if ('pending' === $kind) {
                 $output->writeln('Waiting for the host to let you in…');
             }
@@ -212,7 +212,7 @@ final class JoinCommand extends PluginCommand
             return $this->welcomed($message ?? [], $output);
         }
 
-        return match (null === $message ? 'timeout' : Wire::string($message, 'reason')) {
+        return match (null === $message ? 'timeout' : Wire::string($message, key: 'reason')) {
             'host' => 'The host turned you away',
             'full' => 'The session is full',
             'busy' => 'Too many are waiting to be let in — try again in a moment',
@@ -231,17 +231,17 @@ final class JoinCommand extends PluginCommand
     {
         $project = \is_array($message['project'] ?? null) ? $message['project'] : [];
         $id = \is_string($project['id'] ?? null) && 1 === \preg_match('/^[0-9a-f]{16}$/', $project['id']) ? $project['id'] : null;
-        $ticket = Wire::string($message, 'ticket');
+        $ticket = Wire::string($message, key: 'ticket');
         if (null === $id || '' === $ticket) {
             return 'The host sent a welcome this Porta does not understand';
         }
-        $output->writeln(\sprintf('In, %s.', 'edit' === Wire::string($message, 'role') ? 'editing' : 'reading along'));
+        $output->writeln(\sprintf('In, %s.', 'edit' === Wire::string($message, key: 'role') ? 'editing' : 'reading along'));
 
         return [
             'project' => $id,
             'name' => \is_string($project['name'] ?? null) ? Wire::clean($project['name']) : '',
             'ticket' => $ticket,
-            'languages' => Wire::strings($message, 'languages'),
+            'languages' => Wire::strings($message, key: 'languages'),
         ];
     }
 
@@ -249,11 +249,11 @@ final class JoinCommand extends PluginCommand
     private function sync(Mirror $mirror, OutputInterface $output): ?string
     {
         $this->send(['t' => 'manifest']);
-        $message = $this->next($this->timeout * 6, 'manifest');
+        $message = $this->next($this->timeout * 6, type: 'manifest');
         if (null === $message) {
             return $this->silence('The host did not list its files');
         }
-        $host = Wire::files($message, 'files');
+        $host = Wire::files($message, key: 'files');
         $pruned = $mirror->prune($host);
         $missing = $mirror->missing($host);
         $output->writeln(\sprintf('Files shared: %d — to fetch: %d, removed: %d.', \count($host), \count($missing), $pruned));
@@ -282,9 +282,9 @@ final class JoinCommand extends PluginCommand
             }
             // A file gone on the host by the fetch comes as missing, with no
             // data — which decodes to an empty file, not to none.
-            $content = true === ($message['missing'] ?? null) ? false : \base64_decode(Wire::string($message, 'data'), strict: true);
+            $content = true === ($message['missing'] ?? null) ? false : \base64_decode(Wire::string($message, key: 'data'), strict: true);
             if ('file' === $message['t'] && false !== $content) {
-                $mirror->write(Wire::string($message, 'path'), $content);
+                $mirror->write(Wire::string($message, key: 'path'), $content);
             }
         }
     }

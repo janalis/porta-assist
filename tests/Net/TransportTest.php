@@ -73,7 +73,7 @@ final class TransportTest extends TestCase
     private function pair(): array
     {
         [, $invite] = $this->door();
-        $guest = self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 0, 5.0));
+        $guest = self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, n: 0, timeout: 5.0));
         $this->assertIsResource($guest);
         $this->await(fn (): bool => [] !== $this->accepted, what: 'the host\'s end');
 
@@ -193,7 +193,7 @@ final class TransportTest extends TestCase
             }
         }, static function (): void {});
 
-        $socket = Probe::get($guest, 'stream');
+        $socket = Probe::get($guest, property: 'stream');
         $this->assertIsResource($socket);
         \fwrite($socket, data: "not json\n{\"t\":\"one\"}\n{\"t\":\"stop\"}\n{\"t\":\"unread\"}\n");
         $this->await($host->isClosed(...), what: 'the close');
@@ -234,9 +234,9 @@ final class TransportTest extends TestCase
 
         $this->assertLessThan(0.5, (\hrtime(as_number: true) - $before) / 1e9, 'no blocking write');
         $this->assertSame(['removed'], $closed, 'the owner hears it at once');
-        $this->assertIsResource(Probe::get($connection, 'stream'), 'the last message still has its chance');
+        $this->assertIsResource(Probe::get($connection, property: 'stream'), 'the last message still has its chance');
         $this->pump(Connection::LINGER + 0.3);
-        $this->assertIsClosedResource(Probe::get($connection, 'stream'), 'then the socket goes regardless');
+        $this->assertIsClosedResource(Probe::get($connection, property: 'stream'), 'then the socket goes regardless');
         \fclose($client);
     }
 
@@ -305,7 +305,7 @@ final class TransportTest extends TestCase
         $this->assertSame("{\"t\":\"ping\"}\n{\"t\":\"mark\"}\n", $said, 'one ping back, however often it is armed');
 
         $connection->close('done');
-        $this->assertIsClosedResource(Probe::get($connection, 'stream'), 'nothing queued: the socket goes at once');
+        $this->assertIsClosedResource(Probe::get($connection, property: 'stream'), 'nothing queued: the socket goes at once');
         \fclose($client);
     }
 
@@ -427,11 +427,11 @@ final class TransportTest extends TestCase
         [$guest, $host] = $this->pair();
         $guest->listen(static function (array $message): void {}, static function (): void {});
         $host->listen(static function (array $message): void {}, static function (): void {});
-        $this->assertNull(Probe::get($host, 'heartbeat'));
+        $this->assertNull(Probe::get($host, property: 'heartbeat'));
 
         $guest->keepAlive();
 
-        $this->await(static fn (): bool => null !== Probe::get($host, 'heartbeat'), what: 'the ping to arrive');
+        $this->await(static fn (): bool => null !== Probe::get($host, property: 'heartbeat'), what: 'the ping to arrive');
         $guest->close('done');
         $host->close('done');
     }
@@ -496,20 +496,20 @@ final class TransportTest extends TestCase
     {
         [$door, $invite] = $this->door();
         // Channels 0 and 1 taken by guest processes that died: 2 still gets through.
-        $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2, 5.0)));
-        $this->assertIsString(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2, 1.5)), 'a channel joined is spent: not waited on again');
+        $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, n: 2, timeout: 5.0)));
+        $this->assertIsString(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, n: 2, timeout: 1.5)), 'a channel joined is spent: not waited on again');
         // Past the window from there, nothing waits; within it, the host does.
-        $this->assertSame('nobody came to the relay at '.$this->wormhole->transit, self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 20, 0.3)));
-        $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2 + Door::WINDOW, 5.0)));
+        $this->assertSame('nobody came to the relay at '.$this->wormhole->transit, self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, n: 20, timeout: 0.3)));
+        $this->assertIsResource(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 2 + Door::WINDOW, timeout: 5.0)));
         $this->await(fn (): bool => 2 === \count($this->accepted), what: 'both through');
         // Waits far behind the last channel joined are called off.
-        $this->assertSame([3, 4, 5, 7, 8, 9, 10], \array_keys((array) Probe::get($door, 'waits')));
+        $this->assertSame([3, 4, 5, 7, 8, 9, 10], \array_keys((array) Probe::get($door, property: 'waits')));
 
         $door->close();
         $door->close();
         // Closed: nobody waits — or a wait the relay has not seen go yet,
         // which joins and then says nothing.
-        $this->assertIsString(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, 9, 0.3)), 'closed: nobody lets the guest in');
+        $this->assertIsString(self::blocking(static fn (): mixed => GuestRendezvous::connect($invite, n: 9, timeout: 0.3)), 'closed: nobody lets the guest in');
     }
 
     public function testOnlyTheHostTheInviteNamesIsTalkedTo(): void
@@ -518,7 +518,7 @@ final class TransportTest extends TestCase
         $impostor = Certificate::create();
         $impostor->forget();
 
-        $result = self::blocking(static fn (): mixed => GuestRendezvous::connect(new Invite($invite->key, $invite->transit, $impostor->fingerprint, $invite->token), 0, 5.0));
+        $result = self::blocking(static fn (): mixed => GuestRendezvous::connect(new Invite($invite->key, $invite->transit, $impostor->fingerprint, $invite->token), n: 0, timeout: 5.0));
 
         $this->assertSame('the host is not the one the invite names', $result);
     }
@@ -527,7 +527,7 @@ final class TransportTest extends TestCase
     {
         // A guest that never shakes hands: the host lets it go.
         [, $invite] = $this->door(timeout: 0.2);
-        $plain = self::blocking(static fn (): mixed => Transit::at($invite->transit, 2.0)->pair($invite->key->channel(0), 'ab', 2.0));
+        $plain = self::blocking(static fn (): mixed => Transit::at($invite->transit, timeout: 2.0)->pair($invite->key->channel(0), side: 'ab', wait: 2.0));
         $this->assertIsResource($plain);
         $this->await(static fn (): bool => '' === \fread($plain, length: 10) && \feof($plain), what: 'the silent guest let go');
         $this->assertSame([], $this->accepted);
@@ -537,17 +537,17 @@ final class TransportTest extends TestCase
         $invite = new Invite($key, $this->wormhole->transit, $this->certificate->fingerprint, \str_repeat('ab', times: 16));
         foreach (["HTTP/1.0 400 nope\r\n\r\n" => 'the secure connection failed', '' => 'the handshake took too long'] as $answer => $says) {
             $host = null;
-            $transit = Transit::at($this->wormhole->transit, 2.0);
+            $transit = Transit::at($this->wormhole->transit, timeout: 2.0);
             EventLoop::queue(static function () use ($transit, $key, &$host): void {
-                $host = $transit->pair($key->channel(0), 'cd', null);
+                $host = $transit->pair($key->channel(0), side: 'cd', wait: null);
             });
-            $stream = self::blocking(static fn (): mixed => GuestRendezvous::pair($invite, 0, 2.0));
+            $stream = self::blocking(static fn (): mixed => GuestRendezvous::pair($invite, n: 0, timeout: 2.0));
             $this->assertIsResource($stream);
             $this->await(static function () use (&$host): bool {
                 return \is_resource($host);
             }, what: 'the host joined');
             \fwrite($host, $answer);
-            $this->assertSame($says, self::blocking(static fn (): mixed => GuestRendezvous::secure($invite, $stream, 0.3)));
+            $this->assertSame($says, self::blocking(static fn (): mixed => GuestRendezvous::secure($invite, $stream, timeout: 0.3)));
             \fclose($host);
         }
     }
@@ -556,12 +556,12 @@ final class TransportTest extends TestCase
     {
         // Port 1 on loopback: nothing listens there, and nothing unprivileged can
         // start to — a port closed by this test could be taken by a parallel one.
-        $this->assertSame('127.0.0.1:1 refused the connection', self::blocking(static fn (): mixed => Tcp::connect('127.0.0.1', 1, 2.0)));
+        $this->assertSame('127.0.0.1:1 refused the connection', self::blocking(static fn (): mixed => Tcp::connect('127.0.0.1', port: 1, timeout: 2.0)));
         // Over DNS's 63-character label: no resolver is asked, so none can answer it (see ResolverTest).
         $nobody = \str_repeat('x', times: 64).'.invalid';
-        $this->assertStringStartsWith("cannot reach {$nobody}:1", (string) self::blocking(static fn (): mixed => Tcp::connect($nobody, 1, 2.0)));
-        $this->assertSame('10.255.255.1:9 did not answer', self::blocking(static fn (): mixed => Tcp::connect('10.255.255.1', 9, 0.2)));
-        $this->assertStringStartsWith('::1:1 ', (string) self::blocking(static fn (): mixed => Tcp::connect('::1', 1, 2.0)), 'IPv6, spelled in brackets to connect');
+        $this->assertStringStartsWith("cannot reach {$nobody}:1", (string) self::blocking(static fn (): mixed => Tcp::connect($nobody, port: 1, timeout: 2.0)));
+        $this->assertSame('10.255.255.1:9 did not answer', self::blocking(static fn (): mixed => Tcp::connect('10.255.255.1', port: 9, timeout: 0.2)));
+        $this->assertStringStartsWith('::1:1 ', (string) self::blocking(static fn (): mixed => Tcp::connect('::1', port: 1, timeout: 2.0)), 'IPv6, spelled in brackets to connect');
     }
 
     public function testARelayThatCannotBeReachedIsWaitedAtAgainUntilTheDoorCloses(): void
@@ -569,19 +569,19 @@ final class TransportTest extends TestCase
         $door = new Door(new SessionKey(\random_bytes(32)), '127.0.0.1:1', $this->certificate, static function (): void {}, 0.5);
         $door->open();
         $this->pump(0.2);
-        $this->assertSame(Door::WINDOW - 1, Probe::get($door, 'last'), 'refused: not further along');
-        $this->assertSame([], Probe::get($door, 'waits'), 'each pausing before it waits again');
+        $this->assertSame(Door::WINDOW - 1, Probe::get($door, property: 'last'), 'refused: not further along');
+        $this->assertSame([], Probe::get($door, property: 'waits'), 'each pausing before it waits again');
         $door->close();
-        $this->assertSame([], Probe::get($door, 'waits'));
+        $this->assertSame([], Probe::get($door, property: 'waits'));
     }
 
     public function testAWaitCalledOffOrHungUpOnSaysSo(): void
     {
         // Called off before it even connected.
-        $transit = Transit::at($this->wormhole->transit, 2.0);
+        $transit = Transit::at($this->wormhole->transit, timeout: 2.0);
         $result = null;
         EventLoop::queue(static function () use ($transit, &$result): void {
-            $result = $transit->pair('ab', 'cd', null);
+            $result = $transit->pair('ab', side: 'cd', wait: null);
         });
         $transit->cancel();
         $this->await(static function () use (&$result): bool {
@@ -605,9 +605,9 @@ final class TransportTest extends TestCase
         ];
         foreach ($answers as $says => $answer) {
             $result = null;
-            $transit = Transit::at($address, 2.0);
+            $transit = Transit::at($address, timeout: 2.0);
             EventLoop::queue(static function () use ($transit, &$result): void {
-                $result = $transit->pair('ab', 'cd', 2.0);
+                $result = $transit->pair('ab', side: 'cd', wait: 2.0);
             });
             $accepted = null;
             $this->await(

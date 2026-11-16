@@ -40,7 +40,7 @@ final class AssistUiE2eTest extends TestCase
 
     private function plugins(Ide $ide): PluginManager
     {
-        $plugins = Probe::get(Services::resolve($ide, PluginLifecycle::class), 'plugins');
+        $plugins = Probe::get(Services::resolve($ide, PluginLifecycle::class), property: 'plugins');
         $this->assertInstanceOf(PluginManager::class, $plugins, 'the lifecycle holds the plugins');
 
         return $plugins;
@@ -106,29 +106,29 @@ final class AssistUiE2eTest extends TestCase
                     ],
                     $this->enabled($ide),
                 );
-                $this->command($ide, 'assist:follow');
-                $this->await(static fn (): bool => self::toasted($ide, 'Nobody else is in the session'), what: 'nobody to follow');
+                $this->command($ide, id: 'assist:follow');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Nobody else is in the session'), what: 'nobody to follow');
                 $nobody = static fn (): int => \count(\array_filter(Toasts::all($ide), static fn (string $toast): bool => 'Nobody else is in the session' === $toast));
                 $before = $nobody();
-                $this->command($ide, 'assist:participants');
+                $this->command($ide, id: 'assist:participants');
                 $this->assertGreaterThan($before, $nobody(), 'nobody to list either');
 
                 // A relay or a mailbox server that is not one: said, and nothing shared.
                 $api = $this->api($ide);
-                $api->changeSetting('transit', 'nowhere');
-                $this->command($ide, 'assist:share');
-                $this->await(static fn (): bool => self::toasted($ide, 'Cannot share: the relay "nowhere" is not host:port'), what: 'the relay refused');
-                $this->assertNull(Probe::get($this->plugin($ide), 'host'));
+                $api->changeSetting('transit', value: 'nowhere');
+                $this->command($ide, id: 'assist:share');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Cannot share: the relay "nowhere" is not host:port'), what: 'the relay refused');
+                $this->assertNull(Probe::get($this->plugin($ide), property: 'host'));
                 $api->changeSetting('transit', $this->wormhole()->transit);
-                $api->changeSetting('mailbox', 'ws://127.0.0.1:1/v1');
-                $this->command($ide, 'assist:share');
-                $host = Probe::get($this->plugin($ide), 'host');
+                $api->changeSetting('mailbox', value: 'ws://127.0.0.1:1/v1');
+                $this->command($ide, id: 'assist:share');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertIsObject($host);
-                $certificate = Probe::get($host, 'certificate');
+                $certificate = Probe::get($host, property: 'certificate');
                 $this->assertInstanceOf(Certificate::class, $certificate);
-                $this->await(static fn (): bool => self::toasted($ide, 'Cannot share: 127.0.0.1:1 refused the connection'), what: 'the mailbox server unreachable');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Cannot share: 127.0.0.1:1 refused the connection'), what: 'the mailbox server unreachable');
                 $this->assertFileDoesNotExist($certificate->file, 'its key gone with the share that failed');
-                $this->assertNull(Probe::get($this->plugin($ide), 'host'));
+                $this->assertNull(Probe::get($this->plugin($ide), property: 'host'));
                 Services::resolve($ide, Identity::class)->rename('Hal');
 
                 // Shared — twice is the same session, its code copied again.
@@ -143,8 +143,8 @@ final class AssistUiE2eTest extends TestCase
                 $this->assertStringContainsString($copied, $terminal->getOutput(), 'copied again from the menu');
                 $invite = $this->redeem($code);
 
-                $this->askIn($invite, 'Ana');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->askIn($invite, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $welcome = $this->expect('welcome');
                 $this->assertSame([['id' => 'host', 'name' => 'Hal', 'role' => 'host']], $welcome['peers'], 'the name the host chose');
@@ -183,13 +183,13 @@ final class AssistUiE2eTest extends TestCase
                 ($this->menu($ide)['Follow Ana']->run)();
                 $this->assertSame('⇄ 1 → Ana', $this->cell($ide)?->text);
                 ($this->menu($ide)['Stop following']->run)();
-                $this->command($ide, 'assist:follow');
-                $this->awaitPainted($tui, $terminal, 'Follow');
+                $this->command($ide, id: 'assist:follow');
+                $this->awaitPainted($tui, $terminal, needle: 'Follow');
                 $terminal->simulateInput("\r");
                 $this->await(fn (): bool => '⇄ 1 → Ana' === $this->cell($ide)?->text, what: 'following from the command');
 
                 ($this->menu($ide)['Participants']->run)();
-                $this->awaitPainted($tui, $terminal, 'Participants');
+                $this->awaitPainted($tui, $terminal, needle: 'Participants');
                 $terminal->simulateInput("\x1b");
                 ($this->menu($ide)['Stop sharing']->run)();
                 $this->assertSame('ended', $this->expect('bye')['reason']);
@@ -197,16 +197,16 @@ final class AssistUiE2eTest extends TestCase
                 $this->assertSame([], $roster->all(), 'and out of it once the session is over');
 
                 // Joining from inside the IDE hands over the command to run.
-                $this->command($ide, 'assist:join');
-                $this->awaitPainted($tui, $terminal, 'Code from the host');
+                $this->command($ide, id: 'assist:join');
+                $this->awaitPainted($tui, $terminal, needle: 'Code from the host');
                 $terminal->clearOutput();
                 $terminal->simulateInput('porta assist '.\strtolower($code->text())."\r");
                 $this->await(static fn (): bool => self::toasted($ide, 'run it in a terminal: porta assist '.$code->text()), what: 'the command handed over');
                 $this->assertStringContainsString($copied, $terminal->getOutput(), 'and copied, as the host wrote it');
-                $this->command($ide, 'assist:join');
-                $this->awaitPainted($tui, $terminal, 'Code from the host');
+                $this->command($ide, id: 'assist:join');
+                $this->awaitPainted($tui, $terminal, needle: 'Code from the host');
                 $terminal->simulateInput("nonsense\r");
-                $this->await(static fn (): bool => self::toasted($ide, '"nonsense" is not a code like 42-K7QM-X2PA'), what: 'refused');
+                $this->await(static fn (): bool => self::toasted($ide, text: '"nonsense" is not a code like 42-K7QM-X2PA'), what: 'refused');
                 $this->hangUp();
             },
         ]);
@@ -228,7 +228,7 @@ final class AssistUiE2eTest extends TestCase
                 $this->say(['t' => 'role', 'role' => 'edit']);
                 $this->await(fn (): bool => 'In Hal\'s session, editing' === $this->cell($ide)?->tooltip, what: 'editing');
                 $this->say(['t' => 'server', 'port' => 0]);
-                $this->await(static fn (): bool => self::toasted($ide, 'Hal shared localhost:0'), what: 'a server shared');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Hal shared localhost:0'), what: 'a server shared');
                 $this->assertSame(
                     [
                         'assist:share' => false,
@@ -247,8 +247,8 @@ final class AssistUiE2eTest extends TestCase
                     $this->enabled($ide),
                 );
 
-                $this->command($ide, 'assist:share');
-                $this->await(static fn (): bool => self::toasted($ide, 'it is theirs to share'), what: 'not ours to share');
+                $this->command($ide, id: 'assist:share');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'it is theirs to share'), what: 'not ours to share');
                 $this->assertSame(['Follow Hal', 'Ask everyone to follow me', '', 'Participants', 'Leave the session'], \array_keys($this->menu($ide)));
 
                 // Cy reads along, the host's agent is at work: each listed by what they are, each to follow.
@@ -256,8 +256,8 @@ final class AssistUiE2eTest extends TestCase
                 $this->say(['t' => 'presence', 'peer' => 'host~claude', 'name' => 'Claude', 'agent' => true, 'path' => 'src/A.php', 'line' => 0, 'column' => 0]);
                 $this->await(fn (): bool => \array_key_exists('Follow Claude', $this->menu($ide)), what: 'the agent among them');
                 $this->assertSame(['Follow Hal', 'Follow Cy', 'Follow Claude'], \array_slice(\array_keys($this->menu($ide)), offset: 0, length: 3));
-                $this->command($ide, 'assist:participants');
-                $this->awaitPainted($tui, $terminal, 'reading along');
+                $this->command($ide, id: 'assist:participants');
+                $this->awaitPainted($tui, $terminal, needle: 'reading along');
                 $row = fn (string $name): string => (
                     \array_find($this->screenGrid($tui, $terminal), static fn (string $line): bool => 1 === \preg_match('/\b'.$name.'\b.*\S\s*$/u', $line) && !\str_contains($line, 'shared')) ?? ''
                 );
@@ -275,12 +275,12 @@ final class AssistUiE2eTest extends TestCase
                 ($this->menu($ide)['Ask everyone to follow me']->run)();
                 $this->assertSame('focus', $this->expect('focus')['t']);
                 $this->assertSame('src/A.php', $this->expect('presence')['path'], 'where this guest is, sent again at once');
-                $this->await(static fn (): bool => self::toasted($ide, 'Asked everyone to follow you'), what: 'the ask said');
-                $guest = Probe::get($this->plugin($ide), 'guest');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Asked everyone to follow you'), what: 'the ask said');
+                $guest = Probe::get($this->plugin($ide), property: 'guest');
                 $this->assertIsObject($guest);
                 ($this->menu($ide)['Leave the session']->run)();
                 $this->assertSame('good', $this->expect('bye')['for'], 'for good: the host need not keep its way back');
-                $this->assertNull(Probe::get($guest, 'lostFor'), 'leaving is not losing the host');
+                $this->assertNull(Probe::get($guest, property: 'lostFor'), 'leaving is not losing the host');
                 $this->await(fn (): bool => null === $this->cell($ide), what: 'gone from the status bar');
                 $this->hangUp();
             },

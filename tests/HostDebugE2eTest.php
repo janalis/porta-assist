@@ -70,7 +70,7 @@ final class HostDebugE2eTest extends TestCase
         $this->runIde($project, $project->path('prog.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
                 $invite = $this->invited($ide);
-                $this->letIn($tui, $terminal, $invite, 'Ana');
+                $this->letIn($tui, $terminal, $invite, name: 'Ana');
                 $ana = $this->peer;
                 // Nobody debugging: nothing is said of it.
                 $this->say(['t' => 'open', 'path' => 'nope.php']);
@@ -79,7 +79,7 @@ final class HostDebugE2eTest extends TestCase
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'debug' === $m['t'])), 'not told of a debugger that is not there');
 
                 // A breakpoint on line 5, and the host debugs: she is told where it stopped.
-                Widgets::editor($tui)->getDocument()->setCursor(4, 0);
+                Widgets::editor($tui)->getDocument()->setCursor(4, col: 0);
                 $tui->handleInput("\x1b[19;5~"); // ctrl+f8
                 $tui->handleInput("\x1b[20;2~"); // shift+f9
                 $paused = $this->debugState('paused');
@@ -87,7 +87,7 @@ final class HostDebugE2eTest extends TestCase
                 $this->assertSame([['id' => 1, 'name' => '{main}', 'path' => 'prog.php', 'line' => 4], ['id' => 2, 'name' => 'require', 'path' => 'prog.php', 'line' => 0]], $paused['frames']);
 
                 // A newcomer is told too.
-                $this->letIn($tui, $terminal, $invite, 'Bo');
+                $this->letIn($tui, $terminal, $invite, name: 'Bo');
                 $this->assertSame('paused', $this->expect('debug')['status']);
                 $this->hangUp();
                 $this->peer = $ana;
@@ -108,10 +108,10 @@ final class HostDebugE2eTest extends TestCase
                 // Not let: refused. Let: her step goes through.
                 $this->say(['t' => 'debug-step', 'verb' => 'stepOver']);
                 $this->expect('debug-refused');
-                $this->command($ide, 'assist:participants');
-                $this->awaitPainted($tui, $terminal, 'Ana');
+                $this->command($ide, id: 'assist:participants');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana');
                 $terminal->simulateInput(self::DOWN."\r");
-                $this->awaitPainted($tui, $terminal, 'Let them step the debugger');
+                $this->awaitPainted($tui, $terminal, needle: 'Let them step the debugger');
                 $terminal->simulateInput(\str_repeat(self::DOWN, times: 7)."\r");
                 $this->assertTrue($this->expect('debugging')['allowed']);
                 $this->say(['t' => 'debug-step', 'verb' => 'stepOver']);
@@ -129,7 +129,7 @@ final class HostDebugE2eTest extends TestCase
                 $this->assertSame(7, $this->debugState('paused')['line'], 'paused where it was');
                 $this->api($ide)->runs()->debugger()->stop();
                 $this->debugState('idle');
-                $this->command($ide, 'assist:stop');
+                $this->command($ide, id: 'assist:stop');
                 $this->hangUp();
             },
         ]);

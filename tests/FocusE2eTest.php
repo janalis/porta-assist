@@ -55,12 +55,12 @@ final class FocusE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($b): void {
-                $this->command($ide, 'assist:focus');
-                $this->await(static fn (): bool => self::toasted($ide, 'Nobody else is in the session'), what: 'nobody to ask');
+                $this->command($ide, id: 'assist:focus');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Nobody else is in the session'), what: 'nobody to ask');
                 Services::resolve($ide, Identity::class)->rename('Hal');
                 $invite = $this->invited($ide);
-                $ana = $this->letIn($tui, $terminal, $invite, 'Ana');
-                $bo = $this->letIn($tui, $terminal, $invite, 'Bo');
+                $ana = $this->letIn($tui, $terminal, $invite, name: 'Ana');
+                $bo = $this->letIn($tui, $terminal, $invite, name: 'Bo');
 
                 // The host asks: both follow it, shown where it is — its caret
                 // sent again, though it has not moved since each saw it.
@@ -75,7 +75,7 @@ final class FocusE2eTest extends TestCase
                     $this->drain();
                     $this->inbox = [];
                 }
-                $this->command($ide, 'assist:focus');
+                $this->command($ide, id: 'assist:focus');
                 foreach ([$ana, $bo] as $guest) {
                     $this->peer = $guest;
                     $this->assertSame(['t' => 'focus', 'peer' => 'host', 'name' => 'Hal'], $this->expect('focus'));
@@ -87,7 +87,7 @@ final class FocusE2eTest extends TestCase
                 $this->peer = $ana;
                 $this->say(['t' => 'focus']);
                 $this->say(['t' => 'presence', 'path' => 'src/B.php', 'line' => 3, 'column' => 2]);
-                $this->await(static fn (): bool => self::toasted($ide, 'Ana asked everyone to follow them'), what: 'the host told');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Ana asked everyone to follow them'), what: 'the host told');
                 $this->await(fn (): bool => $b === $this->api($ide)->activeFile(), what: 'the host taken to her file');
                 $this->peer = $bo;
                 $asked = $this->expect('focus');
@@ -99,7 +99,7 @@ final class FocusE2eTest extends TestCase
                 $this->expect('error'); // answered in order: anything for her came before it
                 $this->drain();
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'focus' === $m['t'])), 'not asked to follow herself');
-                $this->command($ide, 'assist:stop');
+                $this->command($ide, id: 'assist:stop');
                 $this->pump(0.2);
                 $this->hangUp();
             },
@@ -128,13 +128,13 @@ final class FocusE2eTest extends TestCase
                     'ticket' => self::TICKET,
                     'peers' => [['id' => 'host', 'name' => 'Hal', 'role' => 'host'], ['id' => 'g2', 'name' => 'Cy', 'role' => 'edit']],
                 ]);
-                $this->await(static fn (): bool => self::toasted($ide, 'Connected to Hal'), what: 'in');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Connected to Hal'), what: 'in');
 
                 $this->say(['t' => 'focus', 'peer' => 'g2', 'name' => 'Cy']);
                 $this->say(['t' => 'presence', 'peer' => 'g2', 'name' => 'Cy', 'path' => 'src/B.php', 'line' => 2, 'column' => 0]);
-                $this->await(static fn (): bool => self::toasted($ide, 'Cy asked everyone to follow them'), what: 'told');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Cy asked everyone to follow them'), what: 'told');
                 $this->await(fn (): bool => $b === $this->api($ide)->activeFile(), what: 'taken to Cy\'s file');
-                $follow = Probe::get($this->plugin($ide), 'follow');
+                $follow = Probe::get($this->plugin($ide), property: 'follow');
                 $this->assertIsObject($follow);
                 $this->assertSame(['g2', 'Cy'], $follow->target);
                 $this->pump(0.2);

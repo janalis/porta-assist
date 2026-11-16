@@ -115,7 +115,7 @@ final class LanguageServerCommand extends PluginCommand
         \stream_set_timeout($socket, (int) \ceil($this->timeout));
         $answer = $this->first($socket, $lines);
         $ready = 'ready' === ($answer['t'] ?? null);
-        $failure = $ready ? null : \sprintf('<error>The host runs no %s language server for this session (%s).</error>', $language, Wire::string($answer ?? [], 'reason'));
+        $failure = $ready ? null : \sprintf('<error>The host runs no %s language server for this session (%s).</error>', $language, Wire::string($answer ?? [], key: 'reason'));
         $gone = $ready && $this->relay($socket, $lines);
         \fclose($socket);
 

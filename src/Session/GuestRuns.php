@@ -35,8 +35,8 @@ final readonly class GuestRuns
                 slot: 'assist',
             ),
             default => $this->api->notify(
-                'unknown' === Wire::string($message, 'reason')
-                    ? $this->api->trans('The host has no run configuration %label% any more', ['%label%' => Wire::text($message, 'label')])
+                'unknown' === Wire::string($message, key: 'reason')
+                    ? $this->api->trans('The host has no run configuration %label% any more', ['%label%' => Wire::text($message, key: 'label')])
                     : $this->api->trans('The host has not let you run its configurations'),
                 slot: 'assist',
             ),
@@ -46,7 +46,7 @@ final readonly class GuestRuns
     /** @param array<string, mixed> $message what the host offers, and whether this guest may run it */
     private function offered(array $message): void
     {
-        $labels = \array_map(Wire::clean(...), Wire::strings($message, 'labels'));
+        $labels = \array_map(Wire::clean(...), Wire::strings($message, key: 'labels'));
         if (true !== ($message['allowed'] ?? null)) {
             $this->api->flash($this->api->trans('The host has not let you run its configurations'));
 

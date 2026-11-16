@@ -70,7 +70,7 @@ final class Mailbox
 
             throw $e;
         }
-        $refusal = \is_array($welcome['welcome'] ?? null) ? Wire::text($welcome['welcome'], 'error') : '';
+        $refusal = \is_array($welcome['welcome'] ?? null) ? Wire::text($welcome['welcome'], key: 'error') : '';
         if ('' !== $refusal) {
             $mailbox->hangUp();
 
@@ -86,14 +86,14 @@ final class Mailbox
     {
         $this->say(['type' => 'allocate']);
 
-        return Wire::string($this->expect('allocated'), 'nameplate');
+        return Wire::string($this->expect('allocated'), key: 'nameplate');
     }
 
     /** Claim $nameplate, and open the mailbox it names. @throws RendezvousFailed */
     public function claim(string $nameplate): void
     {
         $this->say(['type' => 'claim', 'nameplate' => $nameplate]);
-        $this->mailbox = Wire::string($this->expect('claimed'), 'mailbox');
+        $this->mailbox = Wire::string($this->expect('claimed'), key: 'mailbox');
         $this->say(['type' => 'open', 'mailbox' => $this->mailbox]);
     }
 
@@ -183,11 +183,11 @@ final class Mailbox
         }
         /** @var array<string, mixed> $message */
         if ('error' === $message['type']) {
-            throw new RendezvousFailed(\sprintf('the mailbox server says: %s', Wire::text($message, 'error')));
+            throw new RendezvousFailed(\sprintf('the mailbox server says: %s', Wire::text($message, key: 'error')));
         }
-        $body = \hex2bin(Wire::string($message, 'body'));
-        if ('message' === $message['type'] && $this->side !== Wire::string($message, 'side') && false !== $body) {
-            $this->phases[Wire::string($message, 'phase')] ??= $body;
+        $body = \hex2bin(Wire::string($message, key: 'body'));
+        if ('message' === $message['type'] && $this->side !== Wire::string($message, key: 'side') && false !== $body) {
+            $this->phases[Wire::string($message, key: 'phase')] ??= $body;
         }
 
         return $message;

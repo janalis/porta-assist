@@ -20,7 +20,7 @@ final class SharedTextTest extends TestCase
         [$shared, $buffer] = self::shared("one\ntwo");
 
         $this->assertNull($shared->read(), 'nothing typed');
-        self::type($buffer, "one\ntwo!");
+        self::type($buffer, text: "one\ntwo!");
         $this->assertSame([7, '!'], $shared->read()?->toWire());
         $this->assertSame("one\ntwo!", $shared->shadow);
         $this->assertNull($shared->read(), 'read once');
@@ -37,10 +37,10 @@ final class SharedTextTest extends TestCase
     {
         [$shared] = self::shared("ab\ncdef\ng");
 
-        $shared->placeCaret('a', 1, 2, null, null);
-        $shared->placeCaret('b', 1, 99, 0, -5);
-        $shared->placeCaret('c', 9, 0, 2, 1);
-        $shared->placeCaret('d', 0, 0, null, null);
+        $shared->placeCaret('a', line: 1, column: 2, anchorLine: null, anchorColumn: null);
+        $shared->placeCaret('b', line: 1, column: 99, anchorLine: 0, anchorColumn: -5);
+        $shared->placeCaret('c', line: 9, column: 0, anchorLine: 2, anchorColumn: 1);
+        $shared->placeCaret('d', line: 0, column: 0, anchorLine: null, anchorColumn: null);
 
         $this->assertSame(
             [
@@ -60,12 +60,12 @@ final class SharedTextTest extends TestCase
     public function testEveryChangeMovesTheCarets(): void
     {
         [$shared, $buffer] = self::shared("ab\ncd");
-        $shared->placeCaret('peer', 1, 1, 1, 0);
+        $shared->placeCaret('peer', line: 1, column: 1, anchorLine: 1, anchorColumn: 0);
 
-        self::type($buffer, "Xab\ncd");
+        self::type($buffer, text: "Xab\ncd");
         $shared->read();
         $this->assertSame(['line' => 1, 'column' => 1, 'anchorLine' => 1, 'anchorColumn' => 0], $shared->carets()['peer'], 'a line above grew: the caret is where it was in its own line');
-        self::type($buffer, "Xab\nYcd");
+        self::type($buffer, text: "Xab\nYcd");
         $shared->read();
         $this->assertSame(['line' => 1, 'column' => 2, 'anchorLine' => 1, 'anchorColumn' => 1], $shared->carets()['peer'], 'typed here, before it: pushed along');
 
@@ -83,7 +83,7 @@ final class SharedTextTest extends TestCase
     public function testUndoTakesBackThisSidesOwnChangeWhereItIsNow(): void
     {
         [$shared, $buffer] = self::shared('ab');
-        self::type($buffer, 'aXb');
+        self::type($buffer, text: 'aXb');
         $shared->read();
 
         $shared->apply(
@@ -97,7 +97,7 @@ final class SharedTextTest extends TestCase
         $this->assertSame([4, 'X', 1], $shared->redo()?->toWire());
         $this->assertSame('123aXb', $buffer['text']);
 
-        self::type($buffer, '123aXbY');
+        self::type($buffer, text: '123aXbY');
         $this->assertSame([6, -1], $shared->undo()?->toWire(), 'what was on screen and not read yet is read first, and is what is undone');
         $this->assertSame('123aXb', $buffer['text']);
         $this->assertSame('123aXb', $shared->shadow);
@@ -109,7 +109,7 @@ final class SharedTextTest extends TestCase
         [$shared, $buffer] = self::shared("keep\nthis");
 
         $this->assertFalse($shared->revert(), 'nothing got in');
-        self::type($buffer, "kept\nthat!");
+        self::type($buffer, text: "kept\nthat!");
         $this->assertTrue($shared->revert());
         $this->assertSame("keep\nthis", $buffer['text']);
         $this->assertFalse($shared->revert(), 'put back: nothing more to');

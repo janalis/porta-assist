@@ -63,7 +63,7 @@ final readonly class FakeWormhole
         $socket = \stream_socket_client('tcp://127.0.0.1:'.$port, timeout: 2.0);
         \assert(\is_resource($socket), description: 'the fake wormhole listens');
         \fwrite($socket, data: "GET /v1 HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: eA==\r\nSec-WebSocket-Version: 13\r\n\r\n");
-        \fwrite($socket, Frames::encode(Frames::TEXT, $message, 'mask'));
+        \fwrite($socket, Frames::encode(Frames::TEXT, $message, mask: 'mask'));
         \stream_set_timeout($socket, seconds: 2);
         do {
             $read = (string) \fread($socket, length: 8_192);

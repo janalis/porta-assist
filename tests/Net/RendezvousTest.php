@@ -70,17 +70,17 @@ final class RendezvousTest extends TestCase
     public function testWhatIsSealedOpensOnlyWithTheKeyAndForThePurpose(): void
     {
         $key = new SessionKey(\random_bytes(32));
-        $sealed = $key->seal('invite', 'the host');
+        $sealed = $key->seal('invite', text: 'the host');
         $this->assertSame('the host', $key->open('invite', $sealed));
-        $this->assertNotSame($sealed, $key->seal('invite', 'the host'), 'a nonce of its own each time');
+        $this->assertNotSame($sealed, $key->seal('invite', text: 'the host'), 'a nonce of its own each time');
         $this->assertNull($key->open('ack', $sealed), 'another purpose');
         $this->assertNull(new SessionKey(\random_bytes(32))->open('invite', $sealed), 'another key');
         // A bit flipped, not the byte replaced: one seal in 256 already ended
         // in the 'x' that replaced it, opened, and failed the test.
         $this->assertNull($key->open('invite', \substr($sealed, offset: 0, length: -1).\chr(\ord($sealed[-1]) ^ 1)), 'tampered with');
-        $this->assertNull($key->open('invite', 'short'));
+        $this->assertNull($key->open('invite', sealed: 'short'));
         $this->assertNull($key->open('invite', \str_repeat('x', times: 20)), 'a nonce and less than a seal: nothing, not an error');
-        $this->assertSame('', $key->open('invite', $key->seal('invite', '')), 'nothing sealed is the shortest seal, and opens');
+        $this->assertSame('', $key->open('invite', $key->seal('invite', text: '')), 'nothing sealed is the shortest seal, and opens');
 
         $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $key->channel(0));
         $this->assertSame($key->channel(3), $key->channel(3));
@@ -105,18 +105,18 @@ final class RendezvousTest extends TestCase
     public function testARelayIsHostAndPort(): void
     {
         // Taken without a word: an address that is not one throws, below.
-        Transit::at(Transit::PUBLIC, 1.0);
-        Transit::at(' [::1]:4001 ', 1.0);
+        Transit::at(Transit::PUBLIC, timeout: 1.0);
+        Transit::at(' [::1]:4001 ', timeout: 1.0);
         foreach (['nowhere', 'host:0', 'host:70000', ':4001'] as $bad) {
             try {
-                Transit::at($bad, 1.0);
+                Transit::at($bad, timeout: 1.0);
                 $this->fail($bad.' is refused');
             } catch (\InvalidArgumentException $e) {
                 $this->assertSame(\sprintf('the relay "%s" is not host:port', $bad), $e->getMessage());
             }
         }
         try {
-            Transit::at("  nowhere\n", 1.0);
+            Transit::at("  nowhere\n", timeout: 1.0);
             $this->fail('nowhere is refused');
         } catch (\InvalidArgumentException $e) {
             $this->assertSame('the relay "nowhere" is not host:port', $e->getMessage(), 'said without the spaces around it');
@@ -130,16 +130,16 @@ final class RendezvousTest extends TestCase
             $errors[] = $why;
         }, maxMessage: 100_000);
         $long = \str_repeat('x', times: 70_000);
-        $wire = Frames::encode(Frames::TEXT, 'hi', 'mask').Frames::encode(Frames::TEXT, \str_repeat('y', times: 200)).Frames::encode(Frames::TEXT, $long, 'abcd');
+        $wire = Frames::encode(Frames::TEXT, payload: 'hi', mask: 'mask').Frames::encode(Frames::TEXT, \str_repeat('y', times: 200)).Frames::encode(Frames::TEXT, $long, mask: 'abcd');
         $messages = [];
         foreach (\str_split($wire, length: 7) as $piece) {
             $messages = [...$messages, ...$frames->feed($piece)];
         }
         $this->assertSame([[Frames::TEXT, 'hi'], [Frames::TEXT, \str_repeat('y', times: 200)], [Frames::TEXT, $long]], $messages, 'masked or not, any length, fed a few bytes at a time');
-        $this->assertSame("\x81\x02hi", Frames::encode(Frames::TEXT, 'hi'), 'a server\'s: no mask');
+        $this->assertSame("\x81\x02hi", Frames::encode(Frames::TEXT, payload: 'hi'), 'a server\'s: no mask');
 
         // A message in fragments, a ping between them.
-        $fragments = "\x01\x03one".Frames::encode(Frames::PING, 'p')."\x00\x03two\x80\x05three";
+        $fragments = "\x01\x03one".Frames::encode(Frames::PING, payload: 'p')."\x00\x03two\x80\x05three";
         $this->assertSame(
             [
                 [Frames::PING, 'p'],
@@ -152,7 +152,7 @@ final class RendezvousTest extends TestCase
         $this->assertSame([], $frames->feed("\x80\x01x"), 'a continuation of nothing');
         $this->assertSame([], new Frames(static function (string $why) use (&$errors): void {
             $errors[] = $why;
-        }, maxMessage: 4)->feed(Frames::encode(Frames::TEXT, 'too long')));
+        }, maxMessage: 4)->feed(Frames::encode(Frames::TEXT, payload: 'too long')));
         $this->assertSame([], new Frames(static function (string $why) use (&$errors): void {
             $errors[] = $why;
         }, maxMessage: 4)->feed("\x01\x03abc\x80\x03def"), 'too long once put together');
@@ -178,16 +178,16 @@ final class RendezvousTest extends TestCase
             $errors[] = $why;
         };
 
-        $this->assertSame([[Frames::TEXT, 'x']], new Frames($onError, maxMessage: 1)->feed(Frames::encode(Frames::TEXT, 'x')), 'one byte, under a limit of one');
+        $this->assertSame([[Frames::TEXT, 'x']], new Frames($onError, maxMessage: 1)->feed(Frames::encode(Frames::TEXT, payload: 'x')), 'one byte, under a limit of one');
         $this->assertSame([[Frames::TEXT, 'abcdef']], new Frames($onError, maxMessage: 6)->feed("\x01\x03abc\x80\x03def"));
         $this->assertSame([], $errors);
         $this->assertSame(
             [[Frames::TEXT, 'a'], [Frames::TEXT, 'b']],
-            new Frames($onError, maxMessage: 4)->feed(Frames::encode(Frames::TEXT, 'a').Frames::encode(Frames::TEXT, 'b').Frames::encode(Frames::TEXT, 'too long')),
+            new Frames($onError, maxMessage: 4)->feed(Frames::encode(Frames::TEXT, payload: 'a').Frames::encode(Frames::TEXT, payload: 'b').Frames::encode(Frames::TEXT, payload: 'too long')),
         );
         $this->assertSame(
             [[Frames::TEXT, 'a'], [Frames::TEXT, 'b']],
-            new Frames($onError, maxMessage: 4)->feed(Frames::encode(Frames::TEXT, 'a').Frames::encode(Frames::TEXT, 'b')."\x01\x03abc\x80\x03def"),
+            new Frames($onError, maxMessage: 4)->feed(Frames::encode(Frames::TEXT, payload: 'a').Frames::encode(Frames::TEXT, payload: 'b')."\x01\x03abc\x80\x03def"),
             'and before one too long once put together',
         );
         $this->assertSame(['a message too long', 'a message too long'], $errors);

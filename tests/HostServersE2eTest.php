@@ -86,7 +86,7 @@ final class HostServersE2eTest extends TestCase
     /** @return string what a tunnel message carries */
     private static function bytes(array $message): string
     {
-        return (string) \base64_decode(Wire::string($message, 'data'), strict: true);
+        return (string) \base64_decode(Wire::string($message, key: 'data'), strict: true);
     }
 
     /** Ask in as $name and be let in. */
@@ -108,25 +108,25 @@ final class HostServersE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($port): void {
-                $this->command($ide, 'assist:share_server');
-                $this->await(static fn (): bool => self::toasted($ide, 'Share this project first'), what: 'nothing to share it in');
+                $this->command($ide, id: 'assist:share_server');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Share this project first'), what: 'nothing to share it in');
 
                 $invite = $this->invited($ide);
-                $this->letIn($tui, $terminal, $invite, 'Ana');
+                $this->letIn($tui, $terminal, $invite, name: 'Ana');
 
                 // Asked for a port: what is not one is said; the port is shared with everyone.
-                $this->command($ide, 'assist:share_server');
-                $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                $this->command($ide, id: 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, needle: 'Share which local port?');
                 $terminal->simulateInput("http\r");
-                $this->await(static fn (): bool => self::toasted($ide, 'Not a port: http'), what: 'the refusal');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Not a port: http'), what: 'the refusal');
                 foreach (['0', '65536'] as $notOne) {
-                    $this->command($ide, 'assist:share_server');
-                    $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                    $this->command($ide, id: 'assist:share_server');
+                    $this->awaitPainted($tui, $terminal, needle: 'Share which local port?');
                     $terminal->simulateInput($notOne."\r");
                     $this->await(static fn (): bool => self::toasted($ide, 'Not a port: '.$notOne), what: 'out of range: '.$notOne);
                 }
-                $this->command($ide, 'assist:share_server');
-                $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                $this->command($ide, id: 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, needle: 'Share which local port?');
                 $terminal->simulateInput(' '.$port." \r"); // as pasted, spaces and all
                 $this->assertSame($port, $this->expect('server')['port']);
 
@@ -156,10 +156,10 @@ final class HostServersE2eTest extends TestCase
                 $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 3]);
                 $served = $this->devAccepts($port);
                 $this->say(['t' => 'tunnel-close', 'conn' => 3]);
-                $this->awaitClosed($served, 'her close at the dev server');
+                $this->awaitClosed($served, what: 'her close at the dev server');
 
                 // Shared, but nothing listens there: closed at once.
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertIsObject($host);
                 $host->servers()->toggle(1);
                 $this->assertSame(1, $this->expect('server')['port']);
@@ -168,7 +168,7 @@ final class HostServersE2eTest extends TestCase
 
                 // A newcomer is told what is shared.
                 $ana = $this->peer;
-                $this->letIn($tui, $terminal, $invite, 'Bo');
+                $this->letIn($tui, $terminal, $invite, name: 'Bo');
                 $this->assertSame($port, $this->expect('server')['port']);
                 $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 1]);
                 $bos = $this->devAccepts($port);
@@ -183,34 +183,34 @@ final class HostServersE2eTest extends TestCase
                 $kept = $this->devAccepts($other);
                 $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 5]);
                 $anas = $this->devAccepts($port);
-                $this->command($ide, 'assist:share_server');
-                $this->awaitPainted($tui, $terminal, 'Share which server?');
+                $this->command($ide, id: 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, needle: 'Share which server?');
                 $terminal->simulateInput("\r");
                 $this->assertSame($port, $this->expect('server-end')['port']);
-                $this->awaitClosed($anas, 'her connection closed with the share');
-                $this->awaitClosed($bos, 'his too');
+                $this->awaitClosed($anas, what: 'her connection closed with the share');
+                $this->awaitClosed($bos, what: 'his too');
                 $this->say(['t' => 'tunnel-data', 'conn' => 6, 'data' => \base64_encode('still here')]);
                 $this->await(static fn (): bool => 'still here' === \fread($kept, length: 100), what: 'the other server still reached');
 
                 // Shared again, from the list; then Bo leaves with a connection open.
-                $this->command($ide, 'assist:share_server');
-                $this->awaitPainted($tui, $terminal, 'Another port');
+                $this->command($ide, id: 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, needle: 'Another port');
                 $terminal->simulateInput(self::DOWN.self::DOWN."\r");
-                $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                $this->awaitPainted($tui, $terminal, needle: 'Share which local port?');
                 $terminal->simulateInput($port."\r");
                 $this->assertSame($port, $this->expect('server')['port']);
                 $this->peer = $bo;
                 $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 7]);
                 $bos = $this->devAccepts($port);
                 $this->hangUp();
-                $this->awaitClosed($bos, 'his connection gone with him');
+                $this->awaitClosed($bos, what: 'his connection gone with him');
 
                 // The session stops: everything shared closes.
                 $this->peer = $ana;
                 $this->say(['t' => 'tunnel-open', 'port' => $port, 'conn' => 8]);
                 $anas = $this->devAccepts($port);
-                $this->command($ide, 'assist:stop');
-                $this->awaitClosed($anas, 'hers gone with the session');
+                $this->command($ide, id: 'assist:stop');
+                $this->awaitClosed($anas, what: 'hers gone with the session');
                 $this->assertSame([], $host->servers()->shared());
                 $this->hangUp();
             },
@@ -228,9 +228,9 @@ final class HostServersE2eTest extends TestCase
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($port): void {
                 $invite = $this->invited($ide);
-                $this->letIn($tui, $terminal, $invite, 'Ana');
-                $this->command($ide, 'assist:share_server');
-                $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                $this->letIn($tui, $terminal, $invite, name: 'Ana');
+                $this->command($ide, id: 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, needle: 'Share which local port?');
                 $terminal->simulateInput($port."\r");
                 $this->expect('server');
 
@@ -255,15 +255,15 @@ final class HostServersE2eTest extends TestCase
                     ['t' => 'tunnel-open', 'port' => $port, 'conn' => 2],
                     ['t' => 'tunnel-close', 'conn' => 2],
                 );
-                $this->awaitClosed($this->devAccepts($port), 'the connection let go');
+                $this->awaitClosed($this->devAccepts($port), what: 'the connection let go');
 
                 // A port shared with nothing behind it — port 1, which no parallel
                 // test can take, as a freed one could be: said closed, the IDE never held.
                 $dead = 1;
-                $this->command($ide, 'assist:share_server');
-                $this->awaitPainted($tui, $terminal, 'Another port');
+                $this->command($ide, id: 'assist:share_server');
+                $this->awaitPainted($tui, $terminal, needle: 'Another port');
                 $terminal->simulateInput(self::DOWN."\r");
-                $this->awaitPainted($tui, $terminal, 'Share which local port?');
+                $this->awaitPainted($tui, $terminal, needle: 'Share which local port?');
                 $terminal->simulateInput($dead."\r");
                 $this->assertSame($dead, $this->expect('server')['port']);
                 $this->say(['t' => 'tunnel-open', 'port' => $dead, 'conn' => 4]);

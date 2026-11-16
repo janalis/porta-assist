@@ -69,19 +69,19 @@ final class HostSessionE2eTest extends TestCase
                 $this->dial($invite);
                 $this->say(['t' => 'hello', 'v' => Wire::VERSION, 'name' => 'Ana', 'token' => $invite->token]);
                 $this->expect('pending');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\r"); // the first answer: let them edit
                 $welcome = $this->expect('welcome');
                 $this->assertSame('edit', $welcome['role']);
-                $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', Wire::string($welcome, 'ticket'), 'a ticket as hard to guess as the token');
-                $this->await(static fn (): bool => self::toasted($ide, 'Ana joined and can edit'), what: 'the host told who came, and what she may do');
+                $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', Wire::string($welcome, key: 'ticket'), 'a ticket as hard to guess as the token');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Ana joined and can edit'), what: 'the host told who came, and what she may do');
                 $user = \getenv('USER');
                 $this->assertSame([['id' => 'host', 'name' => \is_string($user) && '' !== $user ? $user : 'anonymous', 'role' => 'host']], $welcome['peers'], 'the host, by login name');
 
                 $this->say(['t' => 'manifest']);
-                $this->assertSame(['2024', 'README.md', 'src/A.php'], \array_column(Wire::list($this->expect('manifest'), 'files'), 0), 'the project, not its settings');
+                $this->assertSame(['2024', 'README.md', 'src/A.php'], \array_column(Wire::list($this->expect('manifest'), key: 'files'), 0), 'the project, not its settings');
                 $this->say(['t' => 'fetch', 'paths' => ['src/A.php', '../escape', '.porta.json', 'node_modules/x.js']]);
-                $this->assertSame("<?php\necho 'a';\n", \base64_decode(Wire::string($this->expect('file'), 'data'), strict: true));
+                $this->assertSame("<?php\necho 'a';\n", \base64_decode(Wire::string($this->expect('file'), key: 'data'), strict: true));
                 $this->assertTrue($this->expect('file')['missing'], 'nothing outside the project');
                 $this->assertTrue($this->expect('file')['missing'], 'nor its settings');
                 $this->assertTrue($this->expect('file')['missing'], 'nor a file the listing never offered');
@@ -127,7 +127,7 @@ final class HostSessionE2eTest extends TestCase
                 $this->assertSame("<?php // guest\necho 'a';\n", \file_get_contents($path));
 
                 $this->say(['t' => 'bye']);
-                $this->await(static fn (): bool => self::toasted($ide, 'Ana left'), what: 'the host told');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Ana left'), what: 'the host told');
 
                 // A goodbye for the moment keeps the way back open; one for good closes it.
                 $this->dial($invite);
@@ -135,10 +135,10 @@ final class HostSessionE2eTest extends TestCase
                 $this->expect('welcome');
                 $this->say(['t' => 'bye', 'for' => 'good']);
                 $this->await($this->hungUp(...), what: 'let go');
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertIsObject($host);
-                $this->assertSame([], Probe::get($host, 'tickets'), 'the ticket lets nobody in now');
-                $this->assertSame([], Probe::get($host, 'doors'), 'and its door no longer waits at the relay');
+                $this->assertSame([], Probe::get($host, property: 'tickets'), 'the ticket lets nobody in now');
+                $this->assertSame([], Probe::get($host, property: 'doors'), 'and its door no longer waits at the relay');
                 $this->hangUp();
             },
         ]);
@@ -156,20 +156,20 @@ final class HostSessionE2eTest extends TestCase
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
                 $invite = $this->invited($ide);
-                $this->askIn($invite, 'Ana');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->askIn($invite, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $this->expect('welcome');
                 $this->say(['t' => 'open', 'path' => 'src/A.php']);
                 $this->expect('opened');
                 $ana = [$this->peer, $this->buffered, $this->inbox];
-                $host = Probe::get($this->plugin($ide), 'host');
+                $host = Probe::get($this->plugin($ide), property: 'host');
                 $this->assertInstanceOf(HostSession::class, $host);
                 $this->dial($invite); // and say nothing yet
-                $this->await(static fn (): bool => [] !== Probe::get($host, 'pending'), what: 'a connection waiting to say who it is');
+                $this->await(static fn (): bool => [] !== Probe::get($host, property: 'pending'), what: 'a connection waiting to say who it is');
 
                 // Held until the session stops.
-                $timers = Probe::get($host, 'timers');
+                $timers = Probe::get($host, property: 'timers');
                 $alive = static function (string $timer): bool {
                     try {
                         return EventLoop::isEnabled($timer);
@@ -182,7 +182,7 @@ final class HostSessionE2eTest extends TestCase
                 foreach ($timers as $timer) {
                     $this->assertTrue($alive((string) $timer));
                 }
-                $certificate = Probe::get($host, 'certificate');
+                $certificate = Probe::get($host, property: 'certificate');
                 $this->assertInstanceOf(Certificate::class, $certificate);
                 $this->assertFileExists($certificate->file);
                 $document = Services::resolve($ide, BufferManager::class)->get($path)?->document;

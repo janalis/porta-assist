@@ -31,7 +31,7 @@ final class DocumentsTest extends TestCase
     {
         $undo = new UndoStack();
         $text = 'one';
-        $typed = TextDiff::between($text, 'one two');
+        $typed = TextDiff::between($text, new: 'one two');
         $undo->did($typed, $text);
         $text = $typed->apply($text);
 
@@ -48,7 +48,7 @@ final class DocumentsTest extends TestCase
         $back = $undo->undo($text);
         $this->assertInstanceOf(TextOperation::class, $back);
         $text = $back->apply($text);
-        $undo->did(TextDiff::between($text, 'one!'), $text);
+        $undo->did(TextDiff::between($text, new: 'one!'), $text);
         $this->assertNull($undo->redo('one!'), 'a new change forgets what could be redone');
     }
 
@@ -80,7 +80,7 @@ final class DocumentsTest extends TestCase
                 ->retain(1)
                 ->insert('x')
                 ->retain(1),
-            'ab',
+            text: 'ab',
         );
         // Someone else deleted the whole text, the x with it.
         $undo->transform(new TextOperation()->delete(3));

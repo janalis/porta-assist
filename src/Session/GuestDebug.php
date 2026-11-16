@@ -103,16 +103,16 @@ final class GuestDebug
     private function changed(array $message): void
     {
         $was = $this->status;
-        $this->status = Wire::string($message, 'status');
+        $this->status = Wire::string($message, key: 'status');
         $this->frames = [];
-        foreach (Decoded::objects(Wire::list($message, 'frames')) as $frame) {
+        foreach (Decoded::objects(Wire::list($message, key: 'frames')) as $frame) {
             if (!\is_int($frame['id'] ?? null)) {
                 continue;
             }
-            $this->frames[] = ['id' => $frame['id'], 'name' => Wire::text($frame, 'name'), 'path' => Wire::string($frame, 'path'), 'line' => Wire::int($frame, 'line')];
+            $this->frames[] = ['id' => $frame['id'], 'name' => Wire::text($frame, key: 'name'), 'path' => Wire::string($frame, key: 'path'), 'line' => Wire::int($frame, key: 'line')];
         }
-        $path = Wire::text($message, 'path');
-        $this->where = '' === $path ? '' : $path.':'.(Wire::int($message, 'line') + 1);
+        $path = Wire::text($message, key: 'path');
+        $this->where = '' === $path ? '' : $path.':'.(Wire::int($message, key: 'line') + 1);
         match (true) {
             'paused' === $this->status => $this->api->notify($this->api->trans('The host\'s debugger paused at %where%', ['%where%' => $this->where]), slot: 'assist'),
             'idle' === $this->status && 'idle' !== $was => $this->api->notify($this->api->trans('The host stopped debugging'), slot: 'assist'),
@@ -124,8 +124,8 @@ final class GuestDebug
     private function variables(array $message): void
     {
         $entries = [];
-        foreach (Decoded::objects(Wire::list($message, 'scopes')) as $scope) {
-            $entries = [...$entries, ...self::entries(Decoded::objects(Wire::list($scope, 'variables')), Wire::text($scope, 'scope'))];
+        foreach (Decoded::objects(Wire::list($message, key: 'scopes')) as $scope) {
+            $entries = [...$entries, ...self::entries(Decoded::objects(Wire::list($scope, key: 'variables')), Wire::text($scope, key: 'scope'))];
         }
         $this->list($this->api->trans('Variables'), $entries);
     }
@@ -133,10 +133,10 @@ final class GuestDebug
     /** @param array<string, mixed> $message what a variable holds */
     private function children(array $message): void
     {
-        $reference = Wire::int($message, 'reference');
+        $reference = Wire::int($message, key: 'reference');
         $name = $this->opening[$reference] ?? '';
         unset($this->opening[$reference]);
-        $this->list($name, self::entries(Decoded::objects(Wire::list($message, 'variables')), $name));
+        $this->list($name, self::entries(Decoded::objects(Wire::list($message, key: 'variables')), $name));
     }
 
     /**
@@ -177,7 +177,12 @@ final class GuestDebug
     {
         $entries = [];
         foreach ($variables as $variable) {
-            $entries[] = ['name' => Wire::text($variable, 'name'), 'value' => Wire::text($variable, 'value', max: 500), 'reference' => Wire::int($variable, 'reference'), 'hint' => $hint];
+            $entries[] = [
+                'name' => Wire::text($variable, key: 'name'),
+                'value' => Wire::text($variable, key: 'value', max: 500),
+                'reference' => Wire::int($variable, key: 'reference'),
+                'hint' => $hint,
+            ];
         }
 
         return $entries;

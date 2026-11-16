@@ -40,20 +40,20 @@ final class HostRendezvousE2eTest extends TestCase
 
     public function testACodeLetsOneGuestInAndTheNextIsReady(): void
     {
-        $this->runIde(self::project(), null, [
+        $this->runIde(self::project(), file: null, steps: [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
                 // Stopped before the mailbox answered: nothing is shared.
                 $api = $this->api($ide);
                 $api->changeSetting('mailbox', $this->wormhole()->mailbox);
                 $api->changeSetting('transit', $this->wormhole()->transit);
-                $this->command($ide, 'assist:share');
-                $this->command($ide, 'assist:stop');
-                $this->await(static fn (): bool => self::toasted($ide, 'Stopped sharing'), what: 'the stop');
+                $this->command($ide, id: 'assist:share');
+                $this->command($ide, id: 'assist:stop');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Stopped sharing'), what: 'the stop');
                 $this->pump(0.2);
-                $this->assertFalse(self::toasted($ide, 'Sharing.'), 'the start called off');
+                $this->assertFalse(self::toasted($ide, text: 'Sharing.'), 'the start called off');
 
                 // Asked twice before the first code came: one code.
-                $this->command($ide, 'assist:share');
+                $this->command($ide, id: 'assist:share');
                 $first = $this->share($ide);
                 $this->assertSame($first->text(), $this->code($ide)->text());
 
@@ -69,8 +69,8 @@ final class HostRendezvousE2eTest extends TestCase
 
                 // Ana gets in with it, Bo with the next: one code each.
                 $ana = $this->redeem($second);
-                $this->askIn($ana, 'Ana');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->askIn($ana, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\r");
                 $this->assertSame('edit', $this->expect('welcome')['role']);
                 $third = $this->code($ide, not: $second);
@@ -82,8 +82,8 @@ final class HostRendezvousE2eTest extends TestCase
                     $this->assertSame('No host is waiting with that code — check it, or ask the host for a new one', $e->getMessage());
                 }
                 $bo = $this->redeem($third);
-                $this->askIn($bo, 'Bo');
-                $this->awaitPainted($tui, $terminal, 'Bo asks to join');
+                $this->askIn($bo, name: 'Bo');
+                $this->awaitPainted($tui, $terminal, needle: 'Bo asks to join');
                 $terminal->simulateInput("\r");
                 $this->assertSame('edit', $this->expect('welcome')['role']);
 
@@ -94,26 +94,26 @@ final class HostRendezvousE2eTest extends TestCase
                 $this->hangUp();
 
                 // Stopped: nobody gets in with the session's invites — not even on a channel Ana's door waited on.
-                $this->command($ide, 'assist:stop');
-                $this->assertIsString(GuestRendezvous::connect($ana, $this->nextChannel($ana), 0.5), 'the session\'s way in went with it');
+                $this->command($ide, id: 'assist:stop');
+                $this->assertIsString(GuestRendezvous::connect($ana, $this->nextChannel($ana), timeout: 0.5), 'the session\'s way in went with it');
             },
         ]);
     }
 
     public function testAMailboxServerThatHangsUpOrForgetsIsGotOver(): void
     {
-        $this->runIde(self::project(), null, [
+        $this->runIde(self::project(), file: null, steps: [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
                 $code = $this->share($ide);
 
                 // Hung up on: back at the same nameplate, the same code.
                 $this->wormhole()->drop();
-                $this->await(static fn (): bool => self::toasted($ide, 'Lost the mailbox server'), what: 'the host told');
-                $this->assertFalse(self::toasted($ide, '%why%'), 'told why');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Lost the mailbox server'), what: 'the host told');
+                $this->assertFalse(self::toasted($ide, text: '%why%'), 'told why');
                 $this->assertSame($code->text(), $this->code($ide)->text());
                 $invite = $this->redeem($code);
-                $this->askIn($invite, 'Ana');
-                $this->awaitPainted($tui, $terminal, 'Ana asks to join');
+                $this->askIn($invite, name: 'Ana');
+                $this->awaitPainted($tui, $terminal, needle: 'Ana asks to join');
                 $terminal->simulateInput("\x1b[B\x1b[B\r");
                 $this->assertSame('host', $this->expect('denied')['reason']);
 
@@ -123,7 +123,7 @@ final class HostRendezvousE2eTest extends TestCase
                 $taken = $this->code($ide, not: $next);
                 $this->await(static fn (): bool => self::toasted($ide, 'The code was taken at the mailbox server — the code is now '.$taken->text()), what: 'the new code said');
 
-                $this->command($ide, 'assist:stop');
+                $this->command($ide, id: 'assist:stop');
             },
         ]);
     }

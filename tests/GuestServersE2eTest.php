@@ -81,8 +81,8 @@ final class GuestServersE2eTest extends TestCase
 
         $this->runIde($project, $project->path('src/A.php'), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
-                $this->command($ide, 'assist:servers');
-                $this->await(static fn (): bool => self::toasted($ide, 'The host shares no server'), what: 'none yet');
+                $this->command($ide, id: 'assist:servers');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'The host shares no server'), what: 'none yet');
                 $this->acceptGuest();
                 $this->expect('hello');
                 $this->say(['t' => 'welcome', 'peer' => 'g1', 'role' => 'read', 'ticket' => self::TICKET, 'peers' => [['id' => 'host', 'name' => 'Hal', 'role' => 'host']]]);
@@ -97,10 +97,10 @@ final class GuestServersE2eTest extends TestCase
                 $client = $this->connect($local);
                 $open = $this->expect('tunnel-open');
                 $this->assertSame($wanted, $open['port']);
-                $conn = Wire::int($open, 'conn');
+                $conn = Wire::int($open, key: 'conn');
                 \fwrite($client, data: 'GET / HTTP/1.0');
                 $data = $this->expect('tunnel-data');
-                $this->assertSame([$conn, 'GET / HTTP/1.0'], [$data['conn'], \base64_decode(Wire::string($data, 'data'), strict: true)]);
+                $this->assertSame([$conn, 'GET / HTTP/1.0'], [$data['conn'], \base64_decode(Wire::string($data, key: 'data'), strict: true)]);
                 $this->say(['t' => 'tunnel-data', 'conn' => $conn, 'data' => \base64_encode('HTTP/1.0 200 OK')]);
                 $this->say(['t' => 'tunnel-data', 'conn' => 99, 'data' => \base64_encode('for nobody')]);
                 $this->await(static fn (): bool => 'HTTP/1.0 200 OK' === \fread($client, length: 100), what: 'the answer here');
@@ -108,9 +108,9 @@ final class GuestServersE2eTest extends TestCase
                 \fclose($client);
                 $this->assertSame($conn, $this->expect('tunnel-close')['conn']);
                 $client = $this->connect($local);
-                $conn = Wire::int($this->expect('tunnel-open'), 'conn');
+                $conn = Wire::int($this->expect('tunnel-open'), key: 'conn');
                 $this->say(['t' => 'tunnel-close', 'conn' => $conn]);
-                $this->awaitClosed($client, 'the host\'s close here');
+                $this->awaitClosed($client, what: 'the host\'s close here');
 
                 // A number taken here: another one.
                 $taken = \stream_socket_server('tcp://127.0.0.1:0');
@@ -120,8 +120,8 @@ final class GuestServersE2eTest extends TestCase
                 $this->assertNotSame($takenPort, $elsewhere);
 
                 // Listed, its address copied.
-                $this->command($ide, 'assist:servers');
-                $this->awaitPainted($tui, $terminal, 'Shared servers');
+                $this->command($ide, id: 'assist:servers');
+                $this->awaitPainted($tui, $terminal, needle: 'Shared servers');
                 // A row of the list — not the toast that said so — by the host's number, reached here at another.
                 $this->assertNotNull(\array_find(
                     $this->screenGrid($tui, $terminal),
@@ -138,7 +138,7 @@ final class GuestServersE2eTest extends TestCase
                 $this->say(['t' => 'server-end', 'port' => $wanted]);
                 $this->say(['t' => 'server-end', 'port' => 1]);
                 $this->await(static fn (): bool => self::toasted($ide, 'Hal stopped sharing localhost:'.$wanted), what: 'the guest told');
-                $this->awaitClosed($client, 'the connection closed with the share');
+                $this->awaitClosed($client, what: 'the connection closed with the share');
                 // @mago-expect lint:no-error-control-operator -- a refused connection warns; the false is what is asserted
                 $this->assertFalse(@\stream_socket_client('tcp://127.0.0.1:'.$local, timeout: 1.0), 'nothing listens there any more');
 
@@ -146,7 +146,7 @@ final class GuestServersE2eTest extends TestCase
                 $client = $this->connect($elsewhere);
                 $this->expect('tunnel-open');
                 $this->dropPeer();
-                $this->awaitClosed($client, 'closed with the session');
+                $this->awaitClosed($client, what: 'closed with the session');
                 // @mago-expect lint:no-error-control-operator -- a refused connection warns; the false is what is asserted
                 $this->assertFalse(@\stream_socket_client('tcp://127.0.0.1:'.$elsewhere, timeout: 1.0));
                 \fclose($taken);
@@ -159,7 +159,7 @@ final class GuestServersE2eTest extends TestCase
                 $client = $this->connect($this->shared($ide, self::freePort()));
                 $this->expect('tunnel-open');
                 $this->say(['t' => 'bye', 'reason' => 'ended']);
-                $this->awaitClosed($client, 'closed with the session');
+                $this->awaitClosed($client, what: 'closed with the session');
                 $this->assertSame('The host ended the session', Toasts::last($ide));
                 $this->hangUp();
             },

@@ -48,7 +48,7 @@ final class ConvergenceTest extends TestCase
         $this->hostUndo = new UndoStack();
         $this->guests = [['text' => 'one two', 'doc' => new ClientDocument(0, 'one two'), 'undo' => new UndoStack(), 'inbox' => []]];
 
-        $this->guestTypes(0, 'one! two');
+        $this->guestTypes(0, new: 'one! two');
         $this->hostTypes('ONE two');
         $this->deliverAll();
         $this->assertSame('ONE! two', $this->host->text);
@@ -89,7 +89,7 @@ final class ConvergenceTest extends TestCase
         $this->deliverAll();
         foreach ($this->guests as $g => $guest) {
             $this->assertSame($this->host->text, $guest['text'], \sprintf('seed %d, guest %d', $seed, $g));
-            $this->assertNull(Probe::get($guest['doc'], 'outstanding'));
+            $this->assertNull(Probe::get($guest['doc'], property: 'outstanding'));
         }
     }
 

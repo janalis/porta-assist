@@ -56,7 +56,7 @@ final class GuestSessionE2eTest extends TestCase
 
     private function copy(Invite $invite): TempProject
     {
-        return $this->guestCopy($invite, self::TICKET, "<?php\n// stale copy\n");
+        return $this->guestCopy($invite, self::TICKET, source: "<?php\n// stale copy\n");
     }
 
     /**
@@ -68,7 +68,7 @@ final class GuestSessionE2eTest extends TestCase
     private function typedIntoTheSharedFile(Ide $ide, VirtualTerminal $terminal, string $path): array
     {
         $this->welcomeGuest();
-        $this->shareFile('src/A.php', "one\n");
+        $this->shareFile('src/A.php', text: "one\n");
         $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
         $terminal->simulateInput('x');
 
@@ -88,7 +88,7 @@ final class GuestSessionE2eTest extends TestCase
                 $hello = $this->expect('hello');
                 $this->assertSame(['Bo', self::TICKET], [$hello['name'], $hello['ticket']]);
                 $this->say(['t' => 'welcome', 'peer' => 'g1', 'role' => 'edit', 'ticket' => self::TICKET, 'peers' => [['id' => 'host', 'name' => 'Hal', 'role' => 'host']]]);
-                $this->await(static fn (): bool => self::toasted($ide, 'Connected to Hal'), what: 'the guest told');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Connected to Hal'), what: 'the guest told');
 
                 // What is open here is asked of the host, and its text replaces the copy's.
                 $this->assertSame('src/A.php', $this->expect('open')['path']);
@@ -107,7 +107,7 @@ final class GuestSessionE2eTest extends TestCase
                 $terminal->simulateInput('a');
                 $this->assertSame(2, $this->expect('op')['rev']);
                 $terminal->simulateInput('b');
-                Probe::invoke(Probe::get($this->plugin($ide), 'guest'), 'readAll'); // read now: held behind the first
+                Probe::invoke(Probe::get($this->plugin($ide), property: 'guest'), method: 'readAll'); // read now: held behind the first
                 $this->say(['t' => 'ack', 'path' => 'src/A.php']);
                 $held = $this->expect('op');
                 $this->assertSame(['t', 'path', 'rev', 'ops'], \array_keys($held));
@@ -120,7 +120,7 @@ final class GuestSessionE2eTest extends TestCase
 
                 // Read only now: a key changes nothing, and says why.
                 $this->say(['t' => 'role', 'role' => 'read']);
-                $this->await(static fn (): bool => self::toasted($ide, 'read along'), what: 'the guest told');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'read along'), what: 'the guest told');
                 $terminal->simulateInput('Q');
                 $this->await(static fn (): bool => \in_array('This file is read-only', Toasts::all($ide), strict: true), what: 'the refusal');
                 $this->assertSame("Zab<?php\n// host\necho 1;\n", $this->bufferText($ide, $path));
@@ -130,7 +130,7 @@ final class GuestSessionE2eTest extends TestCase
                 $this->await(static fn (): bool => "Zab<?php\n// host\necho 1;\n" === \file_get_contents($path), what: 'the copy saved');
 
                 $this->say(['t' => 'bye', 'reason' => 'ended']);
-                $this->await(static fn (): bool => self::toasted($ide, 'The host ended the session'), what: 'the guest told');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'The host ended the session'), what: 'the guest told');
                 $this->drain();
                 $this->assertSame([], \array_values(\array_filter($this->inbox, static fn (array $m): bool => 'save' === $m['t'])), 'the host\'s own save is not asked back');
                 $this->hangUp();
@@ -170,11 +170,11 @@ final class GuestSessionE2eTest extends TestCase
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path, $project): void {
                 $this->welcomeGuest();
-                $this->shareFile('src/A.php', "one\n");
+                $this->shareFile('src/A.php', text: "one\n");
                 $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
                 $roster = Services::resolve($ide, Participants::class);
                 $this->assertSame(['Hal', 'Cy'], \array_map(static fn (Participant $p): string => $p->name, $roster->all()), 'the session\'s people in core\'s roster');
-                $guest = Probe::get($this->plugin($ide), 'guest');
+                $guest = Probe::get($this->plugin($ide), property: 'guest');
                 $this->assertInstanceOf(GuestSession::class, $guest);
                 $this->assertSame(
                     [['id' => 'host', 'name' => 'Hal', 'kind' => 'host'], ['id' => 'g2', 'name' => 'Cy', 'kind' => 'read']],
@@ -191,11 +191,11 @@ final class GuestSessionE2eTest extends TestCase
                 });
 
                 $this->dropPeer();
-                $this->await(static fn (): bool => self::toasted($ide, 'Lost the host (the connection was closed)'), what: 'the guest told');
-                $this->assertArrayHasKey(Participants::pluginSource('assist'), Probe::array($roster, 'lost'), 'kept as last seen while it tries again');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Lost the host (the connection was closed)'), what: 'the guest told');
+                $this->assertArrayHasKey(Participants::pluginSource('assist'), Probe::array($roster, property: 'lost'), 'kept as last seen while it tries again');
                 $this->assertCount(2, $roster->all());
                 $terminal->simulateInput('x');
-                $this->await(static fn (): bool => self::toasted($ide, 'This file is read-only'), what: 'nothing typed while away');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'This file is read-only'), what: 'nothing typed while away');
                 $this->assertSame("one\n", $this->bufferText($ide, $path));
 
                 // Back by itself, on its ticket — Cy gone meanwhile; the host's copy is the one to carry on from.
@@ -208,19 +208,19 @@ final class GuestSessionE2eTest extends TestCase
                 $this->assertNotContains('assist:host', $left, 'the host\'s kept: still here');
                 $this->say(['t' => 'opened', 'path' => 'src/A.php', 'rev' => 0, 'text' => "one\ntwo\n"]);
                 $this->await(fn (): bool => "one\ntwo\n" === $this->bufferText($ide, $path), what: 'the host\'s copy');
-                $this->assertArrayNotHasKey(Participants::pluginSource('assist'), Probe::array($roster, 'lost'), 'back in touch');
+                $this->assertArrayNotHasKey(Participants::pluginSource('assist'), Probe::array($roster, property: 'lost'), 'back in touch');
                 $terminal->simulateInput('y');
                 $this->assertSame(['y', 8], $this->expect('op')['ops'], 'writable again');
 
                 // Nobody listening any more — the relay gone too: the retry says why, and leaving ends it.
                 $this->hangUp();
                 $this->wormhole = null;
-                $this->await(static fn (): bool => self::toasted($ide, 'refused the connection'), timeout: 15.0, what: 'the retry refused');
-                $this->await(static fn (): bool => null !== Probe::get($guest, 'retry'), what: 'the next try waiting');
-                $timers = [...((array) Probe::get($guest, 'timers')), Probe::get($guest, 'retry')];
+                $this->await(static fn (): bool => self::toasted($ide, text: 'refused the connection'), timeout: 15.0, what: 'the retry refused');
+                $this->await(static fn (): bool => null !== Probe::get($guest, property: 'retry'), what: 'the next try waiting');
+                $timers = [...((array) Probe::get($guest, property: 'timers')), Probe::get($guest, property: 'retry')];
                 $this->assertCount(3, $timers);
-                $this->command($ide, 'assist:leave');
-                $this->await(static fn (): bool => self::toasted($ide, 'Left the session'), what: 'left');
+                $this->command($ide, id: 'assist:leave');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Left the session'), what: 'left');
                 foreach ($timers as $timer) {
                     $this->assertFalse(self::alive((string) $timer), 'the reading, the caret and the next try: all called off');
                 }
@@ -228,7 +228,7 @@ final class GuestSessionE2eTest extends TestCase
                 $this->assertNull($document->historyDelegate, 'undo too');
                 $this->assertFileDoesNotExist($project->path(GuestSession::FILE), 'the copy forgets the session');
                 $this->assertSame([], $roster->all(), 'and its people');
-                $this->command($ide, 'assist:leave');
+                $this->command($ide, id: 'assist:leave');
             },
         ]);
     }
@@ -246,11 +246,11 @@ final class GuestSessionE2eTest extends TestCase
                 // Typed as the host goes, before anything read it: read as the drop is.
                 $terminal->simulateInput('y');
                 $this->dropPeer();
-                $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Lost the host'), what: 'the drop seen');
 
                 // The host never applied either, and someone else wrote meanwhile.
                 $this->welcomeGuest();
-                $this->shareFile('src/A.php', "one\ntheirs\n");
+                $this->shareFile('src/A.php', text: "one\ntheirs\n");
 
                 $this->await(fn (): bool => "xyone\ntheirs\n" === $this->bufferText($ide, $path), what: 'theirs, and mine on top');
                 $this->assertSame(['xy', 11], $this->expect('op')['ops'], 'sent again, onto the host\'s text');
@@ -281,7 +281,7 @@ final class GuestSessionE2eTest extends TestCase
                 $this->assertSame('src/A.php', $this->expect('presence')['path'], 'said once let in');
 
                 $this->dropPeer();
-                $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Lost the host'), what: 'the drop seen');
                 $this->welcomeGuest();
                 $this->assertSame('src/A.php', $this->expect('presence')['path'], 'said again once back: the host has forgotten it');
                 $this->hangUp();
@@ -298,21 +298,21 @@ final class GuestSessionE2eTest extends TestCase
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path): void {
                 $this->welcomeGuest();
-                $this->shareFile('src/A.php', "one\n");
+                $this->shareFile('src/A.php', text: "one\n");
                 $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => 'tests', 'data' => \base64_encode('first')]);
                 $this->say(['t' => 'terminal', 'id' => 'run:y', 'title' => 'server', 'data' => \base64_encode('up')]);
-                $this->await(static fn (): bool => self::toasted($ide, 'Hal shared a terminal: server'), what: 'the terminals, by who shared them');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Hal shared a terminal: server'), what: 'the terminals, by who shared them');
                 $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
                 $terminal->simulateInput('x');
                 $this->expect('op');
 
                 $this->dropPeer();
-                $this->await(static fn (): bool => self::toasted($ide, 'Lost the host'), what: 'the drop seen');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Lost the host'), what: 'the drop seen');
                 $this->welcomeGuest('read', terminals: ['run:x']); // run:y stopped while away
                 $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => 'tests', 'data' => \base64_encode('again')]);
-                $this->shareFile('src/A.php', "one\n");
+                $this->shareFile('src/A.php', text: "one\n");
 
-                $this->await(static fn (): bool => self::toasted($ide, 'What you typed in src/A.php while away was not sent: you can only read along now'), what: 'said, not dropped silently');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'What you typed in src/A.php while away was not sent: you can only read along now'), what: 'said, not dropped silently');
                 $this->assertSame("one\n", $this->bufferText($ide, $path));
                 $runs = $this->api($ide)->runs();
                 $this->await(static fn (): bool => \str_contains((string) $runs->scrollback('assist:run:x'), 'again'), what: 'the terminal sent again');
@@ -340,15 +340,15 @@ final class GuestSessionE2eTest extends TestCase
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path, $root, $outside, $far): void {
                 $this->welcomeGuest('read');
-                $this->shareFile('src/A.php', "one\n");
+                $this->shareFile('src/A.php', text: "one\n");
                 $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'shared');
 
                 $buffers = $this->api($ide)->openBuffers();
-                $this->assertNull($buffers->edit($path, 0, 0, 0, 0, 'formatted '));
+                $this->assertNull($buffers->edit($path, line: 0, column: 0, endLine: 0, endColumn: 0, text: 'formatted '));
                 $this->await(fn (): bool => "one\n" === $this->bufferText($ide, $path), what: 'put back');
 
                 $this->api($ide)->openFile($far);
-                $buffers->edit($far, 0, 0, 0, 0, '!');
+                $buffers->edit($far, line: 0, column: 0, endLine: 0, endColumn: 0, text: '!');
                 $buffers->save($far);
                 $events = Services::resolve($ide, EventDispatcherInterface::class);
                 \rename($far, $root.'/came.txt');
@@ -362,8 +362,8 @@ final class GuestSessionE2eTest extends TestCase
                 $buffers->open($root.'/own.txt');
                 $this->assertSame('own.txt', $this->expect('open')['path']);
                 $this->say(['t' => 'error', 'path' => 'own.txt', 'message' => 'not shared']);
-                $this->await(static fn (): bool => self::toasted($ide, 'own.txt: not shared'), what: 'refused');
-                $buffers->edit($root.'/own.txt', 0, 0, 0, 0, '!');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'own.txt: not shared'), what: 'refused');
+                $buffers->edit($root.'/own.txt', line: 0, column: 0, endLine: 0, endColumn: 0, text: '!');
                 $this->assertNull($buffers->save($root.'/own.txt'));
 
                 $this->api($ide)->openFile($root.'/came.txt'); // in the copy: asked of the host, after all the rest
@@ -388,11 +388,11 @@ final class GuestSessionE2eTest extends TestCase
 
         $this->runIde($project, (string) \realpath($project->path('src/A.php')), [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide): void {
-                $this->await(static fn (): bool => self::toasted($ide, 'Not rejoining: the host is not the one the invite names'), what: 'the impostor refused');
-                $guest = Probe::get($this->plugin($ide), 'guest');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Not rejoining: the host is not the one the invite names'), what: 'the impostor refused');
+                $guest = Probe::get($this->plugin($ide), property: 'guest');
                 $this->assertIsObject($guest);
-                $this->assertSame([], Probe::get($guest, 'timers'), 'the session over here');
-                $this->assertFalse(self::toasted($ide, 'trying again'), 'and not tried again');
+                $this->assertSame([], Probe::get($guest, property: 'timers'), 'the session over here');
+                $this->assertFalse(self::toasted($ide, text: 'trying again'), 'and not tried again');
                 $this->hangUp();
             },
         ]);
@@ -425,7 +425,7 @@ final class GuestSessionE2eTest extends TestCase
     private function joinWithAFile(Ide $ide, string $path): void
     {
         $this->welcomeGuest();
-        $this->shareFile('src/A.php', "<?php\n");
+        $this->shareFile('src/A.php', text: "<?php\n");
         $this->await(fn (): bool => "<?php\n" === $this->bufferText($ide, $path), what: 'shared');
         $this->say(['t' => 'pending']);
     }
@@ -452,11 +452,11 @@ final class GuestSessionE2eTest extends TestCase
     {
         // Out of step with the host: the file starts over from its copy.
         $this->say(['t' => 'op', 'path' => 'src/A.php', 'ops' => 'garbage']);
-        $this->shareFile('src/A.php', "Z<?php\n");
+        $this->shareFile('src/A.php', text: "Z<?php\n");
         $this->say(['t' => 'reopen', 'path' => 'src/A.php']);
-        $this->shareFile('src/A.php', "Z<?php\n");
+        $this->shareFile('src/A.php', text: "Z<?php\n");
         $this->say(['t' => 'error', 'path' => 'src/A.php', 'message' => 'nope']);
-        $this->await(static fn (): bool => self::toasted($ide, 'src/A.php: nope'), what: 'the host\'s complaint');
+        $this->await(static fn (): bool => self::toasted($ide, text: 'src/A.php: nope'), what: 'the host\'s complaint');
         $this->assertNotNull(Services::resolve($ide, BufferManager::class)->get($path)?->document->historyDelegate, 'a complaint about a file shared already leaves it shared');
     }
 
@@ -478,13 +478,13 @@ final class GuestSessionE2eTest extends TestCase
         $this->awaitPainted($tui, $terminal, Glyphs::AGENT.' Claude');
         $this->assertSame(['Hal', 'Dee'], \array_map(static fn (Participant $in): string => $in->name, $roster->all()), 'core\'s roster: Dee in, Cy out');
         $this->assertContains('assist:g2', $left, 'her marks gone');
-        $guest = Probe::get($this->plugin($ide), 'guest');
+        $guest = Probe::get($this->plugin($ide), property: 'guest');
         $this->assertIsObject($guest);
-        $docs = Probe::get($guest, 'docs');
+        $docs = Probe::get($guest, property: 'docs');
         $this->assertIsArray($docs);
         $this->assertSame(['host~claude'], \array_keys($docs['src/A.php']['text']->carets()), 'her caret gone from the text');
-        $this->command($ide, 'assist:participants');
-        $this->awaitPainted($tui, $terminal, 'Dee');
+        $this->command($ide, id: 'assist:participants');
+        $this->awaitPainted($tui, $terminal, needle: 'Dee');
         $this->assertStringNotContainsString('Cy', \implode("\n", $this->screenGrid($tui, $terminal)));
     }
 
@@ -492,13 +492,13 @@ final class GuestSessionE2eTest extends TestCase
     {
         // Following the host into a file the session does not share yet.
         $terminal->simulateInput("\r"); // Hal, the first row
-        $this->await(static fn (): bool => self::toasted($ide, 'Following Hal'), what: 'following');
+        $this->await(static fn (): bool => self::toasted($ide, text: 'Following Hal'), what: 'following');
         $this->say(['t' => 'presence', 'peer' => 'host', 'name' => 'Hal', 'path' => 'notes.txt', 'line' => 1, 'column' => 2, 'anchorLine' => 1, 'anchorColumn' => 0]);
         $this->await(fn (): bool => $root.'/notes.txt' === $this->api($ide)->activeFile(), what: 'the host\'s file');
         $this->assertSame('notes.txt', $this->expect('open')['path'], 'asked of the host, as any file opened');
-        $guest = Probe::get($this->plugin($ide), 'guest');
+        $guest = Probe::get($this->plugin($ide), property: 'guest');
         $this->assertIsObject($guest);
-        $following = static fn (): bool => null !== Probe::get($guest->follow, 'target');
+        $following = static fn (): bool => null !== Probe::get($guest->follow, property: 'target');
 
         // Followed to the start of notes.txt; then this side goes to the start of another file — the same line and column: that was the user, and following stops.
         $this->say(['t' => 'presence', 'peer' => 'host', 'name' => 'Hal', 'path' => 'notes.txt', 'line' => 0, 'column' => 0]);
@@ -506,11 +506,11 @@ final class GuestSessionE2eTest extends TestCase
             $mine = $this->expect('presence'); // this side's caret, as it says it: seen there by now
         } while (['notes.txt', 0, 0] !== [$mine['path'], $mine['line'], $mine['column']]);
         $this->api($ide)->openFile($root.'/src/A.php');
-        $this->api($ide)->jumpTo(0, 0);
+        $this->api($ide)->jumpTo(0, column: 0);
         $this->await(static fn (): bool => !$following(), what: 'following stopped by a move to another file');
 
         // Followed again, until the host leaves.
-        $this->command($ide, 'assist:participants');
+        $this->command($ide, id: 'assist:participants');
         $terminal->simulateInput("\r"); // Hal, the first row
         $this->await($following, what: 'following again');
 
@@ -519,10 +519,10 @@ final class GuestSessionE2eTest extends TestCase
         $this->await(fn (): bool => 1 === ($this->api($ide)->caretPosition()['line'] ?? null), what: 'the host\'s line');
         $this->say(['t' => 'presence', 'peer' => 'host', 'name' => 'Hal', 'path' => 'notes.txt', 'line' => -1, 'column' => 0]);
         $this->await(fn (): bool => 0 === ($this->api($ide)->caretPosition()['line'] ?? null), what: 'the top of the file');
-        Probe::invoke($guest, 'caret');
+        Probe::invoke($guest, method: 'caret');
         $this->assertTrue($following(), 'still following');
         $this->say(['t' => 'left', 'peer' => 'host']);
-        $this->await(static fn (): bool => !$following() && self::toasted($ide, 'Stopped following Hal'), what: 'gone, not followed');
+        $this->await(static fn (): bool => !$following() && self::toasted($ide, text: 'Stopped following Hal'), what: 'gone, not followed');
     }
 
     private function filesFromTheHost(string $root): void
@@ -560,12 +560,12 @@ final class GuestSessionE2eTest extends TestCase
     {
         // The guest's own file operations, asked of the host.
         $buffers = $this->api($ide)->openBuffers();
-        $buffers->create($root.'/mine.txt', 'mine');
+        $buffers->create($root.'/mine.txt', text: 'mine');
         $buffers->open($root.'/mine.txt');
         $this->assertSame('mine.txt', $this->expect('open')['path']);
-        $buffers->edit($root.'/mine.txt', 0, 0, 0, 0, '!');
+        $buffers->edit($root.'/mine.txt', line: 0, column: 0, endLine: 0, endColumn: 0, text: '!');
         $buffers->save($root.'/mine.txt');
-        $this->assertSame(['mine.txt', '!mine'], [($write = $this->expect('write'))['path'], \base64_decode(Wire::string($write, 'data'), strict: true)]);
+        $this->assertSame(['mine.txt', '!mine'], [($write = $this->expect('write'))['path'], \base64_decode(Wire::string($write, key: 'data'), strict: true)]);
         $buffers->move($root.'/mine.txt', $root.'/ours.txt');
         $this->assertSame(['mine.txt', 'ours.txt'], [($move = $this->expect('move'))['from'], $move['to']]);
         $this->assertSame('ours.txt', $this->expect('open')['path'], 'asked again under its new name');
@@ -586,7 +586,7 @@ final class GuestSessionE2eTest extends TestCase
         $events->dispatch(new AgentActivity('assist:host', 'Hal', $root.'/src/B.php', AgentActivityKind::Editing, 0, 1, 10.0));
         $events->dispatch(new AgentActivity('far', 'Far', '/elsewhere/x.php', AgentActivityKind::Editing, 0, 1, 10.0));
         $this->assertSame(['t' => 'agent', 'id' => 'codex', 'name' => 'Codex', 'path' => 'src/B.php', 'line' => 0, 'column' => 1], $this->expect('agent'));
-        $guest = Probe::get($this->plugin($ide), 'guest');
+        $guest = Probe::get($this->plugin($ide), property: 'guest');
         $this->assertInstanceOf(GuestSession::class, $guest);
         $this->assertContains(['id' => 'me~codex', 'name' => 'Codex', 'kind' => 'agent'], $guest->participants(), 'its own agents too');
         $events->dispatch(new AgentLeft('codex'));
@@ -611,9 +611,9 @@ final class GuestSessionE2eTest extends TestCase
         $this->say(['t' => 'moved', 'from' => 'fresh.txt', 'to' => 'docs/fresh.txt']);
         $this->assertSame('docs/fresh.txt', $this->expect('open')['path'], 'an open file moved by the host, asked again');
         $this->say(['t' => 'role', 'role' => 'edit']);
-        $this->await(static fn (): bool => self::toasted($ide, 'You can edit now'), what: 'editing again');
+        $this->await(static fn (): bool => self::toasted($ide, text: 'You can edit now'), what: 'editing again');
         $this->say(['t' => 'bye', 'reason' => 'removed']);
-        $this->await(static fn (): bool => self::toasted($ide, 'The host removed you'), what: 'removed');
+        $this->await(static fn (): bool => self::toasted($ide, text: 'The host removed you'), what: 'removed');
         $this->hangUp();
     }
 
@@ -639,9 +639,9 @@ final class GuestSessionE2eTest extends TestCase
 
                 // A relay out of reach is tried again on the same channel: the
                 // host waits on only a few past the last one joined.
-                $guest = Probe::get($this->plugin($ide), 'guest');
+                $guest = Probe::get($this->plugin($ide), property: 'guest');
                 $this->assertIsObject($guest);
-                $this->await(static fn (): bool => Probe::get($guest, 'tries') >= 2, what: 'a second try');
+                $this->await(static fn (): bool => Probe::get($guest, property: 'tries') >= 2, what: 'a second try');
                 $this->assertSame(1, GuestSession::channel($project->dir), 'one channel taken, however many tries');
             },
         ]);
@@ -664,20 +664,20 @@ final class GuestSessionE2eTest extends TestCase
 
                 // Typed into the tab: refused, until the host says so.
                 $controller = Services::resolve($ide, RunController::class);
-                $sessions = Probe::get($controller, 'sessions');
+                $sessions = Probe::get($controller, property: 'sessions');
                 $this->assertInstanceOf(TerminalSessions::class, $sessions);
                 $tab = $sessions->find('assist:shell:1');
                 $this->assertInstanceOf(TerminalSession::class, $tab);
                 $sessions->makeActive($tab);
                 $controller->forwardInput('r');
-                $this->await(static fn (): bool => self::toasted($ide, 'ask them to let you type'), what: 'the refusal');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'ask them to let you type'), what: 'the refusal');
                 $this->say(['t' => 'typing', 'allowed' => true]);
-                $this->await(static fn (): bool => self::toasted($ide, 'You can type in the shared terminals'), what: 'allowed');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'You can type in the shared terminals'), what: 'allowed');
                 $controller->forwardInput('l');
                 $typed = $this->expect('terminal-in');
-                $this->assertSame(['shell:1', 'l'], [$typed['id'], \base64_decode(Wire::string($typed, 'data'), strict: true)], 'only what was let through');
+                $this->assertSame(['shell:1', 'l'], [$typed['id'], \base64_decode(Wire::string($typed, key: 'data'), strict: true)], 'only what was let through');
                 $this->say(['t' => 'typing', 'allowed' => false]);
-                $this->await(static fn (): bool => self::toasted($ide, 'read-only for you again'), what: 'read-only again');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'read-only for you again'), what: 'read-only again');
 
                 // No longer shared; another one ends with the session.
                 $this->say(['t' => 'terminal-end', 'id' => 'shell:1']);
@@ -703,8 +703,8 @@ final class GuestSessionE2eTest extends TestCase
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($invite): void {
                 // Waiting at the relay for a host not there yet, the guest leaves.
                 $this->pump(0.2);
-                $this->command($ide, 'assist:leave');
-                $this->await(static fn (): bool => self::toasted($ide, 'Left the session'), what: 'left');
+                $this->command($ide, id: 'assist:leave');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Left the session'), what: 'left');
                 $this->open($invite);
                 $this->acceptGuest();
                 $this->await($this->hungUp(...), what: 'the connection let go');
@@ -727,12 +727,12 @@ final class GuestSessionE2eTest extends TestCase
         $this->runIde($project, $path, [
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($path, $project): void {
                 $this->welcomeGuest();
-                $this->shareFile('src/A.php', "one\n");
+                $this->shareFile('src/A.php', text: "one\n");
                 $this->say(['t' => 'role', 'role' => 'read']);
-                $this->await(static fn (): bool => self::toasted($ide, 'read along'), what: 'read only');
-                $guest = Probe::get($this->plugin($ide), 'guest');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'read along'), what: 'read only');
+                $guest = Probe::get($this->plugin($ide), property: 'guest');
                 $this->assertInstanceOf(GuestSession::class, $guest);
-                $guest->follow->start('host', 'Hal');
+                $guest->follow->start('host', name: 'Hal');
                 $left = [];
                 Services::resolve($ide, EventDispatcherInterface::class)->addListener(AgentLeft::class, static function (AgentLeft $event) use (&$left): void {
                     $left[] = $event->agent;
@@ -745,7 +745,7 @@ final class GuestSessionE2eTest extends TestCase
                 $plugin->deactivate(); // the IDE closing
 
                 $this->assertSame(['t' => 'bye'], $this->expect('bye'), 'goodbye for now: the host keeps the way back');
-                $this->assertNull(Probe::get($guest, 'lostFor'), 'not taken for a host lost');
+                $this->assertNull(Probe::get($guest, property: 'lostFor'), 'not taken for a host lost');
                 $this->assertFalse($document->readOnly, 'the file the user\'s own again');
                 $this->assertNull($document->historyDelegate);
                 $this->assertSame(['assist:host', 'assist:g2'], $left, 'everyone\'s marks gone');
@@ -768,7 +768,7 @@ final class GuestSessionE2eTest extends TestCase
                 $this->typedIntoTheSharedFile($ide, $terminal, $path);
                 $this->say(['t' => 'ack', 'path' => 'src/A.php']);
                 $this->say(['t' => 'role', 'role' => 'read']);
-                $this->await(static fn (): bool => self::toasted($ide, 'read along'), what: 'read only');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'read along'), what: 'read only');
 
                 $terminal->simulateInput("\x1a");
                 Services::resolve($ide, EventDispatcherInterface::class)->dispatch(new AgentActivity('codex', 'Codex', $path, AgentActivityKind::Editing, 0, 1, 10.0));
@@ -800,15 +800,15 @@ final class GuestSessionE2eTest extends TestCase
             100 => function (Tui $tui, VirtualTerminal $terminal, Ide $ide) use ($reason, $says): void {
                 $this->acceptGuest();
                 $this->expect('hello');
-                $guest = Probe::get($this->plugin($ide), 'guest');
+                $guest = Probe::get($this->plugin($ide), property: 'guest');
                 $this->assertIsObject($guest);
-                $this->assertNotSame([], Probe::get($guest, 'timers'));
+                $this->assertNotSame([], Probe::get($guest, property: 'timers'));
                 $this->say(['t' => 'denied', 'reason' => $reason]);
                 $this->dropPeer();
                 $this->await(static fn (): bool => self::toasted($ide, $says), what: 'the refusal said');
-                $this->assertSame([], Probe::get($guest, 'timers'), 'the session over here');
+                $this->assertSame([], Probe::get($guest, property: 'timers'), 'the session over here');
                 $this->pump(1.2);
-                $this->assertFalse(self::toasted($ide, 'Lost the host'), 'no retry');
+                $this->assertFalse(self::toasted($ide, text: 'Lost the host'), 'no retry');
                 $this->hangUp();
             },
         ]);
@@ -825,26 +825,26 @@ final class GuestSessionE2eTest extends TestCase
                 $this->acceptGuest();
                 $this->expect('hello');
                 $this->say(['t' => 'welcome', 'peer' => 'g1', 'role' => 'edit', 'ticket' => self::TICKET, 'peers' => [['id' => 'host', 'name' => $evil('HOSTNAME'), 'role' => 'host']]]);
-                $this->await(static fn (): bool => self::toasted($ide, 'Connected to X]52;c;HOSTNAMEY'), what: 'the host\'s name, as text');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'Connected to X]52;c;HOSTNAMEY'), what: 'the host\'s name, as text');
                 $this->say(['t' => 'peer', 'id' => 'g2', 'name' => $evil('PEER'), 'role' => 'edit']);
                 $this->say(['t' => 'focus', 'peer' => 'g2', 'name' => $evil('FOCUS')]);
-                $this->await(static fn (): bool => self::toasted($ide, 'X]52;c;FOCUSY asked everyone'), what: 'the asker\'s name, as text');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'X]52;c;FOCUSY asked everyone'), what: 'the asker\'s name, as text');
                 $this->say(['t' => 'error', 'path' => $evil('PATH'), 'message' => $evil('MESSAGE')]);
-                $this->await(static fn (): bool => self::toasted($ide, 'X]52;c;PATHY: X]52;c;MESSAGEY'), what: 'the error, as text');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'X]52;c;PATHY: X]52;c;MESSAGEY'), what: 'the error, as text');
                 $this->say(['t' => 'terminal', 'id' => 'run:x', 'title' => $evil('TITLE'), 'data' => '']);
-                $this->await(static fn (): bool => self::toasted($ide, 'shared a terminal: X]52;c;TITLEY'), what: 'the title, as text');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'shared a terminal: X]52;c;TITLEY'), what: 'the title, as text');
                 $this->say(['t' => 'run-refused', 'label' => $evil('LABEL'), 'reason' => 'unknown']);
-                $this->await(static fn (): bool => self::toasted($ide, 'no run configuration X]52;c;LABELY'), what: 'the label, as text');
-                $this->command($ide, 'assist:run');
+                $this->await(static fn (): bool => self::toasted($ide, text: 'no run configuration X]52;c;LABELY'), what: 'the label, as text');
+                $this->command($ide, id: 'assist:run');
                 $this->expect('runs');
                 $this->say(['t' => 'runs', 'labels' => [$evil('OFFERED')], 'allowed' => true]);
-                $this->awaitPainted($tui, $terminal, 'X]52;c;OFFEREDY');
-                $this->command($ide, 'assist:participants');
-                $this->awaitPainted($tui, $terminal, 'X]52;c;PEERY');
+                $this->awaitPainted($tui, $terminal, needle: 'X]52;c;OFFEREDY');
+                $this->command($ide, id: 'assist:participants');
+                $this->awaitPainted($tui, $terminal, needle: 'X]52;c;PEERY');
                 $terminal->simulateInput("\x1b");
-                $this->shareFile('src/A.php', "<?php\n");
+                $this->shareFile('src/A.php', text: "<?php\n");
                 $this->say(['t' => 'presence', 'peer' => 'g3', 'name' => $evil('CARET'), 'path' => 'src/A.php', 'line' => 0, 'column' => 1]);
-                $this->awaitPainted($tui, $terminal, 'X]52;c;CARETY');
+                $this->awaitPainted($tui, $terminal, needle: 'X]52;c;CARETY');
 
                 foreach (['HOSTNAME', 'PEER', 'FOCUS', 'PATH', 'MESSAGE', 'TITLE', 'LABEL', 'OFFERED', 'CARET'] as $mark) {
                     $this->assertStringNotContainsString("\x1b]52;c;".$mark, $terminal->getOutput(), $mark.' never reached the terminal');
