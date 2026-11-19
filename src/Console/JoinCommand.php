@@ -381,7 +381,7 @@ final class JoinCommand extends PluginCommand
     private static function launch(string $root, array $options): int
     {
         $pipes = [];
-        $process = \proc_open([\PHP_BINARY, PortaBinary::path(), ...$options, $root], [\STDIN, \STDOUT, \STDERR], $pipes);
+        $process = \proc_open([...PortaBinary::command(\PHP_BINARY, PortaBinary::path()), ...$options, $root], [\STDIN, \STDOUT, \STDERR], $pipes);
 
         return false === $process ? 1 : \proc_close($process);
     }
