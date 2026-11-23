@@ -223,7 +223,7 @@ final class SharedText
         $end = \strpos($this->shadow, needle: "\n", offset: $start);
         $length = (false === $end ? \strlen($this->shadow) : $end) - $start;
 
-        return $start + \max(0, \min($column, $length));
+        return $start + \clamp($column, min: 0, max: $length);
     }
 
     /** @return array{int, int} */
