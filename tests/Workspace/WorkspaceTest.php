@@ -70,6 +70,24 @@ final class WorkspaceTest extends TestCase
         $this->assertNull(new Paths($root.'/missing')->absolute('a.php'), 'and shares nothing');
     }
 
+    /** A composer.json that moves the vendor dir moves what is shared with it; one outside the project is not walked. */
+    public function testAGitProjectSharesTheVendorDirItsComposerJsonNames(): void
+    {
+        $project = new TempProject([
+            '.gitignore' => "lib/\nvendor/\n",
+            'composer.json' => '{"config":{"vendor-dir":"lib"}}',
+            'lib/pkg/B.php' => '<?php',
+            'vendor/stale/C.php' => '<?php',
+        ]);
+        new Process(['git', 'init', '-q'], $project->dir)->mustRun();
+        new Process(['git', 'add', '.gitignore', 'composer.json'], $project->dir)->mustRun();
+
+        $this->assertSame(['.gitignore', 'composer.json', 'lib/pkg/B.php'], \array_keys(new ProjectFiles($project->dir, maxFileSize: 1_000)->scan()));
+
+        $project->write('composer.json', content: '{"config":{"vendor-dir":"/opt/deps"}}');
+        $this->assertSame(['.gitignore', 'composer.json'], \array_keys(new ProjectFiles($project->dir, maxFileSize: 1_000)->scan()), 'outside the project');
+    }
+
     public function testAGitProjectSharesWhatGitShowsAndVendor(): void
     {
         $project = new TempProject([

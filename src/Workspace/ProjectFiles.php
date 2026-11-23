@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Workspace;
 
+use Porta\Support\ComposerLayout;
 use Porta\Support\GitIgnored;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Process;
@@ -64,7 +65,9 @@ final class ProjectFiles
             return new Paths($this->root)->walk('', self::SKIPPED_DIRECTORIES);
         }
 
-        return \is_dir($this->root.'/vendor') ? [...$files, ...new Paths($this->root)->walk('vendor', self::SKIPPED_DIRECTORIES)] : $files;
+        $vendor = ComposerLayout::of($this->root)->vendorBelow($this->root);
+
+        return null !== $vendor && \is_dir($this->root.'/'.$vendor) ? [...$files, ...new Paths($this->root)->walk($vendor, self::SKIPPED_DIRECTORIES)] : $files;
     }
 
     /** @return list<string>|null what git lists — or, where it cannot, what the .gitignore files leave — or null outside a repository */
