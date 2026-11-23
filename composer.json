@@ -9,7 +9,8 @@
         "ext-sodium": "*",
         "revolt/event-loop": "^1.0",
         "symfony/console": "^8.2",
-        "symfony/filesystem": "^8.2"
+        "symfony/filesystem": "^8.2",
+        "symfony/polyfill-php86": "^1.43"
     },
     "autoload": {
         "psr-4": {
