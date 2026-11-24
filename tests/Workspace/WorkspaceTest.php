@@ -72,20 +72,23 @@ final class WorkspaceTest extends TestCase
 
     /**
      * A guest who may edit can rewrite composer.json: a vendor-dir it names
-     * must not share the ignored folder it points at.
+     * must not share the ignored folder it points at — it may only narrow.
      */
     public function testAComposerJsonCannotWidenWhatIsShared(): void
     {
         $project = new TempProject([
             '.gitignore' => "secrets/\nvendor/\n",
-            'composer.json' => '{"config":{"vendor-dir":"secrets"}}',
+            'composer.json' => '{"name":"a/b"}',
             'secrets/key.pem' => 'private',
             'vendor/pkg/B.php' => '<?php',
         ]);
         new Process(['git', 'init', '-q'], $project->dir)->mustRun();
         new Process(['git', 'add', '.gitignore', 'composer.json'], $project->dir)->mustRun();
+        $shared = static fn (): array => \array_keys(new ProjectFiles($project->dir, maxFileSize: 1_000)->scan());
+        $this->assertSame(['.gitignore', 'composer.json', 'vendor/pkg/B.php'], $shared());
 
-        $this->assertSame(['.gitignore', 'composer.json', 'vendor/pkg/B.php'], \array_keys(new ProjectFiles($project->dir, maxFileSize: 1_000)->scan()));
+        $project->write('composer.json', content: '{"config":{"vendor-dir":"secrets"}}');
+        $this->assertSame(['.gitignore', 'composer.json'], $shared(), 'not widened to the folder it names; narrowed: a vendor/ composer no longer fills is no one\'s packages');
     }
 
     public function testAGitProjectSharesWhatGitShowsAndVendor(): void

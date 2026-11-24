@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Porta\AssistPlugin\Workspace;
 
+use Porta\Support\ComposerLayout;
 use Porta\Support\GitIgnored;
+use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Process;
 
@@ -64,10 +66,15 @@ final class ProjectFiles
             return new Paths($this->root)->walk('', self::SKIPPED_DIRECTORIES);
         }
 
-        // vendor/ by name, never the config.vendor-dir of composer.json: a guest
-        // who may edit can rewrite that file, and would have any ignored folder
-        // it names (secrets, keys) shared with them.
-        return \is_dir($this->root.'/vendor') ? [...$files, ...new Paths($this->root)->walk('vendor', self::SKIPPED_DIRECTORIES)] : $files;
+        // vendor/ by name, and only while it is composer's: never the
+        // config.vendor-dir that composer.json names. A guest who may edit can
+        // rewrite that file, so it may narrow what is shared, never widen it to
+        // an ignored folder of secrets; and a vendor/ composer no longer fills
+        // is no one's packages.
+        $vendor = $this->root.'/vendor';
+        $composers = ComposerLayout::of($this->root)->vendorDir === Path::canonicalize($vendor);
+
+        return $composers && \is_dir($vendor) ? [...$files, ...new Paths($this->root)->walk('vendor', self::SKIPPED_DIRECTORIES)] : $files;
     }
 
     /** @return list<string>|null what git lists — or, where it cannot, what the .gitignore files leave — or null outside a repository */
